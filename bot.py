@@ -26,7 +26,8 @@ def owner_only(func):
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
         if user_id != config.OWNER_ID:
-            logger.warning(f"Попытка доступа от чужого ID: {user_id}")
+            logger.warning(f"Попытка доступа: user_id={user_id} (тип: {type(user_id)}), OWNER_ID={config.OWNER_ID} (тип: {type(config.OWNER_ID)}), равны: {user_id == config.OWNER_ID}")
+
             await update.effective_message.reply_text(config.ACCESS_DENIED)
             return ConversationHandler.END
         return await func(update, context)
