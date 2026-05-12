@@ -133,11 +133,7 @@ def entry_action_keyboard(entry_id: int, is_favorite: bool, category: str):
 
 # ─── Автоудаление сообщений ───────────────────────────────────────────────
 
-# Держим сильные ссылки на фоновые задачи, иначе GC удалит их до выполнения
-_delete_tasks: set = set()
-
-
-async def _schedule_delete(bot, chat_id: int, message_id: int, delay: int):
+async def _delete_after(bot, chat_id: int, message_id: int, delay: int):
     """Удаляет сообщение через delay секунд."""
     await asyncio.sleep(delay)
     try:
@@ -147,7 +143,7 @@ async def _schedule_delete(bot, chat_id: int, message_id: int, delay: int):
 
 
 async def _send_secret(context: ContextTypes.DEFAULT_TYPE, chat_id: int, text: str, parse_mode: str = "Markdown"):
-    """Отправляет сообщение с секретом и запускает его автоудаление."""
+    """Отправляет сообщение с секретом и запускает его автоудаление через PTB."""
     delay = config.SECRET_DELETE_SECONDS
     footer = f"\n\n🔐 _Сообщение удалится через {delay} сек_"
     msg = await context.bot.send_message(
@@ -155,9 +151,10 @@ async def _send_secret(context: ContextTypes.DEFAULT_TYPE, chat_id: int, text: s
         text=text + footer,
         parse_mode=parse_mode,
     )
-    task = asyncio.create_task(_schedule_delete(context.bot, chat_id, msg.message_id, delay))
-    _delete_tasks.add(task)
-    task.add_done_callback(_delete_tasks.discard)
+    # context.application.create_task — PTB-способ, задача не удаляется GC
+    context.application.create_task(
+        _delete_after(context.bot, chat_id, msg.message_id, delay)
+    )
     return msg
 
 
