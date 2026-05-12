@@ -133,12 +133,15 @@ def entry_action_keyboard(entry_id: int, is_favorite: bool, category: str):
 
 # ─── Автоудаление сообщений ───────────────────────────────────────────────
 
-async def _schedule_delete(context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int, delay: int = None):
+# Держим сильные ссылки на фоновые задачи, иначе GC удалит их до выполнения
+_delete_tasks: set = set()
+
+
+async def _schedule_delete(bot, chat_id: int, message_id: int, delay: int):
     """Удаляет сообщение через delay секунд."""
-    delay = delay or config.SECRET_DELETE_SECONDS
     await asyncio.sleep(delay)
     try:
-        await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+        await bot.delete_message(chat_id=chat_id, message_id=message_id)
     except Exception:
         pass
 
@@ -152,7 +155,9 @@ async def _send_secret(context: ContextTypes.DEFAULT_TYPE, chat_id: int, text: s
         text=text + footer,
         parse_mode=parse_mode,
     )
-    asyncio.create_task(_schedule_delete(context, chat_id, msg.message_id, delay))
+    task = asyncio.create_task(_schedule_delete(context.bot, chat_id, msg.message_id, delay))
+    _delete_tasks.add(task)
+    task.add_done_callback(_delete_tasks.discard)
     return msg
 
 
