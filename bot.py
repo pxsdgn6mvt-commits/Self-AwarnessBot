@@ -1,969 +1,1066 @@
+import logging
 import asyncio
 import io
 import json
-import logging
-import random
-import string
-import time
-from functools import wraps
+from datetime import datetime, timezone, timedelta
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Document
+from telegram import (
+    Update, InlineKeyboardButton, InlineKeyboardMarkup,
+    BotCommand,
+)
 from telegram.ext import (
-    Application, CommandHandler, MessageHandler,
-    CallbackQueryHandler, ConversationHandler, filters,
+    Application, CommandHandler, MessageHandler, CallbackQueryHandler,
+    PreCheckoutQueryHandler, ConversationHandler, filters,
     ContextTypes,
 )
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-import config
 import database as db
-from crypto import encrypt, decrypt
+import crypto
+import utils
+import payments as pay
+from config import (
+    BOT_TOKEN, OWNER_ID, CATEGORIES,
+    PLAN_FREE, PLAN_ONETIME, PLAN_PREMIUM,
+    FREE_ENTRY_LIMIT, FREE_CATEGORIES,
+    SECRET_DELETE_SECONDS,
+)
+from locales import t
 
 logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     level=logging.INFO,
 )
 logger = logging.getLogger(__name__)
 
-# ─── Состояния ConversationHandler ────────────────────────────────────────
-WAITING_TITLE, WAITING_CONTENT, WAITING_TAGS = range(3)
-WAITING_SEARCH = 10
-WAITING_SEARCH_TAG = 11
-WAITING_PIN_SET = 20
-WAITING_PIN_UNLOCK = 21
-WAITING_EDIT_CONTENT = 30
-WAITING_RESTORE_FILE = 40
+# ─── Состояния ConversationHandler ───────────────────────────────────────────
 
-# ─── Состояние сессии (в памяти) ──────────────────────────────────────────
-_last_activity: float = time.time()
-_locked: bool = False
+(
+    ST_LANG, ST_MASTER_NEW, ST_MASTER_CONFIRM,
+    ST_MASTER_ENTER, ST_PIN_ENTER,
+    ST_ADD_CAT, ST_ADD_NAME, ST_ADD_CONTENT, ST_ADD_TAGS,
+    ST_SEARCH, ST_PIN_NEW, ST_PIN_CONFIRM,
+    ST_RESTORE,
+) = range(13)
 
 
-def _touch():
-    global _last_activity
-    _last_activity = time.time()
+# ─── Вспомогательные функции ─────────────────────────────────────────────────
+
+def _plan_label(user: dict, lang: str) -> str:
+    plan = user["plan"]
+    if plan == PLAN_ONETIME:
+        return t(lang, "plan_onetime")
+    if plan == PLAN_PREMIUM and pay.is_plan_active(user):
+        return t(lang, "plan_premium")
+    return t(lang, "plan_free")
 
 
-def _is_locked() -> bool:
-    global _locked
-    if _locked:
-        return True
-    if time.time() - _last_activity > config.AUTO_LOCK_SECONDS:
-        _locked = True
+def _cat_label(cat: str, lang: str) -> str:
+    names = {
+        "passwords": ("Пароли"     if lang == "ru" else "Passwords"),
+        "seeds":     ("Seed-фразы" if lang == "ru" else "Seeds"),
+        "wallets":   ("Кошельки"   if lang == "ru" else "Wallets"),
+        "exchanges": ("Биржи"      if lang == "ru" else "Exchanges"),
+        "twofa":     ("2FA"        if lang == "ru" else "2FA"),
+        "documents": ("Документы"  if lang == "ru" else "Documents"),
+        "contacts":  ("Контакты"   if lang == "ru" else "Contacts"),
+        "notes":     ("Заметки"    if lang == "ru" else "Notes"),
+    }
+    emoji = CATEGORIES.get(cat, "📁")
+    return f"{emoji} {names.get(cat, cat)}"
+
+
+async def _get_user_or_create(update: Update) -> dict:
+    tg = update.effective_user
+    user = await db.get_user(tg.id)
+    if not user:
+        lang = utils.detect_lang(tg.language_code or "")
+        await db.create_user(tg.id, tg.username or "", lang)
+        user = await db.get_user(tg.id)
+    return dict(user)
+
+
+async def _require_unlock(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    user_id = update.effective_user.id
+    if utils.is_locked(user_id):
+        user = await db.get_user(user_id)
+        lang = user["lang"] if user else "en"
+        await update.effective_message.reply_text(t(lang, "locked"))
+        return False
+    utils.touch(user_id)
+    return True
+
+
+async def _check_rate_limit(update: Update, lang: str) -> bool:
+    if utils.is_rate_limited(update.effective_user.id):
+        await update.effective_message.reply_text(t(lang, "rate_limit"))
         return True
     return False
 
 
-def _unlock():
-    global _locked, _last_activity
-    _locked = False
-    _last_activity = time.time()
-
-
-# ─── Декораторы ───────────────────────────────────────────────────────────
-
-def owner_only(func):
-    @wraps(func)
-    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user_id = update.effective_user.id
-        if user_id != config.OWNER_ID:
-            await update.effective_message.reply_text(config.ACCESS_DENIED)
-            return ConversationHandler.END
-        return await func(update, context)
-    return wrapper
-
-
-def lock_check(func):
-    """Проверяет блокировку. Если заблокировано — просит пин-код."""
-    @wraps(func)
-    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user_id = update.effective_user.id
-        if user_id != config.OWNER_ID:
-            await update.effective_message.reply_text(config.ACCESS_DENIED)
-            return ConversationHandler.END
-        if _is_locked():
-            if not db.has_pin():
-                _unlock()
-            else:
-                context.user_data["pending_callback"] = None
-                msg = update.effective_message
-                await msg.reply_text(
-                    "🔒 Хранилище заблокировано.\n\nВведи пин-код (4 цифры):"
-                )
-                return WAITING_PIN_UNLOCK
-        _touch()
-        return await func(update, context)
-    return wrapper
-
-
-# ─── Клавиатуры ──────────────────────────────────────────────────────────
-
-def main_menu_keyboard():
-    buttons = []
-    for key, label in config.CATEGORIES.items():
-        buttons.append([InlineKeyboardButton(label, callback_data=f"cat_{key}")])
-    buttons.append([
-        InlineKeyboardButton("🔍 Поиск", callback_data="search"),
-        InlineKeyboardButton("📊 Статистика", callback_data="stats"),
-    ])
-    buttons.append([
-        InlineKeyboardButton("⭐️ Избранное", callback_data="favorites"),
-        InlineKeyboardButton("🔑 Генератор", callback_data="gen_password"),
-    ])
-    buttons.append([
-        InlineKeyboardButton("💾 Бэкап", callback_data="backup"),
-    ])
-    return InlineKeyboardMarkup(buttons)
-
-
-def entry_action_keyboard(entry_id: int, is_favorite: bool, category: str):
-    star = "★ Убрать из избранного" if is_favorite else "⭐️ В избранное"
+def _main_keyboard(lang: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("✏️ Редактировать", callback_data=f"edit_{entry_id}"),
-            InlineKeyboardButton("🗑 Удалить", callback_data=f"del_{entry_id}"),
+            InlineKeyboardButton(t(lang, "btn_add"),       callback_data="menu_add"),
+            InlineKeyboardButton(t(lang, "btn_list"),      callback_data="menu_list"),
         ],
         [
-            InlineKeyboardButton("📋 Копировать", callback_data=f"copy_{entry_id}"),
-            InlineKeyboardButton(star, callback_data=f"fav_{entry_id}"),
+            InlineKeyboardButton(t(lang, "btn_search"),    callback_data="menu_search"),
+            InlineKeyboardButton(t(lang, "btn_favorites"), callback_data="menu_fav"),
         ],
-        [InlineKeyboardButton("◀️ Назад", callback_data=f"cat_{category}")],
+        [
+            InlineKeyboardButton(t(lang, "btn_generate"),  callback_data="menu_gen"),
+            InlineKeyboardButton(t(lang, "btn_backup"),    callback_data="menu_backup"),
+        ],
+        [
+            InlineKeyboardButton(t(lang, "btn_subscribe"), callback_data="menu_subscribe"),
+            InlineKeyboardButton(t(lang, "btn_settings"),  callback_data="menu_settings"),
+        ],
     ])
 
 
-# ─── Автоудаление сообщений ───────────────────────────────────────────────
-
-async def _delete_after(bot, chat_id: int, message_id: int, delay: int):
-    """Удаляет сообщение через delay секунд."""
-    await asyncio.sleep(delay)
-    try:
-        await bot.delete_message(chat_id=chat_id, message_id=message_id)
-    except Exception:
-        pass
-
-
-async def _send_secret(context: ContextTypes.DEFAULT_TYPE, chat_id: int, text: str, parse_mode: str = "Markdown"):
-    """Отправляет сообщение с секретом и запускает его автоудаление через PTB."""
-    delay = config.SECRET_DELETE_SECONDS
-    footer = f"\n\n🔐 _Сообщение удалится через {delay} сек_"
-    msg = await context.bot.send_message(
-        chat_id=chat_id,
-        text=text + footer,
-        parse_mode=parse_mode,
-    )
-    # context.application.create_task — PTB-способ, задача не удаляется GC
-    context.application.create_task(
-        _delete_after(context.bot, chat_id, msg.message_id, delay)
-    )
-    return msg
-
-
-# ─── /start ───────────────────────────────────────────────────────────────
-
-@owner_only
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    _touch()
-    if _is_locked() and db.has_pin():
-        await update.message.reply_text("🔒 Хранилище заблокировано.\n\nВведи пин-код (4 цифры):")
-        return WAITING_PIN_UNLOCK
-    _unlock()
-    await update.message.reply_text(
-        config.WELCOME_MESSAGE,
-        reply_markup=main_menu_keyboard(),
-        parse_mode="Markdown",
-    )
-
-
-# ─── Пин-код ──────────────────────────────────────────────────────────────
-
-@owner_only
-async def cmd_setpin(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    _touch()
-    await update.message.reply_text(
-        "🔐 Введи новый пин-код (4 цифры):\n\n_/cancel — отмена_",
-        parse_mode="Markdown",
-    )
-    return WAITING_PIN_SET
-
-
-async def pin_set_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    pin = update.message.text.strip()
-    if not pin.isdigit() or len(pin) != 4:
-        await update.message.reply_text("⚠️ Пин-код должен быть 4 цифры. Попробуй снова:")
-        return WAITING_PIN_SET
-    db.set_pin(pin)
-    _touch()
-    await update.message.reply_text(
-        "✅ Пин-код установлен. Хранилище будет блокироваться через 10 минут бездействия.",
-        reply_markup=main_menu_keyboard(),
-    )
-    return ConversationHandler.END
-
-
-async def pin_unlock_receive(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    pin = update.message.text.strip()
-    if db.check_pin(pin):
-        _unlock()
-        await update.message.reply_text(
-            "✅ Разблокировано.",
-            reply_markup=main_menu_keyboard(),
-        )
-        return ConversationHandler.END
-    else:
-        await update.message.reply_text("❌ Неверный пин-код. Попробуй снова:")
-        return WAITING_PIN_UNLOCK
-
-
-# ─── Главное меню (callback) ──────────────────────────────────────────────
-
-@owner_only
-async def back_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    _touch()
-    await query.edit_message_text(
-        config.WELCOME_MESSAGE,
-        reply_markup=main_menu_keyboard(),
-        parse_mode="Markdown",
-    )
-
-
-# ─── Категории ────────────────────────────────────────────────────────────
-
-@owner_only
-async def show_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    if _is_locked() and db.has_pin():
-        await query.edit_message_text("🔒 Хранилище заблокировано. Нажми /start и введи пин-код.")
-        return
-    _touch()
-    category = query.data.replace("cat_", "")
-    label = config.CATEGORIES.get(category, category)
-    entries = db.get_entries_by_category(category)
-    if not entries:
-        buttons = [
-            [InlineKeyboardButton(f"➕ Добавить", callback_data=f"add_{category}")],
-            [InlineKeyboardButton("◀️ Назад", callback_data="back_main")],
-        ]
-        await query.edit_message_text(
-            f"{label}\n\n_Пусто. Добавь первую запись._",
-            reply_markup=InlineKeyboardMarkup(buttons),
-            parse_mode="Markdown",
-        )
-        return
-    buttons = []
-    for entry in entries:
-        star = "⭐️ " if entry["is_favorite"] else ""
-        buttons.append([
-            InlineKeyboardButton(f"📌 {star}{entry['title']}", callback_data=f"view_{entry['id']}")
-        ])
-    buttons.append([
-        InlineKeyboardButton("➕ Добавить", callback_data=f"add_{category}"),
-        InlineKeyboardButton("◀️ Назад", callback_data="back_main"),
-    ])
-    await query.edit_message_text(
-        f"{label} — {len(entries)} записей:",
-        reply_markup=InlineKeyboardMarkup(buttons),
-    )
-
-
-# ─── Просмотр записи ──────────────────────────────────────────────────────
-
-@owner_only
-async def view_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    if _is_locked() and db.has_pin():
-        await query.edit_message_text("🔒 Хранилище заблокировано. Нажми /start и введи пин-код.")
-        return
-    _touch()
-    entry_id = int(query.data.replace("view_", ""))
-    entry = db.get_entry_by_id(entry_id)
-    if not entry:
-        await query.edit_message_text("❌ Запись не найдена.")
-        return
-    category = entry["category"]
-    label = config.CATEGORIES.get(category, category)
-    created = entry["created_at"][:10]
-    tags_line = f"\n🏷 _{entry['tags']}_" if entry.get("tags") else ""
-    text = (
-        f"*{entry['title']}*\n"
-        f"_{label} · {created}_{tags_line}\n\n"
-        f"`{entry['content']}`"
-    )
-    # Отправляем секретное сообщение с автоудалением
-    await _send_secret(context, query.message.chat_id, text)
-    # Редактируем исходное сообщение — оставляем только кнопки управления
-    await query.edit_message_text(
-        f"*{entry['title']}* — управление записью:",
-        reply_markup=entry_action_keyboard(entry_id, entry["is_favorite"], category),
-        parse_mode="Markdown",
-    )
-
-
-# ─── Копировать ───────────────────────────────────────────────────────────
-
-@owner_only
-async def copy_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    _touch()
-    entry_id = int(query.data.replace("copy_", ""))
-    entry = db.get_entry_by_id(entry_id)
-    if not entry:
-        await query.answer("❌ Запись не найдена.", show_alert=True)
-        return
-    await _send_secret(context, query.message.chat_id, f"`{entry['content']}`")
-
-
-# ─── Избранное ────────────────────────────────────────────────────────────
-
-@owner_only
-async def toggle_favorite(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    _touch()
-    entry_id = int(query.data.replace("fav_", ""))
-    entry = db.get_entry_by_id(entry_id)
-    if not entry:
-        return
-    new_state = db.toggle_favorite(entry_id)
-    label = "⭐️ Добавлено в избранное" if new_state else "★ Убрано из избранного"
-    await query.answer(label, show_alert=False)
-    # Обновляем кнопки
-    await query.edit_message_reply_markup(
-        reply_markup=entry_action_keyboard(entry_id, new_state, entry["category"])
-    )
-
-
-@owner_only
-async def show_favorites(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    _touch()
-    entries = db.get_favorites()
-    if not entries:
-        await query.edit_message_text(
-            "⭐️ *Избранное*\n\n_Нет избранных записей._",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="back_main")]]),
-            parse_mode="Markdown",
-        )
-        return
-    buttons = []
-    for e in entries:
-        cat_label = config.CATEGORIES.get(e["category"], e["category"])
-        buttons.append([InlineKeyboardButton(f"{cat_label} · {e['title']}", callback_data=f"view_{e['id']}")])
-    buttons.append([InlineKeyboardButton("◀️ Назад", callback_data="back_main")])
-    await query.edit_message_text(
-        f"⭐️ *Избранное* — {len(entries)} записей:",
-        reply_markup=InlineKeyboardMarkup(buttons),
-        parse_mode="Markdown",
-    )
-
-
-@owner_only
-async def cmd_favorites(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    _touch()
-    entries = db.get_favorites()
-    if not entries:
-        await update.message.reply_text(
-            "⭐️ *Избранное*\n\n_Нет избранных записей._",
-            reply_markup=main_menu_keyboard(),
-            parse_mode="Markdown",
-        )
-        return
-    buttons = []
-    for e in entries:
-        cat_label = config.CATEGORIES.get(e["category"], e["category"])
-        buttons.append([InlineKeyboardButton(f"{cat_label} · {e['title']}", callback_data=f"view_{e['id']}")])
-    buttons.append([InlineKeyboardButton("◀️ Назад", callback_data="back_main")])
-    await update.message.reply_text(
-        f"⭐️ *Избранное* — {len(entries)} записей:",
-        reply_markup=InlineKeyboardMarkup(buttons),
-        parse_mode="Markdown",
-    )
-
-
-# ─── Редактирование ───────────────────────────────────────────────────────
-
-@owner_only
-async def edit_entry_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    _touch()
-    entry_id = int(query.data.replace("edit_", ""))
-    entry = db.get_entry_by_id(entry_id)
-    if not entry:
-        await query.edit_message_text("❌ Запись не найдена.")
-        return ConversationHandler.END
-    context.user_data["editing_id"] = entry_id
-    context.user_data["editing_category"] = entry["category"]
-    await query.edit_message_text(
-        f"✏️ *Редактирование: {entry['title']}*\n\n"
-        f"Введи новое содержимое (старое будет заменено):\n\n"
-        f"_/cancel — отмена_",
-        parse_mode="Markdown",
-    )
-    return WAITING_EDIT_CONTENT
-
-
-async def edit_entry_save(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    new_content = update.message.text.strip()
-    entry_id = context.user_data.get("editing_id")
-    category = context.user_data.get("editing_category", "notes")
-    if not entry_id:
-        await update.message.reply_text("❌ Ошибка. Начни заново.")
-        return ConversationHandler.END
-    db.update_entry(entry_id, new_content)
-    _touch()
-    buttons = [
-        [InlineKeyboardButton("👁 Посмотреть", callback_data=f"view_{entry_id}")],
-        [InlineKeyboardButton("◀️ К категории", callback_data=f"cat_{category}")],
-    ]
-    await update.message.reply_text(
-        "✅ *Запись обновлена и перезашифрована.*",
-        reply_markup=InlineKeyboardMarkup(buttons),
-        parse_mode="Markdown",
-    )
-    context.user_data.clear()
-    return ConversationHandler.END
-
-
-# ─── Удаление ────────────────────────────────────────────────────────────
-
-@owner_only
-async def delete_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    _touch()
-    entry_id = int(query.data.replace("del_", ""))
-    buttons = [
-        [
-            InlineKeyboardButton("✅ Да, удалить", callback_data=f"confirm_del_{entry_id}"),
-            InlineKeyboardButton("❌ Отмена", callback_data=f"view_{entry_id}"),
-        ]
-    ]
-    await query.edit_message_text(
-        "⚠️ Точно удалить эту запись? Действие нельзя отменить.",
-        reply_markup=InlineKeyboardMarkup(buttons),
-    )
-
-
-@owner_only
-async def confirm_delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    _touch()
-    entry_id = int(query.data.replace("confirm_del_", ""))
-    entry = db.get_entry_by_id(entry_id)
-    category = entry["category"] if entry else "notes"
-    db.delete_entry(entry_id)
-    buttons = [[InlineKeyboardButton("◀️ К категории", callback_data=f"cat_{category}")]]
-    await query.edit_message_text("✅ Удалено.", reply_markup=InlineKeyboardMarkup(buttons))
-
-
-# ─── Добавление записи ────────────────────────────────────────────────────
-
-@owner_only
-async def add_entry_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    if _is_locked() and db.has_pin():
-        await query.edit_message_text("🔒 Хранилище заблокировано. Нажми /start и введи пин-код.")
-        return ConversationHandler.END
-    _touch()
-    category = query.data.replace("add_", "")
-    context.user_data["adding_category"] = category
-    label = config.CATEGORIES.get(category, category)
-    await query.edit_message_text(
-        f"➕ *Новая запись в {label}*\n\n"
-        f"Введи название (например: «Gmail», «Паспорт», «Мама»):\n\n"
-        f"_/cancel — отмена_",
-        parse_mode="Markdown",
-    )
-    return WAITING_TITLE
-
-
-async def add_entry_title(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    title = update.message.text.strip()
-    if len(title) > 200:
-        await update.message.reply_text("⚠️ Название слишком длинное. Попробуй снова:")
-        return WAITING_TITLE
-    context.user_data["adding_title"] = title
-    await update.message.reply_text(
-        f"📝 Теперь введи содержимое для *{title}*\n\n"
-        f"Текст будет зашифрован.\n\n"
-        f"_/cancel — отмена_",
-        parse_mode="Markdown",
-    )
-    return WAITING_CONTENT
-
-
-async def add_entry_content(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    content = update.message.text.strip()
-    if len(content) > 4000:
-        await update.message.reply_text("⚠️ Текст слишком длинный. Попробуй снова:")
-        return WAITING_CONTENT
-    context.user_data["adding_content"] = content
-    await update.message.reply_text(
-        "🏷 Добавь теги через запятую (например: *работа, важное*)\n\n"
-        "Или нажми /skip чтобы пропустить:",
-        parse_mode="Markdown",
-    )
-    return WAITING_TAGS
-
-
-async def add_entry_tags(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    tags_raw = update.message.text.strip()
-    # Нормализуем теги
-    tags = ",".join(t.strip() for t in tags_raw.split(",") if t.strip())
-    return await _save_entry(update, context, tags)
-
-
-async def add_entry_skip_tags(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    return await _save_entry(update, context, "")
-
-
-async def _save_entry(update, context, tags: str):
-    category = context.user_data.get("adding_category", "notes")
-    title = context.user_data.get("adding_title", "Без названия")
-    content = context.user_data.get("adding_content", "")
-    try:
-        entry_id = db.add_entry(category, title, content, tags)
-        label = config.CATEGORIES.get(category, category)
-        buttons = [
-            [InlineKeyboardButton(f"📂 К категории", callback_data=f"cat_{category}")],
-            [InlineKeyboardButton("🏠 Главное меню", callback_data="back_main")],
-        ]
-        tags_line = f"\n🏷 Теги: {tags}" if tags else ""
-        await update.message.reply_text(
-            f"✅ *Сохранено и зашифровано*\n\n"
-            f"📌 {title}\n{label} · запись #{entry_id}{tags_line}",
-            reply_markup=InlineKeyboardMarkup(buttons),
-            parse_mode="Markdown",
-        )
-    except Exception as e:
-        logger.error(f"Ошибка сохранения: {e}")
-        await update.message.reply_text("❌ Ошибка при сохранении. Попробуй снова.")
-    context.user_data.clear()
-    return ConversationHandler.END
-
-
-# ─── Поиск ────────────────────────────────────────────────────────────────
-
-@owner_only
-async def search_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    _touch()
-    buttons = [
-        [InlineKeyboardButton("🔤 По тексту", callback_data="search_text")],
-        [InlineKeyboardButton("🏷 По тегам", callback_data="search_tag")],
-        [InlineKeyboardButton("◀️ Назад", callback_data="back_main")],
-    ]
-    await query.edit_message_text(
-        "🔍 Выбери тип поиска:",
-        reply_markup=InlineKeyboardMarkup(buttons),
-    )
-
-
-@owner_only
-async def search_text_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    _touch()
-    await query.edit_message_text(
-        "🔍 Введи поисковый запрос:\n\n_/cancel — отмена_",
-        parse_mode="Markdown",
-    )
-    return WAITING_SEARCH
-
-
-async def search_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query_text = update.message.text.strip()
-    results = db.search_entries(query_text)
-    _touch()
-    if not results:
-        buttons = [[InlineKeyboardButton("🏠 Главное меню", callback_data="back_main")]]
-        await update.message.reply_text(
-            f"🔍 По запросу «{query_text}» ничего не найдено.",
-            reply_markup=InlineKeyboardMarkup(buttons),
-        )
-        return ConversationHandler.END
-    buttons = []
-    for entry in results[:20]:
-        label = config.CATEGORIES.get(entry["category"], entry["category"])
-        buttons.append([InlineKeyboardButton(f"{label} · {entry['title']}", callback_data=f"view_{entry['id']}")])
-    buttons.append([InlineKeyboardButton("🏠 Главное меню", callback_data="back_main")])
-    await update.message.reply_text(
-        f"🔍 Найдено: {len(results)}",
-        reply_markup=InlineKeyboardMarkup(buttons),
-    )
-    return ConversationHandler.END
-
-
-@owner_only
-async def search_tag_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    _touch()
-    await query.edit_message_text(
-        "🏷 Введи тег для поиска:\n\n_/cancel — отмена_",
-        parse_mode="Markdown",
-    )
-    return WAITING_SEARCH_TAG
-
-
-async def search_tag_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    tag = update.message.text.strip()
-    results = db.search_by_tag(tag)
-    _touch()
-    if not results:
-        buttons = [[InlineKeyboardButton("🏠 Главное меню", callback_data="back_main")]]
-        await update.message.reply_text(
-            f"🏷 По тегу «{tag}» ничего не найдено.",
-            reply_markup=InlineKeyboardMarkup(buttons),
-        )
-        return ConversationHandler.END
-    buttons = []
-    for entry in results[:20]:
-        label = config.CATEGORIES.get(entry["category"], entry["category"])
-        buttons.append([InlineKeyboardButton(f"{label} · {entry['title']}", callback_data=f"view_{entry['id']}")])
-    buttons.append([InlineKeyboardButton("🏠 Главное меню", callback_data="back_main")])
-    await update.message.reply_text(
-        f"🏷 По тегу «{tag}» найдено: {len(results)}",
-        reply_markup=InlineKeyboardMarkup(buttons),
-    )
-    return ConversationHandler.END
-
-
-# ─── Статистика ───────────────────────────────────────────────────────────
-
-@owner_only
-async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    _touch()
-    stats = db.get_stats()
-    total = sum(stats.values())
-    lines = ["📊 *Хранилище*\n"]
-    for key, label in config.CATEGORIES.items():
-        count = stats.get(key, 0)
-        lines.append(f"{label}: {count}")
-    lines.append(f"\n*Всего записей: {total}*")
-    buttons = [[InlineKeyboardButton("◀️ Назад", callback_data="back_main")]]
-    await query.edit_message_text(
-        "\n".join(lines),
-        reply_markup=InlineKeyboardMarkup(buttons),
-        parse_mode="Markdown",
-    )
-
-
-# ─── Генератор паролей ────────────────────────────────────────────────────
-
-def _generate_password(length: int = 16) -> str:
-    alphabet = string.ascii_letters + string.digits + "!@#$%^&*()-_=+"
-    return "".join(random.SystemRandom().choice(alphabet) for _ in range(length))
-
-
-@owner_only
-async def gen_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Вызывается через callback или команду /generate."""
-    _touch()
-    pwd = _generate_password()
-    context.user_data["generated_password"] = pwd
-    buttons = [
-        [
-            InlineKeyboardButton("🔄 Новый", callback_data="gen_password"),
-            InlineKeyboardButton("📋 Копировать", callback_data="gen_copy"),
-        ],
-        [InlineKeyboardButton("💾 Сохранить в Пароли", callback_data="gen_save")],
-        [InlineKeyboardButton("◀️ Назад", callback_data="back_main")],
-    ]
-    text = f"🔑 *Сгенерированный пароль:*\n\n`{pwd}`"
+async def _send_main_menu(update: Update, user: dict):
+    lang = user["lang"]
+    count = await db.count_entries(user["user_id"])
+    plan_label = _plan_label(user, lang)
+    text = t(lang, "menu", plan=plan_label, count=count)
+    kb = _main_keyboard(lang)
     if update.callback_query:
-        query = update.callback_query
-        await query.answer()
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
+        await update.callback_query.edit_message_text(text, reply_markup=kb, parse_mode="Markdown")
     else:
-        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="Markdown")
+        await update.effective_message.reply_text(text, reply_markup=kb, parse_mode="Markdown")
 
 
-@owner_only
-async def gen_copy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# ─── /start — онбординг ──────────────────────────────────────────────────────
+
+async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    tg = update.effective_user
+    args = context.args or []
+
+    referrer_id = None
+    if args and args[0].startswith("ref_"):
+        try:
+            referrer_id = int(args[0][4:])
+        except ValueError:
+            pass
+
+    user = await db.get_user(tg.id)
+
+    if user and user["master_hash"]:
+        lang = user["lang"]
+        if utils.is_locked(tg.id):
+            # Есть PIN — просим его, иначе мастер-пароль
+            if user["pin_hash"]:
+                await update.message.reply_text(t(lang, "enter_pin"))
+                return ST_PIN_ENTER
+            await update.message.reply_text(t(lang, "enter_master"))
+            return ST_MASTER_ENTER
+        await _send_main_menu(update, dict(user))
+        return ConversationHandler.END
+
+    # Новый пользователь
+    lang = utils.detect_lang(tg.language_code or "")
+    if referrer_id and referrer_id != tg.id:
+        context.user_data["referrer_id"] = referrer_id
+
+    kb = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🇷🇺 Русский", callback_data="lang_ru"),
+            InlineKeyboardButton("🇬🇧 English", callback_data="lang_en"),
+        ]
+    ])
+    await update.message.reply_text(t(lang, "welcome"), reply_markup=kb, parse_mode="Markdown")
+    return ST_LANG
+
+
+async def cb_lang(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    _touch()
-    pwd = context.user_data.get("generated_password", "")
-    if pwd:
-        await _send_secret(context, query.message.chat_id, f"`{pwd}`")
+    lang = "ru" if query.data == "lang_ru" else "en"
+    context.user_data["lang"] = lang
+
+    tg = update.effective_user
+    referrer_id = context.user_data.get("referrer_id")
+    await db.create_user(tg.id, tg.username or "", lang, referrer_id)
+
+    if referrer_id:
+        await db.add_referral(referrer_id, tg.id)
+
+    await query.edit_message_text(t(lang, "lang_set"))
+    await query.message.reply_text(t(lang, "set_master"), parse_mode="Markdown")
+    return ST_MASTER_NEW
 
 
-@owner_only
-async def gen_save(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    _touch()
-    pwd = context.user_data.get("generated_password", "")
-    if not pwd:
-        await query.answer("❌ Нет пароля для сохранения.", show_alert=True)
-        return
-    context.user_data["adding_category"] = "passwords"
-    context.user_data["adding_content_prefill"] = pwd
-    await query.edit_message_text(
-        "💾 *Сохранение пароля*\n\nВведи название (например: «Gmail»):\n\n_/cancel — отмена_",
-        parse_mode="Markdown",
-    )
-    return WAITING_TITLE
+async def rcv_master_new(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    pwd = update.message.text.strip()
+    lang = context.user_data.get("lang", "en")
+    if len(pwd) < 8:
+        await update.message.reply_text(t(lang, "master_too_short"))
+        return ST_MASTER_NEW
+    context.user_data["master_pwd"] = pwd
+    await update.message.reply_text(t(lang, "confirm_master"))
+    return ST_MASTER_CONFIRM
 
 
-# ─── Бэкап и восстановление ──────────────────────────────────────────────
+async def rcv_master_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    pwd = update.message.text.strip()
+    lang = context.user_data.get("lang", "en")
+    if pwd != context.user_data.get("master_pwd"):
+        await update.message.reply_text(t(lang, "master_mismatch"))
+        return ST_MASTER_CONFIRM
 
-@owner_only
-async def cmd_backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    _touch()
-    await _do_backup(context, update.effective_chat.id)
+    user_id = update.effective_user.id
+    master_hash = crypto.hash_password(pwd, user_id)
+    await db.set_master_hash(user_id, master_hash)
 
+    key = crypto.derive_key(pwd, user_id)
+    utils.set_key(user_id, key)
 
-@owner_only
-async def backup_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    _touch()
-    await query.edit_message_text("💾 Создаю бэкап...")
-    await _do_backup(context, query.message.chat_id)
-    await context.bot.send_message(
-        chat_id=query.message.chat_id,
-        text="✅ Бэкап отправлен.",
-        reply_markup=main_menu_keyboard(),
-    )
-
-
-async def _do_backup(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
-    records = db.export_all_encrypted()
-    payload = json.dumps(records, ensure_ascii=False, indent=2)
-    # Шифруем весь JSON мастер-паролем
-    encrypted_payload = encrypt(payload, config.MASTER_PASSWORD)
-    file_data = encrypted_payload.encode()
-    filename = f"vault_backup_{int(time.time())}.enc"
-    await context.bot.send_document(
-        chat_id=chat_id,
-        document=io.BytesIO(file_data),
-        filename=filename,
-        caption=(
-            "💾 *Зашифрованный бэкап хранилища*\n\n"
-            "Файл зашифрован мастер-паролем.\n"
-            "Для восстановления: /restore"
-        ),
-        parse_mode="Markdown",
-    )
-
-
-@owner_only
-async def cmd_restore(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    _touch()
+    user = await db.get_user(user_id)
     await update.message.reply_text(
-        "📥 *Восстановление из бэкапа*\n\n"
-        "Отправь файл бэкапа (.enc).\n\n"
-        "_/cancel — отмена_",
+        t(lang, "master_set") + t(lang, "tutorial"),
         parse_mode="Markdown",
     )
-    return WAITING_RESTORE_FILE
+    await _send_main_menu(update, dict(user))
+    return ConversationHandler.END
 
 
-async def restore_receive_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def rcv_master_enter(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    pwd = update.message.text.strip()
+    user_id = update.effective_user.id
+    user = await db.get_user(user_id)
+    lang = user["lang"] if user else "en"
+
+    if crypto.hash_password(pwd, user_id) != user["master_hash"]:
+        await update.message.reply_text(t(lang, "wrong_master"))
+        return ST_MASTER_ENTER
+
+    key = crypto.derive_key(pwd, user_id)
+    utils.set_key(user_id, key)
+
+    if user["pin_hash"]:
+        await update.message.reply_text(t(lang, "enter_pin"))
+        return ST_PIN_ENTER
+
+    await update.message.reply_text(t(lang, "unlocked"))
+    await _send_main_menu(update, dict(user))
+    return ConversationHandler.END
+
+
+async def rcv_pin_enter(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    pin = update.message.text.strip()
+    user_id = update.effective_user.id
+    user = await db.get_user(user_id)
+    lang = user["lang"] if user else "en"
+
+    if crypto.hash_pin(pin, user_id) != user["pin_hash"]:
+        await update.message.reply_text(t(lang, "wrong_pin"))
+        return ST_PIN_ENTER
+
+    utils.touch(user_id)
+    await update.message.reply_text(t(lang, "unlocked"))
+    await _send_main_menu(update, dict(user))
+    return ConversationHandler.END
+
+
+# ─── Меню (CallbackQuery) ─────────────────────────────────────────────────────
+
+async def cb_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    user = await _get_user_or_create(update)
+    lang = user["lang"]
+
+    if await _check_rate_limit(update, lang):
+        return
+
+    action = query.data
+    if action == "menu_add":
+        await cmd_add(update, context)
+    elif action == "menu_list":
+        await cmd_list(update, context)
+    elif action == "menu_search":
+        await cmd_search(update, context)
+    elif action == "menu_fav":
+        await cmd_favorites(update, context)
+    elif action == "menu_gen":
+        await cmd_generate(update, context)
+    elif action == "menu_backup":
+        await cmd_backup(update, context)
+    elif action == "menu_subscribe":
+        await cmd_subscribe(update, context)
+    elif action == "menu_settings":
+        await _show_settings(update, user)
+    elif action == "menu_home":
+        await _send_main_menu(update, user)
+
+
+async def _show_settings(update: Update, user: dict):
+    lang = user["lang"]
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔢 PIN", callback_data="settings_pin")],
+        [
+            InlineKeyboardButton(t(lang, "btn_ru"), callback_data="settings_lang_ru"),
+            InlineKeyboardButton(t(lang, "btn_en"), callback_data="settings_lang_en"),
+        ],
+        [InlineKeyboardButton("🔙", callback_data="menu_home")],
+    ])
+    title = "⚙️ Настройки" if lang == "ru" else "⚙️ Settings"
+    await update.callback_query.edit_message_text(title, reply_markup=kb)
+
+
+async def cb_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    user = await _get_user_or_create(update)
+    lang = user["lang"]
+
+    if query.data == "settings_pin":
+        await query.edit_message_text(t(lang, "pin_prompt"))
+        return ST_PIN_NEW
+
+    if query.data in ("settings_lang_ru", "settings_lang_en"):
+        new_lang = "ru" if query.data == "settings_lang_ru" else "en"
+        await db.set_lang(user["user_id"], new_lang)
+        user["lang"] = new_lang
+        await query.edit_message_text(t(new_lang, "lang_set"))
+        await _send_main_menu(update, user)
+
+    return ConversationHandler.END
+
+
+# ─── /add ─────────────────────────────────────────────────────────────────────
+
+async def cmd_add(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = await _get_user_or_create(update)
+    lang = user["lang"]
+
+    if not await _require_unlock(update, context):
+        return ConversationHandler.END
+
+    # Paywall по количеству
+    effective_plan = user["plan"] if pay.is_plan_active(user) else PLAN_FREE
+    if effective_plan == PLAN_FREE:
+        count = await db.count_entries(user["user_id"])
+        if count >= FREE_ENTRY_LIMIT:
+            kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton(t(lang, "btn_buy_onetime"), callback_data="buy_onetime")],
+                [InlineKeyboardButton(t(lang, "btn_buy_premium"), callback_data="buy_premium")],
+            ])
+            msg = t(lang, "paywall")
+            if update.callback_query:
+                await update.callback_query.edit_message_text(msg, reply_markup=kb, parse_mode="Markdown")
+            else:
+                await update.effective_message.reply_text(msg, reply_markup=kb, parse_mode="Markdown")
+            return ConversationHandler.END
+
+    cats = FREE_CATEGORIES if effective_plan == PLAN_FREE else list(CATEGORIES.keys())
+    buttons = [[InlineKeyboardButton(_cat_label(c, lang), callback_data=f"addcat_{c}")] for c in cats]
+    buttons.append([InlineKeyboardButton(t(lang, "btn_cancel"), callback_data="cancel_add")])
+    kb = InlineKeyboardMarkup(buttons)
+
+    if update.callback_query:
+        await update.callback_query.edit_message_text(t(lang, "add_choose_cat"), reply_markup=kb)
+    else:
+        await update.effective_message.reply_text(t(lang, "add_choose_cat"), reply_markup=kb)
+
+    return ST_ADD_CAT
+
+
+async def cb_add_cat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    if query.data == "cancel_add":
+        user = await _get_user_or_create(update)
+        await query.edit_message_text(t(user["lang"], "add_cancelled"))
+        return ConversationHandler.END
+
+    cat = query.data.replace("addcat_", "")
+    user = await _get_user_or_create(update)
+    lang = user["lang"]
+
+    effective_plan = user["plan"] if pay.is_plan_active(user) else PLAN_FREE
+    if effective_plan == PLAN_FREE and cat not in FREE_CATEGORIES:
+        await query.edit_message_text(
+            t(lang, "paywall_cat", cat=_cat_label(cat, lang)), parse_mode="Markdown"
+        )
+        return ConversationHandler.END
+
+    context.user_data["add_cat"] = cat
+    await query.edit_message_text(t(lang, "add_name"))
+    return ST_ADD_NAME
+
+
+async def rcv_add_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = await _get_user_or_create(update)
+    context.user_data["add_name"] = update.message.text.strip()
+    await update.message.reply_text(t(user["lang"], "add_content"))
+    return ST_ADD_CONTENT
+
+
+async def rcv_add_content(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = await _get_user_or_create(update)
+    context.user_data["add_content"] = update.message.text.strip()
+    await update.message.reply_text(t(user["lang"], "add_tags"))
+    return ST_ADD_TAGS
+
+
+async def rcv_add_tags(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = await _get_user_or_create(update)
+    lang = user["lang"]
+    user_id = user["user_id"]
+
+    raw_tags = update.message.text.strip()
+    tags = "" if raw_tags == "/skip" else raw_tags
+
+    key = utils.get_key(user_id)
+    if key is None:
+        await update.message.reply_text(t(lang, "locked"))
+        return ConversationHandler.END
+
+    encrypted = crypto.encrypt(context.user_data.get("add_content", ""), key)
+    cat = context.user_data.get("add_cat", "notes")
+    name = context.user_data.get("add_name", "")
+
+    await db.add_entry(user_id, cat, name, encrypted, tags)
+    await update.message.reply_text(
+        t(lang, "add_done", name=name, cat=_cat_label(cat, lang)), parse_mode="Markdown"
+    )
+    return ConversationHandler.END
+
+
+# ─── /list ────────────────────────────────────────────────────────────────────
+
+async def cmd_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = await _get_user_or_create(update)
+    lang = user["lang"]
+
+    if not await _require_unlock(update, context):
+        return
+
+    effective_plan = user["plan"] if pay.is_plan_active(user) else PLAN_FREE
+    cats = FREE_CATEGORIES if effective_plan == PLAN_FREE else list(CATEGORIES.keys())
+
+    buttons = [[InlineKeyboardButton(_cat_label(c, lang), callback_data=f"listcat_{c}")] for c in cats]
+    buttons.append([InlineKeyboardButton("🔙", callback_data="menu_home")])
+    kb = InlineKeyboardMarkup(buttons)
+
+    if update.callback_query:
+        await update.callback_query.edit_message_text(t(lang, "list_choose_cat"), reply_markup=kb)
+    else:
+        await update.effective_message.reply_text(t(lang, "list_choose_cat"), reply_markup=kb)
+
+
+async def cb_list_cat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    cat = query.data.replace("listcat_", "")
+    user = await _get_user_or_create(update)
+    lang = user["lang"]
+
+    entries = await db.get_entries_by_category(user["user_id"], cat)
+    cat_label = _cat_label(cat, lang)
+
+    if not entries:
+        await query.edit_message_text(t(lang, "list_empty", cat=cat_label), parse_mode="Markdown")
+        return
+
+    lines = [t(lang, "list_header", cat=cat_label, count=len(entries))]
+    for e in entries:
+        fav = "⭐ " if e["is_favorite"] else ""
+        tags_str = f" [{e['tags']}]" if e["tags"] else ""
+        lines.append(t(lang, "entry_line", fav=fav, name=e["name"], tags=tags_str, id=e["id"]))
+
+    await query.edit_message_text("\n".join(lines), parse_mode="Markdown")
+
+
+# ─── Inline-команды /get_N, /del_N, /fav_N ───────────────────────────────────
+
+async def handle_inline_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.strip()
+    user = await _get_user_or_create(update)
+    lang = user["lang"]
+    user_id = user["user_id"]
+
+    if not await _require_unlock(update, context):
+        return
+
+    if text.startswith("/get_"):
+        try:
+            entry_id = int(text[5:])
+        except ValueError:
+            return
+        key = utils.get_key(user_id)
+        if not key:
+            await update.message.reply_text(t(lang, "locked"))
+            return
+        entry = await db.get_entry(entry_id, user_id)
+        if not entry:
+            await update.message.reply_text(t(lang, "entry_not_found"))
+            return
+        try:
+            content = crypto.decrypt(entry["content_encrypted"], key)
+        except Exception:
+            await update.message.reply_text(t(lang, "error"))
+            return
+        cat_label = _cat_label(entry["category"], lang)
+        msg = await update.message.reply_text(
+            t(lang, "entry_view",
+              name=entry["name"], cat=cat_label,
+              tags=entry["tags"] or "—", content=content),
+            parse_mode="Markdown",
+        )
+        asyncio.create_task(
+            utils.schedule_delete(context.bot, msg.chat_id, msg.message_id, SECRET_DELETE_SECONDS)
+        )
+
+    elif text.startswith("/del_"):
+        try:
+            entry_id = int(text[5:])
+        except ValueError:
+            return
+        entry = await db.get_entry(entry_id, user_id)
+        if not entry:
+            await update.message.reply_text(t(lang, "entry_not_found"))
+            return
+        kb = InlineKeyboardMarkup([[
+            InlineKeyboardButton(t(lang, "btn_yes_delete"), callback_data=f"confirm_del_{entry_id}"),
+            InlineKeyboardButton(t(lang, "btn_cancel"), callback_data="cancel_del"),
+        ]])
+        await update.message.reply_text(
+            t(lang, "delete_confirm", name=entry["name"]),
+            reply_markup=kb, parse_mode="Markdown",
+        )
+
+    elif text.startswith("/fav_"):
+        try:
+            entry_id = int(text[5:])
+        except ValueError:
+            return
+        await db.toggle_favorite(entry_id, user_id)
+        await update.message.reply_text(t(lang, "fav_toggled"))
+
+
+async def cb_confirm_delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    user = await _get_user_or_create(update)
+    lang = user["lang"]
+
+    if query.data.startswith("confirm_del_"):
+        entry_id = int(query.data[12:])
+        await db.delete_entry(entry_id, user["user_id"])
+        await query.edit_message_text(t(lang, "deleted"))
+    else:
+        await query.edit_message_text(t(lang, "cancelled"))
+
+
+# ─── /search ─────────────────────────────────────────────────────────────────
+
+async def cmd_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = await _get_user_or_create(update)
+    lang = user["lang"]
+    if not await _require_unlock(update, context):
+        return ConversationHandler.END
+    if update.callback_query:
+        await update.callback_query.edit_message_text(t(lang, "search_prompt"))
+    else:
+        await update.effective_message.reply_text(t(lang, "search_prompt"))
+    return ST_SEARCH
+
+
+async def rcv_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = await _get_user_or_create(update)
+    lang = user["lang"]
+    query_str = update.message.text.strip()
+
+    results = await db.search_entries(user["user_id"], query_str)
+
+    if not results:
+        await update.message.reply_text(
+            t(lang, "search_empty", query=query_str), parse_mode="Markdown"
+        )
+        return ConversationHandler.END
+
+    lines = [t(lang, "search_results", query=query_str, count=len(results))]
+    for e in results:
+        fav = "⭐ " if e["is_favorite"] else ""
+        tags_str = f" [{e['tags']}]" if e["tags"] else ""
+        lines.append(t(lang, "entry_line", fav=fav, name=e["name"], tags=tags_str, id=e["id"]))
+
+    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+    return ConversationHandler.END
+
+
+# ─── /favorites ───────────────────────────────────────────────────────────────
+
+async def cmd_favorites(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = await _get_user_or_create(update)
+    lang = user["lang"]
+    if not await _require_unlock(update, context):
+        return
+
+    entries = await db.get_favorites(user["user_id"])
+    if not entries:
+        msg = t(lang, "fav_empty")
+        if update.callback_query:
+            await update.callback_query.edit_message_text(msg)
+        else:
+            await update.effective_message.reply_text(msg)
+        return
+
+    lines = [t(lang, "fav_header", count=len(entries))]
+    for e in entries:
+        tags_str = f" [{e['tags']}]" if e["tags"] else ""
+        lines.append(t(lang, "entry_line", fav="⭐ ", name=e["name"], tags=tags_str, id=e["id"]))
+
+    text = "\n".join(lines)
+    if update.callback_query:
+        await update.callback_query.edit_message_text(text, parse_mode="Markdown")
+    else:
+        await update.effective_message.reply_text(text, parse_mode="Markdown")
+
+
+# ─── /generate ────────────────────────────────────────────────────────────────
+
+async def cmd_generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = await _get_user_or_create(update)
+    lang = user["lang"]
+
+    effective_plan = user["plan"] if pay.is_plan_active(user) else PLAN_FREE
+    if effective_plan == PLAN_FREE:
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton(t(lang, "btn_buy_onetime"), callback_data="buy_onetime")],
+            [InlineKeyboardButton(t(lang, "btn_buy_premium"), callback_data="buy_premium")],
+        ])
+        msg = t(lang, "paywall")
+        if update.callback_query:
+            await update.callback_query.edit_message_text(msg, reply_markup=kb, parse_mode="Markdown")
+        else:
+            await update.effective_message.reply_text(msg, reply_markup=kb, parse_mode="Markdown")
+        return
+
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton(t(lang, "btn_gen_pass"),   callback_data="gen_pass")],
+        [InlineKeyboardButton(t(lang, "btn_gen_seed12"), callback_data="gen_seed12")],
+        [InlineKeyboardButton(t(lang, "btn_gen_seed24"), callback_data="gen_seed24")],
+        [InlineKeyboardButton("🔙", callback_data="menu_home")],
+    ])
+    if update.callback_query:
+        await update.callback_query.edit_message_text(
+            t(lang, "gen_menu"), reply_markup=kb, parse_mode="Markdown"
+        )
+    else:
+        await update.effective_message.reply_text(
+            t(lang, "gen_menu"), reply_markup=kb, parse_mode="Markdown"
+        )
+
+
+async def cb_generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    user = await _get_user_or_create(update)
+    lang = user["lang"]
+
+    if query.data == "gen_pass":
+        value = utils.generate_password(16)
+        msg = await query.message.reply_text(
+            t(lang, "gen_result_pass", value=value), parse_mode="Markdown"
+        )
+    elif query.data == "gen_seed12":
+        value = utils.generate_seed_phrase(12)
+        msg = await query.message.reply_text(
+            t(lang, "gen_result_seed", words=12, value=value), parse_mode="Markdown"
+        )
+    elif query.data == "gen_seed24":
+        value = utils.generate_seed_phrase(24)
+        msg = await query.message.reply_text(
+            t(lang, "gen_result_seed", words=24, value=value), parse_mode="Markdown"
+        )
+    else:
+        return
+
+    asyncio.create_task(
+        utils.schedule_delete(context.bot, msg.chat_id, msg.message_id, SECRET_DELETE_SECONDS)
+    )
+
+
+# ─── /backup ──────────────────────────────────────────────────────────────────
+
+async def cmd_backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = await _get_user_or_create(update)
+    lang = user["lang"]
+
+    if not await _require_unlock(update, context):
+        return ConversationHandler.END
+
+    key = utils.get_key(user["user_id"])
+    if not key:
+        if update.callback_query:
+            await update.callback_query.edit_message_text(t(lang, "locked"))
+        else:
+            await update.effective_message.reply_text(t(lang, "locked"))
+        return ConversationHandler.END
+
+    if update.callback_query:
+        await update.callback_query.edit_message_text(t(lang, "backup_start"))
+    else:
+        await update.effective_message.reply_text(t(lang, "backup_start"))
+
+    raw_json = await db.export_entries_encrypted(user["user_id"])
+    encrypted_backup = crypto.encrypt(raw_json, key)
+    file_bytes = json.dumps({"vault_backup": True, "data": encrypted_backup}, ensure_ascii=False).encode()
+
+    buf = io.BytesIO(file_bytes)
+    buf.name = f"vault_backup_{user['user_id']}.json"
+    await context.bot.send_document(
+        chat_id=update.effective_chat.id,
+        document=buf,
+        caption=t(lang, "backup_done"),
+        parse_mode="Markdown",
+    )
+    return ConversationHandler.END
+
+
+# ─── /restore ─────────────────────────────────────────────────────────────────
+
+async def cmd_restore(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = await _get_user_or_create(update)
+    lang = user["lang"]
+    if not await _require_unlock(update, context):
+        return ConversationHandler.END
+    await update.effective_message.reply_text(t(lang, "restore_prompt"))
+    return ST_RESTORE
+
+
+async def rcv_restore_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = await _get_user_or_create(update)
+    lang = user["lang"]
+    user_id = user["user_id"]
+
+    key = utils.get_key(user_id)
+    if not key:
+        await update.message.reply_text(t(lang, "locked"))
+        return ConversationHandler.END
+
     doc = update.message.document
     if not doc:
-        await update.message.reply_text("⚠️ Отправь файл (.enc). Попробуй снова:")
-        return WAITING_RESTORE_FILE
-    file = await context.bot.get_file(doc.file_id)
-    buf = io.BytesIO()
-    await file.download_to_memory(buf)
-    encrypted_payload = buf.getvalue().decode()
+        await update.message.reply_text(t(lang, "restore_error"))
+        return ConversationHandler.END
+
     try:
-        payload = decrypt(encrypted_payload, config.MASTER_PASSWORD)
-        records = json.loads(payload)
-        inserted = db.import_from_backup(records)
-        await update.message.reply_text(
-            f"✅ *Восстановлено {inserted} записей.*",
-            reply_markup=main_menu_keyboard(),
-            parse_mode="Markdown",
-        )
+        tg_file = await context.bot.get_file(doc.file_id)
+        file_bytes = await tg_file.download_as_bytearray()
+        wrapper = json.loads(file_bytes.decode())
+        raw_json = crypto.decrypt(wrapper["data"], key)
+        before = await db.count_entries(user_id)
+        await db.import_entries_from_backup(user_id, raw_json)
+        after = await db.count_entries(user_id)
+        await update.message.reply_text(t(lang, "restore_done", count=after - before))
     except Exception as e:
-        logger.error(f"Ошибка восстановления: {e}")
-        await update.message.reply_text(
-            "❌ Не удалось расшифровать файл. Убедись что файл верный.",
-            reply_markup=main_menu_keyboard(),
-        )
+        logger.warning(f"Restore failed for {user_id}: {e}")
+        await update.message.reply_text(t(lang, "restore_error"))
+
     return ConversationHandler.END
 
 
-# ─── Отмена ───────────────────────────────────────────────────────────────
+# ─── /setpin ──────────────────────────────────────────────────────────────────
 
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data.clear()
-    await update.message.reply_text("❌ Отменено.", reply_markup=main_menu_keyboard())
+async def cmd_setpin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = await _get_user_or_create(update)
+    lang = user["lang"]
+    if not await _require_unlock(update, context):
+        return ConversationHandler.END
+    await update.effective_message.reply_text(t(lang, "pin_prompt"))
+    return ST_PIN_NEW
+
+
+async def rcv_pin_new(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = await _get_user_or_create(update)
+    lang = user["lang"]
+    pin = update.message.text.strip()
+    if not pin.isdigit() or len(pin) != 4:
+        await update.message.reply_text(t(lang, "pin_invalid"))
+        return ST_PIN_NEW
+    context.user_data["pin_new"] = pin
+    await update.message.reply_text(t(lang, "pin_confirm"))
+    return ST_PIN_CONFIRM
+
+
+async def rcv_pin_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = await _get_user_or_create(update)
+    lang = user["lang"]
+    pin = update.message.text.strip()
+    if pin != context.user_data.get("pin_new"):
+        await update.message.reply_text(t(lang, "pin_mismatch"))
+        return ST_PIN_CONFIRM
+    await db.set_pin_hash(user["user_id"], crypto.hash_pin(pin, user["user_id"]))
+    await update.message.reply_text(t(lang, "pin_set"))
     return ConversationHandler.END
 
 
-# ─── Обработчик ошибок ────────────────────────────────────────────────────
+# ─── /subscribe ───────────────────────────────────────────────────────────────
 
-async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
-    logger.error(f"Ошибка: {context.error}", exc_info=context.error)
-    if isinstance(update, Update) and update.effective_message:
-        await update.effective_message.reply_text(
-            "⚠️ Что-то пошло не так. Попробуй снова или нажми /start"
-        )
+async def cmd_subscribe(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = await _get_user_or_create(update)
+    lang = user["lang"]
+    plan_label = _plan_label(user, lang)
+
+    kb_buttons = []
+    if user["plan"] != PLAN_ONETIME:
+        kb_buttons.append([InlineKeyboardButton(t(lang, "btn_buy_onetime"), callback_data="buy_onetime")])
+    if not (user["plan"] == PLAN_PREMIUM and pay.is_plan_active(user)):
+        kb_buttons.append([InlineKeyboardButton(t(lang, "btn_buy_premium"), callback_data="buy_premium")])
+    kb_buttons.append([InlineKeyboardButton("🔙", callback_data="menu_home")])
+    kb = InlineKeyboardMarkup(kb_buttons)
+
+    text = t(lang, "subscribe_menu", plan=plan_label)
+    if update.callback_query:
+        await update.callback_query.edit_message_text(text, reply_markup=kb, parse_mode="Markdown")
+    else:
+        await update.effective_message.reply_text(text, reply_markup=kb, parse_mode="Markdown")
 
 
-# ─── Автобэкап (каждое воскресенье в 10:00) ──────────────────────────────
+async def cb_buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    user = await _get_user_or_create(update)
+    lang = user["lang"]
+
+    if query.data == "buy_onetime":
+        if user["plan"] == PLAN_ONETIME:
+            await query.message.reply_text(t(lang, "already_onetime"))
+            return
+        await pay.send_onetime_invoice(update, context, lang)
+    elif query.data == "buy_premium":
+        if user["plan"] == PLAN_PREMIUM and pay.is_plan_active(user):
+            await query.message.reply_text(t(lang, "already_premium"))
+            return
+        await pay.send_premium_invoice(update, context, lang)
+
+
+# ─── /refer ───────────────────────────────────────────────────────────────────
+
+async def cmd_refer(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = await _get_user_or_create(update)
+    lang = user["lang"]
+    bot_info = await context.bot.get_me()
+    link = f"https://t.me/{bot_info.username}?start=ref_{user['user_id']}"
+    count = await db.get_referral_count(user["user_id"])
+    await update.effective_message.reply_text(
+        t(lang, "refer_text", link=link, count=count), parse_mode="Markdown"
+    )
+
+
+# ─── /language ────────────────────────────────────────────────────────────────
+
+async def cmd_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = await _get_user_or_create(update)
+    lang = user["lang"]
+    kb = InlineKeyboardMarkup([[
+        InlineKeyboardButton(t(lang, "btn_ru"), callback_data="setlang_ru"),
+        InlineKeyboardButton(t(lang, "btn_en"), callback_data="setlang_en"),
+    ]])
+    await update.effective_message.reply_text(t(lang, "lang_menu"), reply_markup=kb)
+
+
+async def cb_setlang(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    user = await _get_user_or_create(update)
+    new_lang = "ru" if query.data == "setlang_ru" else "en"
+    await db.set_lang(user["user_id"], new_lang)
+    await query.edit_message_text(t(new_lang, "lang_set"))
+
+
+# ─── /admin ───────────────────────────────────────────────────────────────────
+
+async def cmd_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != OWNER_ID:
+        await update.message.reply_text(t("en", "not_admin"))
+        return
+    stats = await db.get_stats()
+    await update.message.reply_text(
+        t("ru", "admin_stats", **stats), parse_mode="Markdown"
+    )
+
+
+# ─── Автобэкап ────────────────────────────────────────────────────────────────
 
 async def auto_backup_job(bot):
-    logger.info("Автобэкап запущен")
-    try:
-        records = db.export_all_encrypted()
-        payload = json.dumps(records, ensure_ascii=False, indent=2)
-        encrypted_payload = encrypt(payload, config.MASTER_PASSWORD)
-        file_data = encrypted_payload.encode()
-        filename = f"vault_autobackup_{int(time.time())}.enc"
-        await bot.send_document(
-            chat_id=config.OWNER_ID,
-            document=io.BytesIO(file_data),
-            filename=filename,
-            caption="🔄 *Еженедельный автобэкап*\n\nФайл зашифрован мастер-паролем.",
-            parse_mode="Markdown",
-        )
-    except Exception as e:
-        logger.error(f"Ошибка автобэкапа: {e}")
+    users = await db.get_premium_users_for_backup()
+    for row in users:
+        user_id = row["user_id"]
+        key = utils.get_key(user_id)
+        if key is None:
+            continue
+        try:
+            user = await db.get_user(user_id)
+            lang = user["lang"]
+            raw_json = await db.export_entries_encrypted(user_id)
+            encrypted_backup = crypto.encrypt(raw_json, key)
+            file_bytes = json.dumps(
+                {"vault_backup": True, "data": encrypted_backup}, ensure_ascii=False
+            ).encode()
+            buf = io.BytesIO(file_bytes)
+            buf.name = f"vault_backup_{user_id}.json"
+            await bot.send_document(
+                chat_id=user_id,
+                document=buf,
+                caption=t(lang, "backup_done"),
+                parse_mode="Markdown",
+            )
+        except Exception as e:
+            logger.warning(f"Auto-backup failed for {user_id}: {e}")
 
 
-# ─── main ─────────────────────────────────────────────────────────────────
+# ─── Сборка приложения ────────────────────────────────────────────────────────
 
-def main():
-    if not config.BOT_TOKEN:
-        raise ValueError("BOT_TOKEN не установлен в .env")
-    if not config.OWNER_ID:
-        raise ValueError("OWNER_ID не установлен в .env")
-    if not config.MASTER_PASSWORD:
-        raise ValueError("MASTER_PASSWORD не установлен в .env")
+def _build_conv_handler() -> ConversationHandler:
+    return ConversationHandler(
+        entry_points=[CommandHandler("start", cmd_start)],
+        states={
+            ST_LANG:           [CallbackQueryHandler(cb_lang, pattern="^lang_")],
+            ST_MASTER_NEW:     [MessageHandler(filters.TEXT & ~filters.COMMAND, rcv_master_new)],
+            ST_MASTER_CONFIRM: [MessageHandler(filters.TEXT & ~filters.COMMAND, rcv_master_confirm)],
+            ST_MASTER_ENTER:   [MessageHandler(filters.TEXT & ~filters.COMMAND, rcv_master_enter)],
+            ST_PIN_ENTER:      [MessageHandler(filters.TEXT & ~filters.COMMAND, rcv_pin_enter)],
+        },
+        fallbacks=[CommandHandler("start", cmd_start)],
+        allow_reentry=True,
+    )
 
-    db.init_db()
-    app = Application.builder().token(config.BOT_TOKEN).build()
 
-    # ConversationHandler: добавление записи
-    add_conv = ConversationHandler(
+def _build_add_handler() -> ConversationHandler:
+    return ConversationHandler(
         entry_points=[
-            CallbackQueryHandler(add_entry_start, pattern=r"^add_"),
-            CallbackQueryHandler(gen_save, pattern=r"^gen_save$"),
+            CommandHandler("add", cmd_add),
+            CallbackQueryHandler(cmd_add, pattern="^menu_add$"),
         ],
         states={
-            WAITING_TITLE:   [MessageHandler(filters.TEXT & ~filters.COMMAND, add_entry_title)],
-            WAITING_CONTENT: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_entry_content)],
-            WAITING_TAGS: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, add_entry_tags),
-                CommandHandler("skip", add_entry_skip_tags),
-            ],
+            ST_ADD_CAT:     [CallbackQueryHandler(cb_add_cat, pattern="^(addcat_|cancel_add)")],
+            ST_ADD_NAME:    [MessageHandler(filters.TEXT & ~filters.COMMAND, rcv_add_name)],
+            ST_ADD_CONTENT: [MessageHandler(filters.TEXT & ~filters.COMMAND, rcv_add_content)],
+            ST_ADD_TAGS:    [MessageHandler(filters.TEXT, rcv_add_tags)],
         },
-        fallbacks=[CommandHandler("cancel", cancel)],
+        fallbacks=[CommandHandler("start", cmd_start)],
+        allow_reentry=True,
     )
 
-    # ConversationHandler: поиск по тексту
-    search_text_conv = ConversationHandler(
-        entry_points=[CallbackQueryHandler(search_text_start, pattern="^search_text$")],
+
+def _build_search_handler() -> ConversationHandler:
+    return ConversationHandler(
+        entry_points=[
+            CommandHandler("search", cmd_search),
+            CallbackQueryHandler(cmd_search, pattern="^menu_search$"),
+        ],
         states={
-            WAITING_SEARCH: [MessageHandler(filters.TEXT & ~filters.COMMAND, search_execute)],
+            ST_SEARCH: [MessageHandler(filters.TEXT & ~filters.COMMAND, rcv_search)],
         },
-        fallbacks=[CommandHandler("cancel", cancel)],
+        fallbacks=[CommandHandler("start", cmd_start)],
     )
 
-    # ConversationHandler: поиск по тегам
-    search_tag_conv = ConversationHandler(
-        entry_points=[CallbackQueryHandler(search_tag_start, pattern="^search_tag$")],
+
+def _build_pin_handler() -> ConversationHandler:
+    return ConversationHandler(
+        entry_points=[
+            CommandHandler("setpin", cmd_setpin),
+            CallbackQueryHandler(cb_settings, pattern="^settings_pin$"),
+        ],
         states={
-            WAITING_SEARCH_TAG: [MessageHandler(filters.TEXT & ~filters.COMMAND, search_tag_execute)],
+            ST_PIN_NEW:     [MessageHandler(filters.TEXT & ~filters.COMMAND, rcv_pin_new)],
+            ST_PIN_CONFIRM: [MessageHandler(filters.TEXT & ~filters.COMMAND, rcv_pin_confirm)],
         },
-        fallbacks=[CommandHandler("cancel", cancel)],
+        fallbacks=[CommandHandler("start", cmd_start)],
     )
 
-    # ConversationHandler: установка пин-кода
-    setpin_conv = ConversationHandler(
-        entry_points=[CommandHandler("setpin", cmd_setpin)],
-        states={
-            WAITING_PIN_SET: [MessageHandler(filters.TEXT & ~filters.COMMAND, pin_set_receive)],
-        },
-        fallbacks=[CommandHandler("cancel", cancel)],
-    )
 
-    # ConversationHandler: разблокировка через /start
-    start_conv = ConversationHandler(
-        entry_points=[CommandHandler("start", start)],
-        states={
-            WAITING_PIN_UNLOCK: [MessageHandler(filters.TEXT & ~filters.COMMAND, pin_unlock_receive)],
-        },
-        fallbacks=[CommandHandler("cancel", cancel)],
-    )
-
-    # ConversationHandler: редактирование записи
-    edit_conv = ConversationHandler(
-        entry_points=[CallbackQueryHandler(edit_entry_start, pattern=r"^edit_")],
-        states={
-            WAITING_EDIT_CONTENT: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_entry_save)],
-        },
-        fallbacks=[CommandHandler("cancel", cancel)],
-    )
-
-    # ConversationHandler: восстановление из бэкапа
-    restore_conv = ConversationHandler(
+def _build_restore_handler() -> ConversationHandler:
+    return ConversationHandler(
         entry_points=[CommandHandler("restore", cmd_restore)],
         states={
-            WAITING_RESTORE_FILE: [MessageHandler(filters.Document.ALL, restore_receive_file)],
+            ST_RESTORE: [MessageHandler(filters.Document.ALL, rcv_restore_file)],
         },
-        fallbacks=[CommandHandler("cancel", cancel)],
+        fallbacks=[CommandHandler("start", cmd_start)],
     )
 
-    app.add_handler(start_conv)
-    app.add_handler(setpin_conv)
-    app.add_handler(add_conv)
-    app.add_handler(search_text_conv)
-    app.add_handler(search_tag_conv)
-    app.add_handler(edit_conv)
-    app.add_handler(restore_conv)
 
-    app.add_handler(CommandHandler("generate", gen_password))
+async def post_init(application: Application):
+    await db.init_db()
+    await application.bot.set_my_commands([
+        BotCommand("start",     "🔐 Start / Главное меню"),
+        BotCommand("add",       "➕ Add entry / Добавить запись"),
+        BotCommand("list",      "📋 List / Список"),
+        BotCommand("search",    "🔍 Search / Поиск"),
+        BotCommand("favorites", "⭐ Favorites / Избранное"),
+        BotCommand("generate",  "⚙️ Generator / Генератор"),
+        BotCommand("backup",    "💾 Backup / Бэкап"),
+        BotCommand("restore",   "📂 Restore / Восстановить"),
+        BotCommand("setpin",    "🔢 Set PIN"),
+        BotCommand("subscribe", "💎 Subscribe / Подписка"),
+        BotCommand("refer",     "👥 Referral / Реферал"),
+        BotCommand("language",  "🌐 Language / Язык"),
+        BotCommand("admin",     "📊 Admin stats"),
+    ])
+
+
+def main():
+    app = (
+        Application.builder()
+        .token(BOT_TOKEN)
+        .post_init(post_init)
+        .build()
+    )
+
+    # ConversationHandlers (порядок важен — от частного к общему)
+    app.add_handler(_build_conv_handler())
+    app.add_handler(_build_add_handler())
+    app.add_handler(_build_search_handler())
+    app.add_handler(_build_pin_handler())
+    app.add_handler(_build_restore_handler())
+
+    # Обычные команды
+    app.add_handler(CommandHandler("list",      cmd_list))
     app.add_handler(CommandHandler("favorites", cmd_favorites))
-    app.add_handler(CommandHandler("backup", cmd_backup))
+    app.add_handler(CommandHandler("generate",  cmd_generate))
+    app.add_handler(CommandHandler("backup",    cmd_backup))
+    app.add_handler(CommandHandler("subscribe", cmd_subscribe))
+    app.add_handler(CommandHandler("refer",     cmd_refer))
+    app.add_handler(CommandHandler("language",  cmd_language))
+    app.add_handler(CommandHandler("admin",     cmd_admin))
 
-    app.add_handler(CallbackQueryHandler(show_category,   pattern=r"^cat_"))
-    app.add_handler(CallbackQueryHandler(view_entry,      pattern=r"^view_"))
-    app.add_handler(CallbackQueryHandler(delete_entry,    pattern=r"^del_"))
-    app.add_handler(CallbackQueryHandler(confirm_delete,  pattern=r"^confirm_del_"))
-    app.add_handler(CallbackQueryHandler(toggle_favorite, pattern=r"^fav_"))
-    app.add_handler(CallbackQueryHandler(copy_entry,      pattern=r"^copy_"))
-    app.add_handler(CallbackQueryHandler(show_favorites,  pattern=r"^favorites$"))
-    app.add_handler(CallbackQueryHandler(show_stats,      pattern="^stats$"))
-    app.add_handler(CallbackQueryHandler(back_main,       pattern="^back_main$"))
-    app.add_handler(CallbackQueryHandler(gen_password,    pattern="^gen_password$"))
-    app.add_handler(CallbackQueryHandler(gen_copy,        pattern="^gen_copy$"))
-    app.add_handler(CallbackQueryHandler(search_start,    pattern="^search$"))
-    app.add_handler(CallbackQueryHandler(backup_callback, pattern="^backup$"))
+    # Inline /get_N /del_N /fav_N
+    app.add_handler(MessageHandler(
+        filters.Regex(r"^/(get|del|fav)_\d+$"), handle_inline_cmd
+    ))
 
-    app.add_error_handler(error_handler)
+    # CallbackQuery
+    app.add_handler(CallbackQueryHandler(cb_menu,           pattern="^menu_"))
+    app.add_handler(CallbackQueryHandler(cb_list_cat,       pattern="^listcat_"))
+    app.add_handler(CallbackQueryHandler(cb_generate,       pattern="^gen_"))
+    app.add_handler(CallbackQueryHandler(cb_buy,            pattern="^buy_"))
+    app.add_handler(CallbackQueryHandler(cb_confirm_delete, pattern="^(confirm_del_|cancel_del)"))
+    app.add_handler(CallbackQueryHandler(cb_setlang,        pattern="^setlang_"))
+    app.add_handler(CallbackQueryHandler(cb_settings,       pattern="^settings_lang_"))
 
-    # Планировщик автобэкапа (каждое воскресенье в 10:00)
-    scheduler = AsyncIOScheduler()
+    # Telegram Stars
+    app.add_handler(PreCheckoutQueryHandler(pay.precheckout_handler))
+    app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, pay.successful_payment_handler))
+
+    # Автобэкап каждое воскресенье 10:00 UTC
+    scheduler = AsyncIOScheduler(timezone="UTC")
     scheduler.add_job(
         auto_backup_job,
         trigger="cron",
         day_of_week="sun",
-        hour=10,
-        minute=0,
+        hour=10, minute=0,
         args=[app.bot],
     )
     scheduler.start()
 
-    logger.info("Vault бот запущен")
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+    logger.info("Vault Bot starting...")
+    app.run_polling(drop_pending_updates=True)
 
 
 if __name__ == "__main__":
