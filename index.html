@@ -481,7 +481,7 @@ footer { border-top: 1px solid var(--border); padding: 36px 20px; }
             <li><span class="chk">✓</span>Поддержка по email</li>
           </ul>
           <!-- ВСТАВЬТЕ STRIPE-ССЫЛКУ STARTER СЮДА ↓ -->
-          <a href="https://buy.stripe.com/9B6cN5bAP96814ScWlgYU01" class="btn-plan btn-plan-ghost stripe-link">Начать</a>
+          <a href="https://buy.stripe.com/9B6cN5bAP96814ScWlgYU01" class="btn-plan btn-plan-ghost">Начать</a>
         </div>
 
         <!-- Pro (Featured) -->
@@ -502,7 +502,7 @@ footer { border-top: 1px solid var(--border); padding: 36px 20px; }
             <li><span class="chk">✓</span>Приоритетная поддержка (2ч)</li>
           </ul>
           <!-- ВСТАВЬТЕ STRIPE-ССЫЛКУ PRO СЮДА ↓ -->
-          <a href="https://buy.stripe.com/eVqeVd9sHeqsfZM5tTgYU02" class="btn-plan btn-plan-purple stripe-link">Начать</a>
+          <a href="https://buy.stripe.com/eVqeVd9sHeqsfZM5tTgYU02" class="btn-plan btn-plan-purple">Начать</a>
         </div>
 
         <!-- Agency -->
@@ -521,7 +521,7 @@ footer { border-top: 1px solid var(--border); padding: 36px 20px; }
             <li><span class="chk">✓</span>SLA-поддержка</li>
           </ul>
           <!-- ВСТАВЬТЕ STRIPE-ССЫЛКУ AGENCY СЮДА ↓ -->
-          <a href="https://buy.stripe.com/28E9AT34jdmobJw9K9gYU00" class="btn-plan btn-plan-ghost stripe-link">Начать</a>
+          <a href="https://buy.stripe.com/28E9AT34jdmobJw9K9gYU00" class="btn-plan btn-plan-ghost">Начать</a>
         </div>
 
       </div>
@@ -843,15 +843,6 @@ inputEl.addEventListener('keydown', e => {
 inputEl.addEventListener('input', () => {
   inputEl.style.height = 'auto';
   inputEl.style.height = Math.min(inputEl.scrollHeight, 100) + 'px';
-});
-
-document.querySelectorAll('.stripe-link').forEach(function(link) {
-  link.addEventListener('click', function(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    var url = this.getAttribute('href');
-    window.location.href = url;
-  });
 });
 </script>
 </body>
