@@ -257,6 +257,85 @@ footer{background:var(--dark-s);border-top:1px solid rgba(255,255,255,.06);paddi
 .ch-send:hover{background:var(--terra-d)}
 .ch-send svg{width:16px;height:16px;fill:#fff;display:block}
 @media(max-width:420px){.chat-box{width:calc(100vw - 20px);right:10px;bottom:10px}}
+
+/* ── TOUCH TARGET FIX ── */
+.btn-nav{min-height:44px;display:inline-flex;align-items:center}
+
+/* ── TABLET 1024px ── */
+@media(max-width:1024px){
+  .team-grid{grid-template-columns:repeat(2,1fr)}
+  .t-grid{grid-template-columns:repeat(2,1fr)}
+}
+
+/* ── MOBILE 768px ── */
+@media(max-width:768px){
+  .container{padding:0 20px}
+  /* Section spacing */
+  .hero{padding:48px 20px 60px}
+  .stats-bar{padding:48px 20px}
+  .countries{padding:36px 20px}
+  .team-section,.how-section,.guar-section,.results-section,
+  .pricing-section,.testi-section,.audit-section,
+  .faq-section,.markets-section{padding:72px 20px}
+  footer{padding:52px 20px 28px}
+  /* Hero */
+  .hero-inner{max-width:100%}
+  .hero h1{font-size:clamp(2.4rem,8vw,3.8rem);letter-spacing:-.01em}
+  .hero-price{font-size:clamp(1.4rem,4.5vw,1.8rem);margin-bottom:22px}
+  .hero p{font-size:.96rem;margin-bottom:28px}
+  .hero-ctas{flex-direction:column!important;width:100%;gap:12px;align-items:stretch}
+  .btn-primary{justify-content:center;padding:17px 24px}
+  .btn-txt{text-align:center}
+  /* Stats */
+  .stats-grid{max-width:100%;gap:32px 16px}
+  .stat-num{font-size:2.8rem}
+  /* Team */
+  .team-section .sh{font-size:clamp(2.4rem,7vw,3.4rem)}
+  .team-section .sub{margin-bottom:40px}
+  /* Steps */
+  .steps-grid{gap:24px}
+  /* Guarantee */
+  .guar-section .sh{font-size:clamp(1.9rem,5vw,2.8rem)}
+  .pills{max-width:100%}
+  .btn-gold{width:100%;justify-content:center}
+  /* Results */
+  .results-layout{gap:36px}
+  .results-right{gap:14px}
+  .rc{padding:22px 16px}
+  .rc-num{font-size:2.2rem}
+  /* Pricing — stack vertically, featured card on top */
+  .pricing-wrap{overflow-x:visible;padding-bottom:0}
+  .pricing-grid{grid-template-columns:1fr;min-width:0;gap:16px}
+  .pc.featured{order:-1}
+  /* Audit */
+  .audit-wrap{max-width:100%}
+  /* Footer */
+  .ft{gap:28px;margin-bottom:36px}
+  .fb2{flex-direction:column;align-items:flex-start;gap:10px}
+  /* Headings */
+  .lbl{margin-bottom:14px}
+  .sh{margin-bottom:10px}
+}
+
+/* ── SMALL MOBILE 480px ── */
+@media(max-width:480px){
+  .container{padding:0 16px}
+  .hero{padding:40px 16px 52px}
+  .hero h1{font-size:clamp(2rem,9.5vw,2.8rem)}
+  .hero-price{font-size:clamp(1.2rem,5vw,1.6rem)}
+  .stats-grid{grid-template-columns:repeat(2,1fr)}
+  .stat-num{font-size:2.2rem}
+  .team-section,.how-section,.guar-section,.results-section,
+  .pricing-section,.testi-section,.audit-section,
+  .faq-section,.markets-section{padding:60px 16px}
+  .team-section .sh{font-size:clamp(2rem,8vw,2.8rem)}
+  footer{padding:44px 16px 24px}
+  .guar-section .sh{font-size:clamp(1.6rem,6vw,2.2rem)}
+  .rc-num{font-size:2rem}
+  .sh{font-size:clamp(2rem,6vw,3rem)}
+  .faq-list{margin-top:32px}
+  .fq{padding:15px 18px;font-size:.88rem}
+}
 </style>
 </head>
 <body>
@@ -302,9 +381,9 @@ footer{background:var(--dark-s);border-top:1px solid rgba(255,255,255,.06);paddi
 <section class="hero">
   <div class="hero-inner rv">
     <div class="lbl">AIBeautyKit 3.0 — Новая версия</div>
-    <h1>Твоя ИИ-команда<br>из <em>6</em>.</h1>
-    <div class="hero-price">За €49.</div>
-    <p>Хватит тянуть всё в одиночку. 6 ИИ-специалистов возьмут на себя запись, контент, общение с клиентами и маркетинг — пока ты занимаешься любимым делом.</p>
+    <h1>Пока ты творишь —<br><em>ИИ работает.</em></h1>
+    <div class="hero-price">6 специалистов. От €49/мес.</div>
+    <p>Запись, контент, маркетинг и клиентский сервис — всё на автопилоте. Пока ты занимаешься тем, что любишь.</p>
     <div class="hero-ctas">
       <a class="btn-primary" href="#audit">Получить бесплатный аудит →</a>
       <button class="btn-txt" onclick="document.getElementById('team').scrollIntoView({behavior:'smooth'})">Познакомиться с командой</button>
@@ -350,7 +429,7 @@ footer{background:var(--dark-s);border-top:1px solid rgba(255,255,255,.06);paddi
   <div class="container">
     <div class="rv">
       <div class="lbl lbl-light">Твоя ИИ-команда</div>
-      <h2 class="sh sh-light">Шесть специалистов.<br><em>Одна подписка.</em></h2>
+      <h2 class="sh sh-light">6 специалистов.<br><em>Одна подписка.</em></h2>
       <p class="sub">Каждый ИИ обучен специально для бьюти-бизнеса. Вместе они делают всё, что делал бы целый офис — без зарплат, больничных и выходных.</p>
     </div>
     <div class="team-grid">
@@ -626,7 +705,7 @@ footer{background:var(--dark-s);border-top:1px solid rgba(255,255,255,.06);paddi
     <div class="ft">
       <div>
         <div class="fb">AI<em>Beauty</em>Kit</div>
-        <p class="ft-tag">Твоя ИИ-команда из 6 специалистов — создана специально для бьюти-мастеров в Европе и Северной Америке.</p>
+        <p class="ft-tag">6 ИИ-специалистов на автопилоте — для бьюти-мастеров в Европе и Северной Америке.</p>
       </div>
       <div class="fc"><h4>Продукт</h4><ul><li><a href="#team">ИИ-команда</a></li><li><a href="#pricing">Тарифы</a></li><li><a href="#results">Результаты</a></li><li><a href="#audit">FAQ</a></li></ul></div>
       <div class="fc"><h4>Компания</h4><ul><li><a href="#">О нас</a></li><li><a href="#">Блог</a></li><li><a href="#">Карьера</a></li><li><a href="#">Контакты</a></li></ul></div>
