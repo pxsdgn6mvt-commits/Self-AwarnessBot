@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>AIBeautyKit — ИИ-команда для мастеров красоты</title>
-<meta name="description" content="Шесть ИИ-специалистов в одной подписке. Запись 24/7, контент, маркетинг и аналитика.">
+<title>AIBeautyKit — AI Team for Beauty Professionals</title>
+<meta name="description" content="6 AI specialists in one subscription. Booking 24/7, content, marketing and analytics — while you do what you love.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -28,8 +28,7 @@ h1,h2,h3,h4{font-family:'Lora',Georgia,serif}
 .container{max-width:1160px;margin:0 auto;padding:0 24px}
 .lbl{display:flex;align-items:center;gap:12px;font-size:.69rem;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--terra);margin-bottom:20px;font-family:'Inter',sans-serif}
 .lbl::before{content:'';display:block;width:30px;height:1.5px;background:var(--terra);flex-shrink:0}
-.lbl-light{color:rgba(245,240,232,.55)}
-.lbl-light::before{background:rgba(245,240,232,.55)}
+.lbl-light{color:rgba(245,240,232,.55)}.lbl-light::before{background:rgba(245,240,232,.55)}
 .lbl-center{justify-content:center}
 .sh{font-size:clamp(2.4rem,5.5vw,3.8rem);font-weight:700;color:var(--dark);line-height:1.08;margin-bottom:14px}
 .sh em{font-style:italic;color:var(--terra)}
@@ -37,16 +36,16 @@ h1,h2,h3,h4{font-family:'Lora',Georgia,serif}
 .sub{color:var(--muted);font-size:1rem;line-height:1.75;max-width:520px}
 
 /* NAV */
-nav{position:sticky;top:0;z-index:200;background:rgba(245,240,232,.95);backdrop-filter:blur(14px);border-bottom:1px solid var(--border)}
+nav{position:sticky;top:0;z-index:200;background:rgba(245,240,232,.96);backdrop-filter:blur(14px);border-bottom:1px solid var(--border)}
 .nav-inner{max-width:1160px;margin:0 auto;padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:62px}
 .brand{font-family:'Lora',serif;font-size:1.45rem;font-weight:700;color:var(--dark);text-decoration:none}
 .brand em{color:var(--terra);font-style:normal}
 .nav-links{display:flex;gap:28px;list-style:none}
 .nav-links a{color:var(--muted);text-decoration:none;font-size:.84rem;font-weight:500;transition:color .2s}
 .nav-links a:hover{color:var(--dark)}
-.btn-nav{background:var(--terra);color:#fff;font-weight:600;font-size:.82rem;padding:9px 20px;border-radius:6px;text-decoration:none;cursor:pointer;transition:background .15s;font-family:'Inter',sans-serif}
+.btn-nav{background:var(--terra);color:#fff;font-weight:600;font-size:.82rem;padding:9px 20px;border-radius:6px;text-decoration:none;cursor:pointer;transition:background .15s;font-family:'Inter',sans-serif;min-height:44px;display:inline-flex;align-items:center}
 .btn-nav:hover{background:var(--terra-d)}
-@media(max-width:680px){.nav-links{display:none}}
+@media(max-width:720px){.nav-links{display:none}}
 
 /* TICKER */
 .ticker-wrap{background:var(--dark-s);overflow:hidden;padding:11px 0}
@@ -59,24 +58,23 @@ nav{position:sticky;top:0;z-index:200;background:rgba(245,240,232,.95);backdrop-
 /* HERO */
 .hero{padding:76px 24px 88px;background:var(--cream)}
 .hero-inner{max-width:680px}
-.hero h1{font-size:clamp(3rem,9vw,5.8rem);font-weight:700;line-height:1.02;color:var(--dark);margin-bottom:10px;letter-spacing:-.02em}
+.hero h1{font-size:clamp(3rem,8vw,5.6rem);font-weight:700;line-height:1.04;color:var(--dark);margin-bottom:10px;letter-spacing:-.02em}
 .hero h1 em{font-style:italic;color:var(--terra)}
-.hero-price{font-family:'Lora',serif;font-size:clamp(2.2rem,6vw,3.8rem);font-weight:700;color:var(--gold);margin-bottom:28px;line-height:1.1}
+.hero-price{font-family:'Lora',serif;font-size:clamp(1.4rem,3.5vw,2rem);font-weight:600;color:var(--muted);margin-bottom:28px;line-height:1.3;letter-spacing:.01em}
 .hero p{color:var(--muted);font-size:1.02rem;max-width:500px;margin-bottom:36px;line-height:1.78}
-.hero-ctas{display:flex;flex-direction:column;gap:14px;align-items:flex-start}
-.btn-primary{background:var(--terra);color:#fff;font-weight:600;font-size:.94rem;padding:17px 32px;border-radius:7px;text-decoration:none;border:none;cursor:pointer;transition:background .15s;display:inline-flex;align-items:center;gap:8px;font-family:'Inter',sans-serif}
+.hero-ctas{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.btn-primary{background:var(--terra);color:#fff;font-weight:600;font-size:.94rem;padding:17px 32px;border-radius:7px;text-decoration:none;border:none;cursor:pointer;transition:background .15s;display:inline-flex;align-items:center;gap:8px;font-family:'Inter',sans-serif;min-height:52px}
 .btn-primary:hover{background:var(--terra-d)}
-.btn-txt{color:var(--dark);font-weight:600;font-size:.92rem;text-decoration:underline;text-underline-offset:3px;text-decoration-color:rgba(196,97,58,.5);cursor:pointer;background:none;border:none;font-family:'Inter',sans-serif;padding:0;transition:color .2s}
+.btn-txt{color:var(--dark);font-weight:600;font-size:.92rem;text-decoration:underline;text-underline-offset:3px;text-decoration-color:rgba(196,97,58,.5);cursor:pointer;background:none;border:none;font-family:'Inter',sans-serif;padding:0;transition:color .2s;white-space:nowrap}
 .btn-txt:hover{color:var(--terra)}
-@media(min-width:580px){.hero-ctas{flex-direction:row;align-items:center}}
+.hero-note{color:var(--muted2);font-size:.78rem;margin-top:16px}
 
 /* STATS */
 .stats-bar{background:var(--cream2);border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:64px 24px}
-.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:40px 24px;max-width:760px}
-.stat-num{font-family:'Lora',serif;font-size:3.4rem;font-weight:700;color:var(--dark);line-height:1;margin-bottom:8px}
+.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:40px 24px;max-width:800px}
+.stat-num{font-family:'Lora',serif;font-size:3.2rem;font-weight:700;color:var(--dark);line-height:1;margin-bottom:8px}
 .stat-num .ac{color:var(--terra)}
 .stat-label{color:var(--muted);font-size:.84rem;line-height:1.5}
-@media(max-width:540px){.stats-grid{grid-template-columns:repeat(2,1fr)}}
 
 /* COUNTRIES */
 .countries{padding:48px 24px;background:var(--cream);border-bottom:1px solid var(--border)}
@@ -86,7 +84,7 @@ nav{position:sticky;top:0;z-index:200;background:rgba(245,240,232,.95);backdrop-
 
 /* TEAM */
 .team-section{background:var(--dark-s);padding:96px 24px}
-.team-section .sh{font-size:clamp(3rem,8vw,5.5rem)}
+.team-section .sh{font-size:clamp(2.8rem,7vw,5rem)}
 .team-section .sub{color:rgba(245,240,232,.45);margin-bottom:56px}
 .team-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
 .tc{border:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.03);border-radius:18px;padding:28px;transition:border-color .25s,background .25s}
@@ -99,7 +97,6 @@ nav{position:sticky;top:0;z-index:200;background:rgba(245,240,232,.95);backdrop-
 .tc-list li{font-size:.79rem;color:rgba(245,240,232,.35);padding-left:14px;position:relative;line-height:1.4}
 .tc-list li::before{content:'—';position:absolute;left:0;color:rgba(196,97,58,.45)}
 @media(max-width:900px){.team-grid{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:560px){.team-grid{grid-template-columns:1fr}}
 
 /* HOW */
 .how-section{background:var(--cream2);padding:96px 24px}
@@ -107,8 +104,7 @@ nav{position:sticky;top:0;z-index:200;background:rgba(245,240,232,.95);backdrop-
 .step-n{font-family:'Lora',serif;font-size:2.8rem;font-weight:700;color:var(--terra);opacity:.3;margin-bottom:14px;line-height:1}
 .step h3{font-family:'Lora',serif;font-size:1.18rem;font-weight:600;color:var(--dark);margin-bottom:8px}
 .step p{color:var(--muted);font-size:.84rem;line-height:1.65}
-@media(max-width:700px){.steps-grid{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:400px){.steps-grid{grid-template-columns:1fr}}
+@media(max-width:700px){.steps-grid{grid-template-columns:repeat(2,1fr);gap:24px}}
 
 /* GUARANTEE */
 .guar-section{background:linear-gradient(155deg,var(--terra-dd) 0%,var(--terra) 100%);padding:96px 24px;text-align:center}
@@ -116,8 +112,8 @@ nav{position:sticky;top:0;z-index:200;background:rgba(245,240,232,.95);backdrop-
 .guar-section .sh em{font-style:italic;color:rgba(255,255,255,.7)}
 .guar-icon{font-size:3rem;margin-bottom:22px;display:block}
 .guar-body{color:rgba(255,255,255,.72);font-size:1rem;line-height:1.75;max-width:540px;margin:0 auto 36px}
-.pills{display:flex;flex-direction:column;gap:10px;max-width:400px;margin:0 auto 40px}
-.pill{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:99px;padding:12px 24px;color:#fff;font-size:.88rem;font-weight:500;display:flex;align-items:center;gap:10px;justify-content:flex-start}
+.pills{display:flex;flex-direction:column;gap:10px;max-width:420px;margin:0 auto 40px}
+.pill{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:99px;padding:12px 24px;color:#fff;font-size:.88rem;font-weight:500;display:flex;align-items:center;gap:10px}
 .pill::before{content:'✓';font-weight:700}
 .btn-gold{background:var(--gold-l);color:var(--dark);font-weight:700;font-size:.94rem;padding:17px 36px;border-radius:7px;text-decoration:none;display:inline-flex;align-items:center;gap:8px;font-family:'Inter',sans-serif;transition:background .15s}
 .btn-gold:hover{background:#e4b645}
@@ -127,16 +123,16 @@ nav{position:sticky;top:0;z-index:200;background:rgba(245,240,232,.95);backdrop-
 .results-layout{display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:start}
 .results-right{display:grid;grid-template-columns:1fr 1fr;gap:20px;padding-top:12px}
 .rc{background:var(--cream2);border:1px solid var(--border);border-radius:16px;padding:28px 20px}
-.rc-num{font-family:'Lora',serif;font-size:2.6rem;font-weight:700;color:var(--dark);line-height:1;margin-bottom:6px}
+.rc-num{font-family:'Lora',serif;font-size:2.4rem;font-weight:700;color:var(--dark);line-height:1;margin-bottom:6px}
 .rc-num .ac{color:var(--terra)}
 .rc-label{color:var(--muted);font-size:.82rem;line-height:1.5}
 @media(max-width:860px){.results-layout{grid-template-columns:1fr}}
-@media(max-width:460px){.results-right{grid-template-columns:1fr}}
+@media(max-width:480px){.results-right{grid-template-columns:1fr 1fr}}
 
 /* PRICING */
 .pricing-section{background:var(--cream2);padding:96px 24px;text-align:center}
 .pricing-wrap{overflow-x:auto;padding-bottom:12px;margin-top:56px}
-.pricing-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;min-width:640px}
+.pricing-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;min-width:660px}
 .pc{border:1.5px solid var(--border);background:var(--cream);border-radius:20px;padding:32px;display:flex;flex-direction:column;position:relative;text-align:left;transition:border-color .25s,transform .25s}
 .pc:hover{border-color:rgba(196,97,58,.35);transform:translateY(-3px)}
 .pc.featured{border-color:var(--terra);border-width:2px}
@@ -150,7 +146,7 @@ nav{position:sticky;top:0;z-index:200;background:rgba(245,240,232,.95);backdrop-
 .pc-feats{list-style:none;display:flex;flex-direction:column;gap:9px;flex:1;margin-bottom:24px}
 .pc-feats li{display:flex;align-items:flex-start;gap:9px;font-size:.84rem;color:var(--dark);line-height:1.45}
 .pc-feats li::before{content:'✓';color:var(--terra);font-weight:700;flex-shrink:0;margin-top:1px}
-.btn-plan{display:flex;align-items:center;justify-content:center;min-height:46px;border-radius:8px;font-weight:600;font-size:.87rem;text-decoration:none;letter-spacing:.02em;transition:background .15s,border-color .15s,color .15s;font-family:'Inter',sans-serif}
+.btn-plan{display:flex;align-items:center;justify-content:center;min-height:48px;border-radius:8px;font-weight:600;font-size:.87rem;text-decoration:none;letter-spacing:.02em;transition:background .15s,border-color .15s,color .15s;font-family:'Inter',sans-serif}
 .btn-terra{background:var(--terra);color:#fff}
 .btn-terra:hover{background:var(--terra-d)}
 .btn-ghost{border:1.5px solid var(--border);color:var(--muted);background:transparent}
@@ -164,13 +160,12 @@ nav{position:sticky;top:0;z-index:200;background:rgba(245,240,232,.95);backdrop-
 .tcard{border:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.03);border-radius:18px;padding:28px;display:flex;flex-direction:column;gap:16px;transition:border-color .2s}
 .tcard:hover{border-color:rgba(196,97,58,.3)}
 .t-stars{color:var(--terra);font-size:.88rem;letter-spacing:2px}
-.t-quote{font-family:'Lora',serif;font-size:1.05rem;font-style:italic;color:rgba(245,240,232,.82);line-height:1.65;flex:1}
+.t-quote{font-family:'Lora',serif;font-size:1.02rem;font-style:italic;color:rgba(245,240,232,.82);line-height:1.68;flex:1}
 .t-author{display:flex;align-items:center;gap:12px;border-top:1px solid rgba(255,255,255,.07);padding-top:14px}
 .t-ava{width:40px;height:40px;border-radius:50%;background:rgba(196,97,58,.15);display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0}
 .t-name{font-weight:600;font-size:.87rem;color:#f5f0e8}
 .t-info{color:rgba(245,240,232,.38);font-size:.77rem;margin-top:2px}
 @media(max-width:900px){.t-grid{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:560px){.t-grid{grid-template-columns:1fr}}
 
 /* AUDIT */
 .audit-section{background:var(--cream);padding:96px 24px}
@@ -195,7 +190,7 @@ nav{position:sticky;top:0;z-index:200;background:rgba(245,240,232,.95);backdrop-
 .faq-list{max-width:700px;margin:46px auto 0;display:flex;flex-direction:column;gap:8px;text-align:left}
 .fi{border:1.5px solid var(--border);border-radius:11px;overflow:hidden;transition:border-color .2s;background:var(--cream)}
 .fi.open{border-color:var(--terra)}
-.fq{width:100%;background:none;border:none;color:var(--dark);text-align:left;padding:17px 22px;font-size:.93rem;font-weight:500;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:16px;font-family:'Inter',sans-serif;transition:background .15s}
+.fq{width:100%;background:none;border:none;color:var(--dark);text-align:left;padding:17px 22px;font-size:.93rem;font-weight:500;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:16px;font-family:'Inter',sans-serif;transition:background .15s;min-height:56px}
 .fq:hover{background:rgba(196,97,58,.04)}
 .fi-icon{color:var(--terra);font-size:1.3rem;flex-shrink:0;transition:transform .25s;line-height:1}
 .fi.open .fi-icon{transform:rotate(45deg)}
@@ -239,7 +234,7 @@ footer{background:var(--dark-s);border-top:1px solid rgba(255,255,255,.06);paddi
 .ch-head{background:var(--terra);padding:15px 18px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
 .ch-title{color:#fff;font-weight:700;font-size:.89rem;font-family:'Inter',sans-serif}
 .ch-status{color:rgba(255,255,255,.72);font-size:.74rem;margin-top:2px}
-.ch-close{background:none;border:none;color:rgba(255,255,255,.7);font-size:1.3rem;cursor:pointer;padding:2px 6px;line-height:1}
+.ch-close{background:none;border:none;color:rgba(255,255,255,.7);font-size:1.3rem;cursor:pointer;padding:4px 8px;line-height:1;min-height:36px}
 .ch-close:hover{color:#fff}
 .ch-msgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;background:var(--cream2)}
 .cb{max-width:82%;padding:10px 14px;border-radius:14px;font-size:.86rem;line-height:1.55}
@@ -253,92 +248,67 @@ footer{background:var(--dark-s);border-top:1px solid rgba(255,255,255,.06);paddi
 .ch-in-row{padding:12px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0;background:#fff}
 .ch-input{flex:1;background:var(--cream);border:1.5px solid var(--border);border-radius:7px;padding:10px 13px;color:var(--dark);font-size:.86rem;outline:none;resize:none;max-height:80px;font-family:'Inter',sans-serif;transition:border-color .2s}
 .ch-input:focus{border-color:var(--terra)}
-.ch-send{background:var(--terra);border:none;color:#fff;border-radius:7px;padding:10px 14px;cursor:pointer;transition:background .15s;flex-shrink:0}
+.ch-send{background:var(--terra);border:none;color:#fff;border-radius:7px;padding:10px 14px;cursor:pointer;transition:background .15s;flex-shrink:0;min-height:44px;display:flex;align-items:center}
 .ch-send:hover{background:var(--terra-d)}
 .ch-send svg{width:16px;height:16px;fill:#fff;display:block}
-@media(max-width:420px){.chat-box{width:calc(100vw - 20px);right:10px;bottom:10px}}
-
-/* ── TOUCH TARGET FIX ── */
-.btn-nav{min-height:44px;display:inline-flex;align-items:center}
-
-/* ── TABLET 1024px ── */
-@media(max-width:1024px){
-  .team-grid{grid-template-columns:repeat(2,1fr)}
-  .t-grid{grid-template-columns:repeat(2,1fr)}
-}
-/* Force 1-col team/testimonials on narrow screens */
-@media(max-width:560px){
-  .team-grid{grid-template-columns:1fr!important}
-  .t-grid{grid-template-columns:1fr!important}
-}
 
 /* ── MOBILE 768px ── */
 @media(max-width:768px){
   .container{padding:0 20px}
-  /* Section spacing */
   .hero{padding:48px 20px 60px}
+  .hero-inner{max-width:100%}
+  .hero h1{font-size:clamp(2.4rem,8vw,3.6rem)}
+  .hero-price{font-size:clamp(1.1rem,4vw,1.4rem);margin-bottom:20px}
+  .hero p{font-size:.95rem;margin-bottom:26px}
+  .hero-ctas{flex-direction:column;width:100%;gap:12px;align-items:stretch}
+  .btn-primary{justify-content:center}
+  .btn-txt{text-align:center}
   .stats-bar{padding:48px 20px}
+  .stats-grid{max-width:100%;gap:32px 16px}
+  .stat-num{font-size:2.6rem}
   .countries{padding:36px 20px}
   .team-section,.how-section,.guar-section,.results-section,
   .pricing-section,.testi-section,.audit-section,
   .faq-section,.markets-section{padding:72px 20px}
-  footer{padding:52px 20px 28px}
-  /* Hero */
-  .hero-inner{max-width:100%}
-  .hero h1{font-size:clamp(2.4rem,8vw,3.8rem);letter-spacing:-.01em}
-  .hero-price{font-size:clamp(1.4rem,4.5vw,1.8rem);margin-bottom:22px}
-  .hero p{font-size:.96rem;margin-bottom:28px}
-  .hero-ctas{flex-direction:column!important;width:100%;gap:12px;align-items:stretch}
-  .btn-primary{justify-content:center;padding:17px 24px}
-  .btn-txt{text-align:center}
-  /* Stats */
-  .stats-grid{max-width:100%;gap:32px 16px}
-  .stat-num{font-size:2.8rem}
-  /* Team */
-  .team-section .sh{font-size:clamp(2.4rem,7vw,3.4rem)}
+  .team-section .sh{font-size:clamp(2.4rem,7vw,3.2rem)}
   .team-section .sub{margin-bottom:40px}
-  /* Steps */
-  .steps-grid{gap:24px}
-  /* Guarantee */
   .guar-section .sh{font-size:clamp(1.9rem,5vw,2.8rem)}
   .pills{max-width:100%}
   .btn-gold{width:100%;justify-content:center}
-  /* Results */
   .results-layout{gap:36px}
   .results-right{gap:14px}
   .rc{padding:22px 16px}
-  .rc-num{font-size:2.2rem}
-  /* Pricing — stack vertically, keep original order 49→89→149 */
+  .rc-num{font-size:2rem}
   .pricing-wrap{overflow-x:visible;padding-bottom:0}
   .pricing-grid{grid-template-columns:1fr;min-width:0;gap:16px}
-  /* Audit */
   .audit-wrap{max-width:100%}
-  /* Footer */
   .ft{gap:28px;margin-bottom:36px}
   .fb2{flex-direction:column;align-items:flex-start;gap:10px}
-  /* Headings */
-  .lbl{margin-bottom:14px}
-  .sh{margin-bottom:10px}
+  footer{padding:52px 20px 28px}
 }
-
+/* ── SMALL MOBILE 560px ── */
+@media(max-width:560px){
+  .team-grid{grid-template-columns:1fr!important}
+  .t-grid{grid-template-columns:1fr!important}
+}
 /* ── SMALL MOBILE 480px ── */
 @media(max-width:480px){
   .container{padding:0 16px}
   .hero{padding:40px 16px 52px}
-  .hero h1{font-size:clamp(2rem,9.5vw,2.8rem)}
-  .hero-price{font-size:clamp(1.2rem,5vw,1.6rem)}
+  .hero h1{font-size:clamp(2rem,9vw,2.8rem)}
+  .hero-price{font-size:clamp(1rem,4.5vw,1.3rem)}
   .stats-grid{grid-template-columns:repeat(2,1fr)}
   .stat-num{font-size:2.2rem}
   .team-section,.how-section,.guar-section,.results-section,
   .pricing-section,.testi-section,.audit-section,
   .faq-section,.markets-section{padding:60px 16px}
-  .team-section .sh{font-size:clamp(2rem,8vw,2.8rem)}
-  footer{padding:44px 16px 24px}
+  .team-section .sh{font-size:clamp(2rem,8vw,2.6rem)}
   .guar-section .sh{font-size:clamp(1.6rem,6vw,2.2rem)}
-  .rc-num{font-size:2rem}
+  .rc-num{font-size:1.8rem}
   .sh{font-size:clamp(2rem,6vw,3rem)}
-  .faq-list{margin-top:32px}
+  footer{padding:44px 16px 24px}
   .fq{padding:15px 18px;font-size:.88rem}
+  .chat-box{width:calc(100vw - 20px);right:10px;bottom:10px}
 }
 </style>
 </head>
@@ -348,50 +318,51 @@ footer{background:var(--dark-s);border-top:1px solid rgba(255,255,255,.06);paddi
   <div class="nav-inner">
     <a class="brand" href="#">AI<em>Beauty</em>Kit</a>
     <ul class="nav-links">
-      <li><a href="#team">ИИ-команда</a></li>
-      <li><a href="#results">Результаты</a></li>
-      <li><a href="#pricing">Цены</a></li>
-      <li><a href="#audit">Аудит</a></li>
+      <li><a href="#team">AI Team</a></li>
+      <li><a href="#results">Results</a></li>
+      <li><a href="#pricing">Pricing</a></li>
+      <li><a href="#audit">Free Audit</a></li>
     </ul>
-    <a class="btn-nav" href="#audit">Начать →</a>
+    <a class="btn-nav" href="#audit">Get Started →</a>
   </div>
 </nav>
 
 <div class="ticker-wrap">
   <div class="ticker-track">
-    <div class="ticker-item"><span>✦</span>ИИ-АДМИНИСТРАТОР</div><div class="ticker-item">·</div>
-    <div class="ticker-item"><span>✦</span>КОНТЕНТ-МЕЙКЕР</div><div class="ticker-item">·</div>
-    <div class="ticker-item"><span>✦</span>КЛИЕНТСКИЙ СЕРВИС</div><div class="ticker-item">·</div>
-    <div class="ticker-item"><span>✦</span>МАРКЕТОЛОГ</div><div class="ticker-item">·</div>
-    <div class="ticker-item"><span>✦</span>АНАЛИТИК</div><div class="ticker-item">·</div>
-    <div class="ticker-item"><span>✦</span>МЕНЕДЖЕР ПРОДАЖ</div><div class="ticker-item">·</div>
-    <div class="ticker-item"><span>✦</span>РАБОТАЕТ 24/7</div><div class="ticker-item">·</div>
-    <div class="ticker-item"><span>✦</span>12 ЯЗЫКОВ</div><div class="ticker-item">·</div>
-    <div class="ticker-item"><span>✦</span>ОТ €49/МЕС</div><div class="ticker-item">·</div>
-    <div class="ticker-item"><span>✦</span>GDPR</div><div class="ticker-item">·</div>
-    <div class="ticker-item"><span>✦</span>ИИ-АДМИНИСТРАТОР</div><div class="ticker-item">·</div>
-    <div class="ticker-item"><span>✦</span>КОНТЕНТ-МЕЙКЕР</div><div class="ticker-item">·</div>
-    <div class="ticker-item"><span>✦</span>КЛИЕНТСКИЙ СЕРВИС</div><div class="ticker-item">·</div>
-    <div class="ticker-item"><span>✦</span>МАРКЕТОЛОГ</div><div class="ticker-item">·</div>
-    <div class="ticker-item"><span>✦</span>АНАЛИТИК</div><div class="ticker-item">·</div>
-    <div class="ticker-item"><span>✦</span>МЕНЕДЖЕР ПРОДАЖ</div><div class="ticker-item">·</div>
-    <div class="ticker-item"><span>✦</span>РАБОТАЕТ 24/7</div><div class="ticker-item">·</div>
-    <div class="ticker-item"><span>✦</span>12 ЯЗЫКОВ</div><div class="ticker-item">·</div>
-    <div class="ticker-item"><span>✦</span>ОТ €49/МЕС</div><div class="ticker-item">·</div>
-    <div class="ticker-item"><span>✦</span>GDPR</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span>AI RECEPTIONIST</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span>CONTENT CREATOR</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span>CLIENT SERVICE</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span>MARKETING</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span>ANALYTICS</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span>SALES MANAGER</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span>WORKS 24/7</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span>12 LANGUAGES</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span>FROM €49/MO</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span>GDPR COMPLIANT</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span>AI RECEPTIONIST</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span>CONTENT CREATOR</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span>CLIENT SERVICE</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span>MARKETING</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span>ANALYTICS</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span>SALES MANAGER</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span>WORKS 24/7</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span>12 LANGUAGES</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span>FROM €49/MO</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span>GDPR COMPLIANT</div><div class="ticker-item">·</div>
   </div>
 </div>
 
 <section class="hero">
   <div class="hero-inner rv">
-    <div class="lbl">AIBeautyKit 3.0 — Новая версия</div>
-    <h1>Пока ты творишь —<br><em>ИИ работает.</em></h1>
-    <div class="hero-price">6 специалистов. От €49/мес.</div>
-    <p>Запись, контент, маркетинг и клиентский сервис — всё на автопилоте. Пока ты занимаешься тем, что любишь.</p>
+    <div class="lbl">AIBeautyKit 3.0 — Now Available</div>
+    <h1>While you create —<br><em>AI works.</em></h1>
+    <div class="hero-price">6 AI specialists · from €49/mo · GDPR</div>
+    <p>Booking, content, marketing and client service — all on autopilot. So you can focus entirely on what you love.</p>
     <div class="hero-ctas">
-      <a class="btn-primary" href="#audit">Получить бесплатный аудит →</a>
-      <button class="btn-txt" onclick="document.getElementById('team').scrollIntoView({behavior:'smooth'})">Познакомиться с командой</button>
+      <a class="btn-primary" href="#audit">Get your free audit →</a>
+      <button class="btn-txt" onclick="document.getElementById('team').scrollIntoView({behavior:'smooth'})">Meet the team</button>
     </div>
+    <p class="hero-note">No credit card · No commitment · Cancel anytime</p>
   </div>
 </section>
 
@@ -400,15 +371,15 @@ footer{background:var(--dark-s);border-top:1px solid rgba(255,255,255,.06);paddi
     <div class="stats-grid">
       <div class="rv d1">
         <div class="stat-num"><span class="cnt" data-target="500">0</span><span class="ac">+</span></div>
-        <div class="stat-label">мастеров уже используют AIBeautyKit</div>
+        <div class="stat-label">beauty pros already using AIBeautyKit</div>
       </div>
       <div class="rv d2">
-        <div class="stat-num"><span class="cnt" data-target="15">0</span><span class="ac"> ч/нед</span></div>
-        <div class="stat-label">экономии в неделю в среднем</div>
+        <div class="stat-num"><span class="cnt" data-target="15">0</span><span class="ac"> hrs</span></div>
+        <div class="stat-label">saved per week on average</div>
       </div>
       <div class="rv d3">
         <div class="stat-num"><span class="ac">+</span><span class="cnt" data-target="30">0</span><span class="ac">%</span></div>
-        <div class="stat-label">удержание клиентов с первого месяца</div>
+        <div class="stat-label">client retention from month one</div>
       </div>
     </div>
   </div>
@@ -416,15 +387,15 @@ footer{background:var(--dark-s);border-top:1px solid rgba(255,255,255,.06);paddi
 
 <div class="countries">
   <div class="container">
-    <div class="countries-label">Работают с мастерами из</div>
+    <div class="countries-label">Trusted by pros in</div>
     <div class="countries-list">
-      <div class="country-item">🇫🇮 Финляндии</div>
-      <div class="country-item">🇸🇪 Швеции</div>
-      <div class="country-item">🇩🇪 Германии</div>
-      <div class="country-item">🇳🇱 Нидерландов</div>
-      <div class="country-item">🇵🇱 Польши</div>
-      <div class="country-item">🇺🇸 США</div>
-      <div class="country-item">🇨🇦 Канады</div>
+      <div class="country-item">🇫🇮 Finland</div>
+      <div class="country-item">🇸🇪 Sweden</div>
+      <div class="country-item">🇩🇪 Germany</div>
+      <div class="country-item">🇳🇱 Netherlands</div>
+      <div class="country-item">🇵🇱 Poland</div>
+      <div class="country-item">🇺🇸 USA</div>
+      <div class="country-item">🇨🇦 Canada</div>
     </div>
   </div>
 </div>
@@ -432,46 +403,46 @@ footer{background:var(--dark-s);border-top:1px solid rgba(255,255,255,.06);paddi
 <section class="team-section" id="team">
   <div class="container">
     <div class="rv">
-      <div class="lbl lbl-light">Твоя ИИ-команда</div>
-      <h2 class="sh sh-light">6 специалистов.<br><em>Одна подписка.</em></h2>
-      <p class="sub">Каждый ИИ обучен специально для бьюти-бизнеса. Вместе они делают всё, что делал бы целый офис — без зарплат, больничных и выходных.</p>
+      <div class="lbl lbl-light">Your AI Team</div>
+      <h2 class="sh sh-light">6 specialists.<br><em>One subscription.</em></h2>
+      <p class="sub">Each AI is trained specifically for the beauty industry. Together they do everything a full office would — no salaries, no sick days, no days off.</p>
     </div>
     <div class="team-grid">
       <div class="tc rv d1">
-        <div class="tc-icon">📅</div><div class="tc-role">Администратор</div>
-        <div class="tc-name">Ария</div>
-        <p class="tc-desc">Принимает все записи, отправляет напоминания, переносит визиты и возвращает клиентов после отмены — круглосуточно, в любом часовом поясе.</p>
-        <ul class="tc-list"><li>Умная запись и перенос</li><li>Автонапоминания клиентам</li><li>Управление листом ожидания</li><li>Работа с отменами и no-show</li></ul>
+        <div class="tc-icon">📅</div><div class="tc-role">Receptionist</div>
+        <div class="tc-name">Aria</div>
+        <p class="tc-desc">Handles all bookings, sends reminders, reschedules appointments and wins back clients after cancellations — around the clock, in any time zone.</p>
+        <ul class="tc-list"><li>Smart booking & rescheduling</li><li>Automated client reminders</li><li>Waitlist management</li><li>Cancellation & no-show recovery</li></ul>
       </div>
       <div class="tc rv d2">
-        <div class="tc-icon">✍️</div><div class="tc-role">Контент-мейкер</div>
-        <div class="tc-name">Селеста</div>
-        <p class="tc-desc">Пишет подписи для Instagram, идеи для сторис, посты и рекламные тексты — в твоём стиле, каждый раз по-новому.</p>
-        <ul class="tc-list"><li>Тексты для Instagram и TikTok</li><li>Шаблоны для before/after</li><li>Сезонные акции и кампании</li><li>Email-рассылки</li></ul>
+        <div class="tc-icon">✍️</div><div class="tc-role">Content Creator</div>
+        <div class="tc-name">Celeste</div>
+        <p class="tc-desc">Writes Instagram captions, story ideas, posts and ad copy — in your voice, fresh every time.</p>
+        <ul class="tc-list"><li>Instagram & TikTok copy</li><li>Before/after templates</li><li>Seasonal campaigns</li><li>Email newsletters</li></ul>
       </div>
       <div class="tc rv d3">
-        <div class="tc-icon">💬</div><div class="tc-role">Клиентский сервис</div>
-        <div class="tc-name">Луна</div>
-        <p class="tc-desc">Мгновенно отвечает в директ, обрабатывает вопросы, собирает отзывы и делает каждого клиента VIP-гостем.</p>
-        <ul class="tc-list"><li>Мгновенные ответы в директ</li><li>Автозапрос отзывов</li><li>Программы лояльности</li><li>Работа с недовольными клиентами</li></ul>
+        <div class="tc-icon">💬</div><div class="tc-role">Client Service</div>
+        <div class="tc-name">Luna</div>
+        <p class="tc-desc">Instantly replies in DMs, handles questions, collects reviews and makes every client feel like a VIP.</p>
+        <ul class="tc-list"><li>Instant DM responses</li><li>Automated review requests</li><li>Loyalty programmes</li><li>Unhappy client recovery</li></ul>
       </div>
       <div class="tc rv d1">
-        <div class="tc-icon">📣</div><div class="tc-role">Маркетолог</div>
-        <div class="tc-name">Майя</div>
-        <p class="tc-desc">Планирует акции, сезонные кампании, реферальные программы — всегда на основе данных, без интуитивных догадок.</p>
-        <ul class="tc-list"><li>Месячный календарь промо</li><li>Реферальная программа</li><li>Флеш-распродажи</li><li>Мониторинг конкурентов</li></ul>
+        <div class="tc-icon">📣</div><div class="tc-role">Marketing</div>
+        <div class="tc-name">Maya</div>
+        <p class="tc-desc">Plans promotions, seasonal campaigns and referral programmes — always data-driven, never guesswork.</p>
+        <ul class="tc-list"><li>Monthly promo calendar</li><li>Referral programme</li><li>Flash sales</li><li>Competitor monitoring</li></ul>
       </div>
       <div class="tc rv d2">
-        <div class="tc-icon">📊</div><div class="tc-role">Аналитик</div>
-        <div class="tc-name">Сейдж</div>
-        <p class="tc-desc">Отслеживает выручку, удержание клиентов, топовые услуги и пиковые часы — и говорит, что нужно сделать прямо сейчас.</p>
-        <ul class="tc-list"><li>Отчёты по выручке и записям</li><li>Анализ удержания клиентов</li><li>Лучшее время для публикаций</li><li>Ежемесячные сводки роста</li></ul>
+        <div class="tc-icon">📊</div><div class="tc-role">Analytics</div>
+        <div class="tc-name">Sage</div>
+        <p class="tc-desc">Tracks revenue, client retention, top services and peak hours — then tells you exactly what to do next.</p>
+        <ul class="tc-list"><li>Revenue & booking reports</li><li>Client retention analysis</li><li>Best posting times</li><li>Monthly growth summaries</li></ul>
       </div>
       <div class="tc rv d3">
-        <div class="tc-icon">💎</div><div class="tc-role">Менеджер продаж</div>
-        <div class="tc-name">Вивьен</div>
-        <p class="tc-desc">Находит возможности для допродаж, отправляет персональные предложения нужным клиентам в нужный момент и поднимает средний чек.</p>
-        <ul class="tc-list"><li>Умные допродажи</li><li>VIP-сценарии для постоянных</li><li>Пакеты и наборы услуг</li><li>Напоминания о повторной записи</li></ul>
+        <div class="tc-icon">💎</div><div class="tc-role">Sales Manager</div>
+        <div class="tc-name">Vivienne</div>
+        <p class="tc-desc">Spots upsell opportunities, sends personalised offers to the right clients at the right moment — and lifts your average ticket.</p>
+        <ul class="tc-list"><li>Smart upsells</li><li>VIP scenarios for regulars</li><li>Service packages & bundles</li><li>Rebooking reminders</li></ul>
       </div>
     </div>
   </div>
@@ -480,15 +451,15 @@ footer{background:var(--dark-s);border-top:1px solid rgba(255,255,255,.06);paddi
 <section class="how-section">
   <div class="container">
     <div class="rv">
-      <div class="lbl">Как это работает</div>
-      <h2 class="sh">Запуск за <em>10 минут</em></h2>
-      <p class="sub">Никаких технических знаний. Ответь на 5 вопросов — и команда сразу начинает работать.</p>
+      <div class="lbl">How It Works</div>
+      <h2 class="sh">Live in <em>10 minutes</em></h2>
+      <p class="sub">No technical skills needed. Answer 5 questions — and the team starts working immediately.</p>
     </div>
     <div class="steps-grid">
-      <div class="step rv d1"><div class="step-n">01</div><h3>Регистрация</h3><p>Выбери тариф и введи данные о своём бизнесе. Займёт 2 минуты.</p></div>
-      <div class="step rv d2"><div class="step-n">02</div><h3>Обучение ИИ</h3><p>Ответь на 5 вопросов. ИИ изучит твой голос, услуги и цены.</p></div>
-      <div class="step rv d3"><div class="step-n">03</div><h3>Подключение</h3><p>Привяжи календарь записи и Instagram одним кликом.</p></div>
-      <div class="step rv d4"><div class="step-n">04</div><h3>Работает</h3><p>Команда начинает сразу. Тебя уведомляют только о важном.</p></div>
+      <div class="step rv d1"><div class="step-n">01</div><h3>Sign Up</h3><p>Choose your plan and enter your business details. Takes about 2 minutes.</p></div>
+      <div class="step rv d2"><div class="step-n">02</div><h3>Train the AI</h3><p>Answer 5 questions. The AI learns your voice, services and prices.</p></div>
+      <div class="step rv d3"><div class="step-n">03</div><h3>Connect</h3><p>Link your booking calendar and Instagram in one click.</p></div>
+      <div class="step rv d4"><div class="step-n">04</div><h3>Done</h3><p>The team starts right away. You're only notified about what matters.</p></div>
     </div>
   </div>
 </section>
@@ -496,16 +467,16 @@ footer{background:var(--dark-s);border-top:1px solid rgba(255,255,255,.06);paddi
 <section class="guar-section">
   <div class="container">
     <span class="guar-icon">🛡️</span>
-    <div class="lbl lbl-light lbl-center rv">Гарантия</div>
-    <h2 class="sh rv">Результаты за 30 дней<br><em>— или вернём деньги</em></h2>
-    <p class="guar-body rv">Мы так уверены в том, что AIBeautyKit сэкономит тебе время и увеличит выручку, что даём полную гарантию возврата в течение 30 дней. Без вопросов и без бюрократии.</p>
+    <div class="lbl lbl-light lbl-center rv">Guarantee</div>
+    <h2 class="sh rv">Results in 30 days<br><em>— or your money back</em></h2>
+    <p class="guar-body rv">We're so confident AIBeautyKit will save you time and grow your revenue that we offer a full 30-day money-back guarantee. No questions, no forms, no waiting.</p>
     <div class="pills rv">
-      <div class="pill">Гарантия возврата 30 дней</div>
-      <div class="pill">Без контракта — отмени в любой момент</div>
-      <div class="pill">GDPR — твои данные в безопасности</div>
-      <div class="pill">Все данные принадлежат тебе</div>
+      <div class="pill">30-day money-back guarantee</div>
+      <div class="pill">No contract — cancel anytime</div>
+      <div class="pill">GDPR — your data is safe</div>
+      <div class="pill">All your data belongs to you</div>
     </div>
-    <a class="btn-gold rv" href="#audit">Сначала получить бесплатный аудит →</a>
+    <a class="btn-gold rv" href="#audit">Get your free audit first →</a>
   </div>
 </section>
 
@@ -513,26 +484,26 @@ footer{background:var(--dark-s);border-top:1px solid rgba(255,255,255,.06);paddi
   <div class="container">
     <div class="results-layout">
       <div class="rv">
-        <div class="lbl">Реальные результаты</div>
-        <h2 class="sh">Цифры, которые<br><em>говорят сами</em></h2>
-        <p class="sub" style="margin-top:16px">Данные мастеров по всей Европе и Северной Америке, которые уже используют AIBeautyKit.</p>
+        <div class="lbl">Real Results</div>
+        <h2 class="sh">Numbers that<br><em>speak for themselves</em></h2>
+        <p class="sub" style="margin-top:16px">Data from beauty pros across Europe and North America who are already using AIBeautyKit.</p>
       </div>
       <div class="results-right">
         <div class="rc rv d1">
-          <div class="rc-num"><span class="cnt" data-target="15">0</span><span class="ac"> ч/нед</span></div>
-          <div class="rc-label">экономии в неделю в среднем</div>
+          <div class="rc-num"><span class="cnt" data-target="15">0</span><span class="ac"> hrs</span></div>
+          <div class="rc-label">saved per week on average</div>
         </div>
         <div class="rc rv d2">
           <div class="rc-num"><span class="ac">€</span><span class="cnt" data-target="300">0</span><span class="ac">+</span></div>
-          <div class="rc-label">дополнительной выручки в месяц</div>
+          <div class="rc-label">extra revenue per month</div>
         </div>
         <div class="rc rv d3">
           <div class="rc-num"><span class="ac">+</span><span class="cnt" data-target="28">0</span><span class="ac">%</span></div>
-          <div class="rc-label">удержание клиентов</div>
+          <div class="rc-label">client retention rate</div>
         </div>
         <div class="rc rv d4">
           <div class="rc-num"><span class="cnt" data-target="500">0</span><span class="ac">+</span></div>
-          <div class="rc-label">мастеров уже используют</div>
+          <div class="rc-label">pros already using AIBeautyKit</div>
         </div>
       </div>
     </div>
@@ -542,89 +513,98 @@ footer{background:var(--dark-s);border-top:1px solid rgba(255,255,255,.06);paddi
 <section class="pricing-section" id="pricing">
   <div class="container">
     <div class="rv">
-      <div class="lbl lbl-center">Тарифы</div>
-      <h2 class="sh" style="text-align:center">Честные цены</h2>
-      <p class="sub" style="margin:0 auto">Никаких скрытых платежей. Никаких долгосрочных договоров. Все тарифы защищены 30-дневной гарантией возврата.</p>
+      <div class="lbl lbl-center">Pricing</div>
+      <h2 class="sh" style="text-align:center">Honest prices</h2>
+      <p class="sub" style="margin:0 auto">No hidden fees. No long-term contracts. Every plan comes with a 30-day money-back guarantee.</p>
     </div>
     <div class="pricing-wrap">
       <div class="pricing-grid">
         <div class="pc">
-          <div class="pc-tier">Старт</div><div class="pc-name">Starter</div>
-          <div class="pc-tag">Для одиночных мастеров — отличный старт</div>
-          <div class="pc-price"><span class="pc-amt">€49</span><span class="pc-per">/мес</span></div>
+          <div class="pc-tier">Starter</div><div class="pc-name">Starter</div>
+          <div class="pc-tag">For solo beauty pros — a great place to start</div>
+          <div class="pc-price"><span class="pc-amt">€49</span><span class="pc-per">/mo</span></div>
           <ul class="pc-feats">
-            <li>Ария: ИИ-администратор</li><li>Селеста: Контент-мейкер</li>
-            <li>Луна: Клиентский сервис (базовый)</li><li>50 ИИ-ответов в месяц</li>
-            <li>Генератор подписей для Instagram</li><li>Поддержка по email и чату</li>
+            <li>Aria: AI Receptionist</li>
+            <li>Celeste: Content Creator</li>
+            <li>Luna: Client Service (basic)</li>
+            <li>50 AI responses per month</li>
+            <li>Instagram caption generator</li>
+            <li>Email & chat support</li>
           </ul>
-          <a href="https://buy.stripe.com/9B6cN5bAP96814ScWlgYU01" class="btn-plan btn-ghost">Начать</a>
+          <a href="https://buy.stripe.com/9B6cN5bAP96814ScWlgYU01" class="btn-plan btn-ghost">Get Started</a>
         </div>
         <div class="pc featured">
-          <div class="pop-badge">Популярный выбор</div>
-          <div class="pc-tier">Про</div><div class="pc-name">Pro</div>
-          <div class="pc-tag">Полная ИИ-команда — выбор большинства мастеров</div>
-          <div class="pc-price"><span class="pc-amt">€89</span><span class="pc-per">/мес</span></div>
+          <div class="pop-badge">Most Popular</div>
+          <div class="pc-tier">Pro</div><div class="pc-name">Pro</div>
+          <div class="pc-tag">Full AI team — the choice of most beauty pros</div>
+          <div class="pc-price"><span class="pc-amt">€89</span><span class="pc-per">/mo</span></div>
           <ul class="pc-feats">
-            <li>Вся команда из 6 специалистов</li><li>Неограниченные ИИ-ответы</li>
-            <li>Вивьен: Движок допродаж</li><li>Сейдж: Полная аналитика</li>
-            <li>Майя: Ежемесячные стратегии</li><li>Поддержка на 12 языках</li>
-            <li>Приоритетная поддержка</li>
+            <li>Full team of 6 specialists</li>
+            <li>Unlimited AI responses</li>
+            <li>Vivienne: Upsell engine</li>
+            <li>Sage: Full analytics</li>
+            <li>Maya: Monthly strategies</li>
+            <li>Support in 12 languages</li>
+            <li>Priority support</li>
           </ul>
-          <a href="https://buy.stripe.com/eVqeVd9sHeqsfZM5tTgYU02" class="btn-plan btn-terra">Начать</a>
+          <a href="https://buy.stripe.com/eVqeVd9sHeqsfZM5tTgYU02" class="btn-plan btn-terra">Get Started</a>
         </div>
         <div class="pc">
-          <div class="pc-tier">Агентство</div><div class="pc-name">Agency</div>
-          <div class="pc-tag">Для студий и команд нескольких мастеров</div>
-          <div class="pc-price"><span class="pc-amt">€149</span><span class="pc-per">/мес</span></div>
+          <div class="pc-tier">Agency</div><div class="pc-name">Agency</div>
+          <div class="pc-tag">For salons and multi-chair studios</div>
+          <div class="pc-price"><span class="pc-amt">€149</span><span class="pc-per">/mo</span></div>
           <ul class="pc-feats">
-            <li>Всё из Pro</li><li>До 5 мастеров / кресел</li>
-            <li>Белые отчёты для клиентов</li><li>Кастомный голос и стиль ИИ</li>
-            <li>Индивидуальный онбординг-звонок</li><li>API-доступ</li>
+            <li>Everything in Pro</li>
+            <li>Up to 5 professionals / chairs</li>
+            <li>White-label client reports</li>
+            <li>Custom AI voice & style</li>
+            <li>Personal onboarding call</li>
+            <li>API access</li>
           </ul>
-          <a href="https://buy.stripe.com/28E9AT34jdmobJw9K9gYU00" class="btn-plan btn-ghost">Начать</a>
+          <a href="https://buy.stripe.com/28E9AT34jdmobJw9K9gYU00" class="btn-plan btn-ghost">Get Started</a>
         </div>
       </div>
     </div>
-    <p class="pricing-note">✦ Все тарифы защищены 30-дневной гарантией · Отмена в любой момент</p>
+    <p class="pricing-note">✦ All plans protected by 30-day guarantee · Cancel anytime</p>
   </div>
 </section>
 
 <section class="testi-section">
   <div class="container">
     <div class="rv">
-      <div class="lbl lbl-light lbl-center">Истории клиентов</div>
-      <h2 class="sh sh-light" style="text-align:center">Мастера в восторге</h2>
+      <div class="lbl lbl-light lbl-center">Client Stories</div>
+      <h2 class="sh sh-light" style="text-align:center">What our pros say</h2>
     </div>
     <div class="t-grid">
       <div class="tcard rv d1">
         <div class="t-stars">★★★★★</div>
-        <div class="t-quote">«Раньше каждое воскресенье я тратила на подписи и напоминания. Теперь AIBeautyKit делает всё это. Я буквально вернула себе выходные.»</div>
-        <div class="t-author"><div class="t-ava">💅</div><div><div class="t-name">Анна К.</div><div class="t-info">Nail-мастер · Хельсинки, Финляндия</div></div></div>
+        <div class="t-quote">"I used to spend every Sunday evening writing captions and chasing no-shows. Now AIBeautyKit handles all of it. I genuinely haven't touched my DMs on a weekend in two months."</div>
+        <div class="t-author"><div class="t-ava">💅</div><div><div class="t-name">Anna K.</div><div class="t-info">Nail Technician · Helsinki, Finland</div></div></div>
       </div>
       <div class="tcard rv d2">
         <div class="t-stars">★★★★★</div>
-        <div class="t-quote">«Одна только функция допродаж окупает всю подписку. Мой средний чек вырос с €65 до €94 за 6 недель.»</div>
-        <div class="t-author"><div class="t-ava">👁️</div><div><div class="t-name">Прия М.</div><div class="t-info">Lash-мастер · Амстердам</div></div></div>
+        <div class="t-quote">"The upsell feature alone pays for the subscription three times over. My average ticket went from €65 to €94 in six weeks. I was sceptical at first — now I recommend it to every artist I know."</div>
+        <div class="t-author"><div class="t-ava">👁️</div><div><div class="t-name">Priya M.</div><div class="t-info">Lash Artist · Amsterdam</div></div></div>
       </div>
       <div class="tcard rv d3">
         <div class="t-stars">★★★★★</div>
-        <div class="t-quote">«Была скептиком насчёт ИИ, но настройка заняла 8 минут. На следующее утро у меня было 3 новых записи — пришли ночью, пока я спала.»</div>
-        <div class="t-author"><div class="t-ava">💇</div><div><div class="t-name">Зофья Р.</div><div class="t-info">Стилист · Берлин, Германия</div></div></div>
+        <div class="t-quote">"I was nervous the AI would sound robotic. It doesn't. My clients have no idea — the messages sound exactly like me. Setup took 8 minutes, and I had a new booking come in that same night."</div>
+        <div class="t-author"><div class="t-ava">💇</div><div><div class="t-name">Sophie R.</div><div class="t-info">Hair Stylist · Berlin, Germany</div></div></div>
       </div>
       <div class="tcard rv d1">
         <div class="t-stars">★★★★★</div>
-        <div class="t-quote">«Клиенты говорят, что мой Instagram выглядит очень профессионально. Они не знают, что это ИИ. Я просто выбираю лучший вариант и публикую.»</div>
-        <div class="t-author"><div class="t-ava">✨</div><div><div class="t-name">Мария Т.</div><div class="t-info">Косметолог · Торонто, Канада</div></div></div>
+        <div class="t-quote">"Running a solo practice means wearing every hat. AIBeautyKit gave me back roughly 3 hours a day. I've taken on 4 more regular clients since I started — I literally didn't have the capacity before."</div>
+        <div class="t-author"><div class="t-ava">✨</div><div><div class="t-name">Maria T.</div><div class="t-info">Aesthetician · Toronto, Canada</div></div></div>
       </div>
       <div class="tcard rv d2">
         <div class="t-stars">★★★★★</div>
-        <div class="t-quote">«AIBeautyKit показал, что по четвергам у меня пустые окошки. ИИ предложил флеш-акцию — я заполнила их за 2 часа. Невероятно.»</div>
-        <div class="t-author"><div class="t-ava">📊</div><div><div class="t-name">Каролина Б.</div><div class="t-info">Владелица салона · Варшава</div></div></div>
+        <div class="t-quote">"Sage flagged that my Thursdays were consistently empty. Maya put together a targeted flash offer. I filled the whole day in under 2 hours. That kind of insight would take me weeks to figure out on my own."</div>
+        <div class="t-author"><div class="t-ava">📊</div><div><div class="t-name">Karolina B.</div><div class="t-info">Salon Owner · Warsaw, Poland</div></div></div>
       </div>
       <div class="tcard rv d3">
         <div class="t-stars">★★★★★</div>
-        <div class="t-quote">«Как соло-мастер я тонула в административных делах. AIBeautyKit вернул мне 4 часа каждый день. Теперь я принимаю больше клиентов.»</div>
-        <div class="t-author"><div class="t-ava">🌸</div><div><div class="t-name">Юки Х.</div><div class="t-info">Nail-мастер · Стокгольм</div></div></div>
+        <div class="t-quote">"Admin was drowning me — confirmations, content, chasing rebookings. Three months in and my retention rate has gone up noticeably. The AI just quietly handles everything in the background."</div>
+        <div class="t-author"><div class="t-ava">🌸</div><div><div class="t-name">Yuki H.</div><div class="t-info">Nail Artist · Stockholm, Sweden</div></div></div>
       </div>
     </div>
   </div>
@@ -634,37 +614,37 @@ footer{background:var(--dark-s);border-top:1px solid rgba(255,255,255,.06);paddi
   <div class="container">
     <div class="audit-wrap">
       <div class="rv">
-        <div class="lbl">Бесплатный аудит</div>
-        <h2 class="sh">Получи персональный<br>ИИ-отчёт для твоего бизнеса</h2>
-        <p class="sub" style="margin-bottom:28px">Через 48 часов ты получишь индивидуальный отчёт с конкретными точками роста — специально для твоей специализации и рынка.</p>
+        <div class="lbl">Free Audit</div>
+        <h2 class="sh">Get a personalised AI report for your business</h2>
+        <p class="sub" style="margin-bottom:28px">Within 48 hours you'll receive a tailored report with specific growth opportunities — based on your specialisation and market.</p>
       </div>
       <ul class="audit-bens rv">
-        <li>Где ты теряешь время — выявим точно</li>
-        <li>Почему клиенты не возвращаются и как это исправить</li>
-        <li>Персональная рекомендация по настройке ИИ</li>
-        <li>Оценка потенциального роста выручки</li>
-        <li>Полностью бесплатно и без обязательств</li>
+        <li>Pinpoint exactly where you're losing time</li>
+        <li>Understand why clients don't return — and how to fix it</li>
+        <li>A personalised AI setup recommendation</li>
+        <li>An estimate of your revenue growth potential</li>
+        <li>Completely free, no strings attached</li>
       </ul>
       <form id="audit-form" class="rv" action="https://formspree.io/f/mjglzlaa" method="POST">
-        <div class="ff"><label for="f-name">Твоё имя</label><input id="f-name" type="text" name="name" placeholder="Анна" required></div>
+        <div class="ff"><label for="f-name">Your name</label><input id="f-name" type="text" name="name" placeholder="Anna" required></div>
         <div class="ff"><label for="f-email">Email</label><input id="f-email" type="email" name="email" placeholder="anna@salon.com" required></div>
         <div class="ff">
-          <label for="f-spec">Твоя специализация</label>
+          <label for="f-spec">Your specialisation</label>
           <select id="f-spec" name="specialization" required>
-            <option value="" disabled selected>Выбери специализацию…</option>
-            <option>Nail-мастер</option><option>Lash-мастер</option>
-            <option>Парикмахер / стилист</option><option>Косметолог</option>
-            <option>Бровист</option><option>Владелец салона (несколько услуг)</option>
-            <option>Другая бьюти-специализация</option>
+            <option value="" disabled selected>Choose your specialisation…</option>
+            <option>Nail Technician</option><option>Lash Artist</option>
+            <option>Hair Stylist</option><option>Aesthetician / Skincare</option>
+            <option>Brow Specialist</option><option>Salon Owner (multiple services)</option>
+            <option>Other beauty specialisation</option>
           </select>
         </div>
-        <button type="submit" class="btn-submit">Отправить — получить аудит →</button>
+        <button type="submit" class="btn-submit">Submit — get my audit →</button>
       </form>
       <div class="form-ok" id="form-ok">
-        <h3>Заявка принята ✓</h3>
-        <p>Мы свяжемся с тобой в течение 48 часов с персональным отчётом.</p>
+        <h3>Request received ✓</h3>
+        <p>We'll be in touch within 48 hours with your personalised report.</p>
       </div>
-      <p class="form-note">Никакого спама. Отписка в один клик. Соответствует GDPR.</p>
+      <p class="form-note">No spam. Unsubscribe in one click. GDPR compliant.</p>
     </div>
   </div>
 </section>
@@ -673,15 +653,15 @@ footer{background:var(--dark-s);border-top:1px solid rgba(255,255,255,.06);paddi
   <div class="container">
     <div class="rv">
       <div class="lbl lbl-center">FAQ</div>
-      <h2 class="sh" style="text-align:center">Частые вопросы</h2>
+      <h2 class="sh" style="text-align:center">Common questions</h2>
     </div>
     <div class="faq-list">
-      <div class="fi"><button class="fq">Нужны ли технические знания? <span class="fi-icon">+</span></button><div class="fa"><div class="fa-inner">Совсем нет. Если ты умеешь пользоваться Instagram или WhatsApp — ты справишься с AIBeautyKit. Настройка занимает до 10 минут. Мы проведём тебя через каждый шаг. Никакого кода.</div></div></div>
-      <div class="fi"><button class="fq">Как ИИ учится писать в моём стиле? <span class="fi-icon">+</span></button><div class="fa"><div class="fa-inner">При настройке ты отвечаешь на 5 простых вопросов о своих услугах, тоне общения и целевых клиентах. ИИ адаптируется под твой стиль. Ты можешь оценивать результаты, и со временем ИИ становится точнее.</div></div></div>
-      <div class="fi"><button class="fq">С какими системами записи интегрируется? <span class="fi-icon">+</span></button><div class="fa"><div class="fa-inner">AIBeautyKit подключается к Fresha, Vagaro, Booksy, Timely, Acuity Scheduling и Google Календарю. Новые интеграции добавляются ежемесячно. Также доступна встроенная лёгкая страница онлайн-записи.</div></div></div>
-      <div class="fi"><button class="fq">Мои данные клиентов в безопасности? <span class="fi-icon">+</span></button><div class="fa"><div class="fa-inner">Абсолютно. Все данные зашифрованы, хранятся на серверах в ЕС и соответствуют GDPR. Твои данные принадлежат тебе — мы никому их не продаём и не передаём. Ты можешь экспортировать или удалить всё в любой момент.</div></div></div>
-      <div class="fi"><button class="fq">Что означает гарантия 30 дней? <span class="fi-icon">+</span></button><div class="fa"><div class="fa-inner">Если в течение 30 дней ты почувствуешь, что AIBeautyKit не сэкономил тебе время — напиши нам, и мы вернём каждый цент. Без вопросов, без форм, без ожидания.</div></div></div>
-      <div class="fi"><button class="fq">Работает ли это для nail, lash, hair и других специализаций? <span class="fi-icon">+</span></button><div class="fa"><div class="fa-inner">Да! AIBeautyKit обучен для nail-мастеров, lash-мастеров, парикмахеров, косметологов, бровистов и владельцев салонов. ИИ понимает твои конкретные услуги, терминологию и особенности общения с клиентами.</div></div></div>
+      <div class="fi"><button class="fq">Do I need any technical skills? <span class="fi-icon">+</span></button><div class="fa"><div class="fa-inner">Not at all. If you can use Instagram or WhatsApp, you can use AIBeautyKit. Setup takes under 10 minutes. We walk you through every step — no code, no technical knowledge required.</div></div></div>
+      <div class="fi"><button class="fq">How does the AI learn to write in my style? <span class="fi-icon">+</span></button><div class="fa"><div class="fa-inner">During setup you answer 5 simple questions about your services, tone and target clients. The AI adapts to your voice. You can rate the output, and it gets sharper over time.</div></div></div>
+      <div class="fi"><button class="fq">Which booking systems does it integrate with? <span class="fi-icon">+</span></button><div class="fa"><div class="fa-inner">AIBeautyKit connects with Fresha, Vagaro, Booksy, Timely, Acuity Scheduling and Google Calendar. New integrations are added monthly. There's also a built-in lightweight booking page included.</div></div></div>
+      <div class="fi"><button class="fq">Is my client data safe? <span class="fi-icon">+</span></button><div class="fa"><div class="fa-inner">Absolutely. All data is encrypted, stored on EU servers and fully GDPR-compliant. Your data belongs to you — we never sell or share it. You can export or delete everything at any time.</div></div></div>
+      <div class="fi"><button class="fq">What does the 30-day guarantee mean exactly? <span class="fi-icon">+</span></button><div class="fa"><div class="fa-inner">If within 30 days you feel AIBeautyKit hasn't saved you time, contact us and we'll refund every cent. No questions, no forms, no waiting.</div></div></div>
+      <div class="fi"><button class="fq">Does it work for nail, lash, hair and other specialisations? <span class="fi-icon">+</span></button><div class="fa"><div class="fa-inner">Yes. AIBeautyKit is trained for nail techs, lash artists, hairdressers, aestheticians, brow specialists and salon owners. The AI understands your specific services, terminology and client communication style.</div></div></div>
     </div>
   </div>
 </section>
@@ -689,9 +669,9 @@ footer{background:var(--dark-s);border-top:1px solid rgba(255,255,255,.06);paddi
 <section class="markets-section">
   <div class="container">
     <div class="rv">
-      <div class="lbl lbl-center">Охват рынков</div>
-      <h2 class="sh" style="text-align:center">Для мастеров<br><em>по всему миру</em></h2>
-      <p class="sub" style="margin:0 auto">AIBeautyKit говорит на языке твоих клиентов — буквально. Доступен по всей Европе и Северной Америке.</p>
+      <div class="lbl lbl-center">Markets</div>
+      <h2 class="sh" style="text-align:center">For pros<br><em>around the world</em></h2>
+      <p class="sub" style="margin:0 auto">AIBeautyKit speaks your clients' language — literally. Available across Europe and North America.</p>
     </div>
     <div class="markets-grid">
       <div class="mi rv d1"><div class="mi-flag">🇺🇸</div><div class="mi-lang">English</div></div>
@@ -709,53 +689,48 @@ footer{background:var(--dark-s);border-top:1px solid rgba(255,255,255,.06);paddi
     <div class="ft">
       <div>
         <div class="fb">AI<em>Beauty</em>Kit</div>
-        <p class="ft-tag">6 ИИ-специалистов на автопилоте — для бьюти-мастеров в Европе и Северной Америке.</p>
+        <p class="ft-tag">6 AI specialists on autopilot — built for beauty pros across Europe and North America.</p>
       </div>
-      <div class="fc"><h4>Продукт</h4><ul><li><a href="#team">ИИ-команда</a></li><li><a href="#pricing">Тарифы</a></li><li><a href="#results">Результаты</a></li><li><a href="#audit">FAQ</a></li></ul></div>
-      <div class="fc"><h4>Компания</h4><ul><li><a href="#">О нас</a></li><li><a href="#">Блог</a></li><li><a href="#">Карьера</a></li><li><a href="#">Контакты</a></li></ul></div>
-      <div class="fc"><h4>Документы</h4><ul><li><a href="#">Конфиденциальность</a></li><li><a href="#">Условия</a></li><li><a href="#">GDPR</a></li><li><a href="#">Возврат средств</a></li></ul></div>
+      <div class="fc"><h4>Product</h4><ul><li><a href="#team">AI Team</a></li><li><a href="#pricing">Pricing</a></li><li><a href="#results">Results</a></li><li><a href="#audit">Free Audit</a></li></ul></div>
+      <div class="fc"><h4>Company</h4><ul><li><a href="#">About</a></li><li><a href="#">Blog</a></li><li><a href="#">Careers</a></li><li><a href="#">Contact</a></li></ul></div>
+      <div class="fc"><h4>Legal</h4><ul><li><a href="#">Privacy Policy</a></li><li><a href="#">Terms of Use</a></li><li><a href="#">GDPR</a></li><li><a href="#">Refund Policy</a></li></ul></div>
     </div>
     <div class="fb2">
-      <span class="f-copy">© 2025 AIBeautyKit · Хельсинки, Финляндия 🇫🇮</span>
+      <span class="f-copy">© 2025 AIBeautyKit · Helsinki, Finland 🇫🇮</span>
       <div class="f-langs"><a href="#">EN</a><a href="#">RU</a><a href="#">FI</a><a href="#">SV</a><a href="#">DE</a><a href="#">FR</a></div>
     </div>
   </div>
 </footer>
 
-<button class="chat-btn" id="chatBtn" aria-label="Открыть чат">
+<button class="chat-btn" id="chatBtn" aria-label="Open chat">
   <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
   <span class="chat-dot"></span>
 </button>
 <div class="chat-box" id="chatBox">
   <div class="ch-head">
-    <div><div class="ch-title">AIBeautyKit Ассистент</div><div class="ch-status">Онлайн · Отвечает мгновенно</div></div>
+    <div><div class="ch-title">AIBeautyKit Assistant</div><div class="ch-status">Online · Replies instantly</div></div>
     <button class="ch-close" id="chatClose">×</button>
   </div>
   <div class="ch-msgs" id="chatMsgs">
-    <div class="cb ai">Привет! Я помогу выбрать подходящий тариф или расскажу об ИИ-команде. Что тебя интересует?</div>
+    <div class="cb ai">Hi! I can help you choose the right plan or tell you more about the AI team. What would you like to know?</div>
   </div>
   <div class="ch-typing" id="chatTyping"><span></span><span></span><span></span></div>
   <div class="ch-in-row">
-    <textarea class="ch-input" id="chatInput" placeholder="Написать сообщение…" rows="1"></textarea>
+    <textarea class="ch-input" id="chatInput" placeholder="Type a message…" rows="1"></textarea>
     <button class="ch-send" id="chatSend"><svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button>
   </div>
 </div>
 
 <script>
-/* Reveal on scroll */
 const obs=new IntersectionObserver(entries=>{
   entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');obs.unobserve(e.target);}});
 },{threshold:.1});
 document.querySelectorAll('.rv').forEach(el=>obs.observe(el));
 
-/* Counter animation */
 function animateCount(el){
-  const target=parseInt(el.dataset.target,10);
-  const dur=1600;
-  const start=performance.now();
+  const target=parseInt(el.dataset.target,10),dur=1600,start=performance.now();
   const tick=now=>{
-    const p=Math.min((now-start)/dur,1);
-    const ease=1-Math.pow(1-p,3);
+    const p=Math.min((now-start)/dur,1),ease=1-Math.pow(1-p,3);
     el.textContent=Math.round(ease*target);
     if(p<1)requestAnimationFrame(tick);
   };
@@ -766,7 +741,6 @@ const cntObs=new IntersectionObserver(entries=>{
 },{threshold:.3});
 document.querySelectorAll('.cnt').forEach(el=>cntObs.observe(el));
 
-/* FAQ */
 document.querySelectorAll('.fq').forEach(btn=>{
   btn.addEventListener('click',()=>{
     const item=btn.closest('.fi'),a=item.querySelector('.fa'),open=item.classList.toggle('open');
@@ -774,19 +748,17 @@ document.querySelectorAll('.fq').forEach(btn=>{
   });
 });
 
-/* Audit form */
 document.getElementById('audit-form').addEventListener('submit',async function(e){
   e.preventDefault();
   const btn=this.querySelector('.btn-submit');
-  btn.textContent='Отправляем…';btn.disabled=true;
+  btn.textContent='Sending…';btn.disabled=true;
   try{
     const res=await fetch(this.action,{method:'POST',body:new FormData(this),headers:{'Accept':'application/json'}});
     if(res.ok){this.style.display='none';document.getElementById('form-ok').style.display='block';}
-    else{btn.textContent='Ошибка. Попробуй ещё раз.';btn.disabled=false;}
-  }catch{btn.textContent='Ошибка сети.';btn.disabled=false;}
+    else{btn.textContent='Error. Please try again.';btn.disabled=false;}
+  }catch{btn.textContent='Network error.';btn.disabled=false;}
 });
 
-/* Chat */
 const chatBtn=document.getElementById('chatBtn'),chatBox=document.getElementById('chatBox'),
       chatClose=document.getElementById('chatClose'),msgsEl=document.getElementById('chatMsgs'),
       inputEl=document.getElementById('chatInput'),sendBtn=document.getElementById('chatSend'),
@@ -806,9 +778,9 @@ async function sendMsg(){
   try{
     const res=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:history.slice(-20)})});
     showTyping(false);if(!res.ok)throw new Error();
-    const data=await res.json(),reply=data.content||'Извините, не удалось получить ответ.';
+    const data=await res.json(),reply=data.content||'Sorry, no response received.';
     history.push({role:'assistant',content:reply});addBubble('ai',reply);
-  }catch{showTyping(false);addBubble('ai','Извините, произошла ошибка. Попробуй ещё раз.');}
+  }catch{showTyping(false);addBubble('ai','Sorry, something went wrong. Please try again.');}
   finally{busy=false;sendBtn.disabled=false;inputEl.focus();}
 }
 sendBtn.addEventListener('click',sendMsg);
