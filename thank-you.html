@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Добро пожаловать в AIBeautyKit! 🎉</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:       #09090f;
+  --bg2:      #13111f;
+  --bg3:      #1e1b2e;
+  --border:   rgba(139,92,246,.15);
+  --purple:   #a78bfa;
+  --purple-d: #7c3aed;
+  --text:     #f5f0ff;
+  --muted:    #9d8fbb;
+  --muted2:   #6b5e8a;
+}
+html { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; }
+body { background: var(--bg); color: var(--text); min-height: 100vh;
+       display: flex; flex-direction: column; align-items: center; justify-content: center;
+       padding: 32px 20px; line-height: 1.6; }
+
+.card { background: var(--bg2); border: 1px solid rgba(139,92,246,.25); border-radius: 24px;
+        padding: 56px 48px; max-width: 540px; width: 100%; text-align: center;
+        box-shadow: 0 24px 64px rgba(0,0,0,.5); }
+@media (max-width: 480px) { .card { padding: 40px 28px; } }
+
+.confetti { font-size: 3.5rem; margin-bottom: 8px; }
+.brand    { font-size: 1rem; font-weight: 800; color: var(--muted2); margin-bottom: 24px;
+            letter-spacing: .05em; text-transform: uppercase; }
+.brand span { color: var(--purple); }
+
+h1 { font-size: clamp(1.8rem, 6vw, 2.4rem); font-weight: 900; color: var(--text);
+     line-height: 1.15; margin-bottom: 16px; }
+h1 .accent { color: var(--purple); }
+
+.sub { color: var(--muted); font-size: 1rem; margin-bottom: 36px; max-width: 400px; margin-left: auto; margin-right: auto; }
+
+.steps { list-style: none; text-align: left; display: flex; flex-direction: column; gap: 16px; margin-bottom: 36px; }
+.step  { display: flex; gap: 14px; align-items: flex-start; }
+.step-num { width: 32px; height: 32px; border-radius: 10px; background: rgba(124,58,237,.15);
+            border: 1px solid rgba(124,58,237,.25); color: var(--purple); font-weight: 800;
+            font-size: .8rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px; }
+.step-text { font-size: .9rem; color: #c4b5e4; line-height: 1.5; }
+.step-text strong { color: var(--text); }
+
+.divider { border: none; border-top: 1px solid var(--border); margin: 28px 0; }
+
+.tg-box { background: rgba(124,58,237,.07); border: 1px solid rgba(139,92,246,.2);
+          border-radius: 16px; padding: 24px; margin-bottom: 28px; }
+.tg-box p { color: var(--muted); font-size: .875rem; margin-bottom: 16px; }
+.tg-box strong { color: var(--text); }
+
+.btn-tg { display: inline-flex; align-items: center; gap: 10px; justify-content: center;
+          background: var(--purple-d); color: #fff; font-weight: 800; font-size: 1rem;
+          padding: 16px 28px; border-radius: 14px; text-decoration: none; width: 100%;
+          transition: background .15s, transform .1s; min-height: 54px; }
+.btn-tg:hover  { background: var(--purple); color: #09090f; }
+.btn-tg:active { transform: scale(.98); }
+
+.tg-note { color: var(--muted2); font-size: .78rem; margin-top: 12px; }
+
+.back { color: var(--muted2); font-size: .82rem; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
+.back:hover { color: var(--muted); }
+
+.glow { position: fixed; top: 0; left: 50%; transform: translateX(-50%);
+        width: 600px; height: 300px; pointer-events: none;
+        background: radial-gradient(ellipse at top, rgba(124,58,237,.12) 0%, transparent 70%); }
+</style>
+</head>
+<body>
+<div class="glow"></div>
+
+<div class="card">
+  <div class="confetti">🎉</div>
+  <div class="brand">AIBeautyKit<span>.</span></div>
+
+  <h1>Добро пожаловать<br>в вашу <span class="accent">AI-команду!</span></h1>
+  <p class="sub">Оплата прошла успешно. Ваши 6 AI-специалистов уже готовы к работе.</p>
+
+  <ol class="steps">
+    <li class="step">
+      <div class="step-num">1</div>
+      <div class="step-text"><strong>Откройте Telegram-бот ниже</strong> — он поможет вам завершить настройку за 20 минут.</div>
+    </li>
+    <li class="step">
+      <div class="step-num">2</div>
+      <div class="step-text"><strong>Подключите Instagram и CRM</strong> (Timma / Vello) по инструкции в боте.</div>
+    </li>
+    <li class="step">
+      <div class="step-num">3</div>
+      <div class="step-text"><strong>Ответьте на 10 вопросов</strong> о ваших услугах и стиле — AI обучится вашему бренду.</div>
+    </li>
+  </ol>
+
+  <hr class="divider">
+
+  <div class="tg-box">
+    <p>Для доступа к вашему аккаунту и запуска AI-команды откройте нашего бота в Telegram:</p>
+    <!--
+      ЗАМЕНИТЕ ССЫЛКУ НИЖЕ на вашего реального Telegram-бота.
+      Формат: https://t.me/ВАШ_БОТ_USERNAME
+      Например: https://t.me/AIBeautyKitBot
+    -->
+    <a href="https://t.me/PASTE_YOUR_BOT_USERNAME_HERE" class="btn-tg" target="_blank">
+      ✈️ Открыть Telegram-бот
+    </a>
+    <p class="tg-note">Нет Telegram? <a href="https://telegram.org" style="color:var(--purple)" target="_blank">Скачайте бесплатно</a> — это займёт 2 минуты.</p>
+  </div>
+
+  <a href="/" class="back">← Вернуться на сайт</a>
+</div>
+
+</body>
+</html>
