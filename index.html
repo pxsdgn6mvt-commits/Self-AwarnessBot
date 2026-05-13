@@ -844,6 +844,15 @@ inputEl.addEventListener('input', () => {
   inputEl.style.height = 'auto';
   inputEl.style.height = Math.min(inputEl.scrollHeight, 100) + 'px';
 });
+
+// ── Stripe payment buttons — guaranteed navigation ─────────────
+document.querySelectorAll('a[href^="https://buy.stripe.com"]').forEach(function(link) {
+  link.addEventListener('click', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    window.location.assign(this.getAttribute('href'));
+  });
+});
 </script>
 </body>
 </html>
