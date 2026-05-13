@@ -1,22 +1,12 @@
-"""
-Flask web server for AIBeautyKit landing page.
-Serves static HTML files and provides the /api/chat endpoint
-that proxies requests to the Claude API for the chat widget.
-
-Environment variables required:
-  PORT              — HTTP port (Railway sets this automatically)
-  ANTHROPIC_API_KEY — Your Anthropic API key
-"""
-
 import os
 import logging
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, Response
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-app = Flask(__name__, static_folder=BASE_DIR)
+app = Flask(__name__)
 
 SALES_SYSTEM_PROMPT = (
     "You are an AIBeautyKit sales assistant. "
@@ -30,15 +20,26 @@ SALES_SYSTEM_PROMPT = (
 )
 
 
+def _read_html(filename):
+    path = os.path.join(BASE_DIR, filename)
+    with open(path, "rb") as f:
+        return Response(f.read(), mimetype="text/html; charset=utf-8")
+
+
 @app.route("/")
 def index():
-    return send_from_directory(BASE_DIR, "index.html")
+    return _read_html("index.html")
 
 
 @app.route("/thank-you")
 @app.route("/thank-you.html")
 def thank_you():
-    return send_from_directory(BASE_DIR, "thank-you.html")
+    return _read_html("thank-you.html")
+
+
+@app.route("/healthz")
+def health():
+    return "ok", 200
 
 
 @app.route("/api/chat", methods=["POST"])
@@ -51,16 +52,13 @@ def chat():
     data = request.get_json(silent=True) or {}
     messages = data.get("messages", [])
 
-    # Basic validation — reject obviously bad payloads
     if not isinstance(messages, list) or len(messages) == 0:
         return jsonify({"error": "messages must be a non-empty list"}), 400
 
-    # Keep at most the last 20 turns to avoid runaway token costs
     messages = messages[-20:]
 
     try:
         import anthropic
-
         client = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
             model="claude-haiku-4-5-20251001",
@@ -68,15 +66,13 @@ def chat():
             system=SALES_SYSTEM_PROMPT,
             messages=messages,
         )
-        reply = response.content[0].text
-        return jsonify({"content": reply})
-
+        return jsonify({"content": response.content[0].text})
     except Exception as exc:
         log.exception("Anthropic API error")
         return jsonify({"error": str(exc)}), 502
 
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", "5000"))
-    log.info("Starting AIBeautyKit server on port %s", port)
+    port = int(os.getenv("PORT", "8080"))
+    log.info("Starting on port %s", port)
     app.run(host="0.0.0.0", port=port)
