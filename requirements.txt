@@ -1,5 +1,12 @@
+# Telegram bots
 python-telegram-bot==20.7
 python-dotenv==1.0.0
+
+# Vault bot dependencies
 cryptography==42.0.8
 apscheduler==3.10.4
 asyncpg==0.29.0
+
+# AIBeautyKit landing page server + chat widget + Aria bot
+flask==3.0.3
+anthropic==0.28.0
