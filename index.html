@@ -1,858 +1,651 @@
 <!doctype html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>AIBeautyKit — AI-команда для мастеров красоты</title>
-<meta name="description" content="6 AI-специалистов в одной подписке. Запись 24/7, контент, SEO и Instagram — пока вы работаете с клиентами.">
-<meta property="og:title" content="AIBeautyKit — AI-команда для мастеров красоты">
-<meta property="og:description" content="Перестаньте тратить 15 часов в неделю на администрирование. AIBeautyKit ведёт запись, создаёт контент и продвигает вас 24/7.">
-<meta property="og:type" content="website">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>AIBeautyKit — ИИ-команда для мастеров красоты</title>
+<meta name="description" content="Шесть ИИ-специалистов в одной подписке. Запись 24/7, контент, маркетинг и аналитика — пока ты занимаешься любимым делом.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-:root {
-  --bg:       #09090f;
-  --bg2:      #13111f;
-  --bg3:      #1e1b2e;
-  --border:   rgba(139,92,246,.15);
-  --border-h: rgba(139,92,246,.35);
-  --purple:   #a78bfa;
-  --purple-d: #7c3aed;
-  --purple-l: #ddd6fe;
-  --text:     #f5f0ff;
-  --muted:    #9d8fbb;
-  --muted2:   #6b5e8a;
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#09090f;--bg2:#0f0d1a;--bg3:#161228;
+  --border:rgba(139,92,246,.14);--border-h:rgba(139,92,246,.38);
+  --purple:#a78bfa;--purple-d:#7c3aed;
+  --gold:#c9a96e;
+  --text:#f5f0ff;--muted:#9d8fbb;--muted2:#6b5e8a;
 }
-html { scroll-behavior: smooth; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; }
-body { background: var(--bg); color: var(--text); line-height: 1.6; overflow-x: hidden; }
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);line-height:1.65;overflow-x:hidden;font-family:'Inter',system-ui,sans-serif}
+h1,h2,h3{font-family:'Cormorant Garamond',Georgia,serif}
+.aos{opacity:0;transform:translateY(22px);transition:opacity .6s ease,transform .6s ease}
+.aos.visible{opacity:1;transform:none}
+.d1{transition-delay:.08s}.d2{transition-delay:.16s}.d3{transition-delay:.24s}
+.d4{transition-delay:.32s}.d5{transition-delay:.40s}.d6{transition-delay:.48s}
+.container{max-width:1180px;margin:0 auto;padding:0 24px}
+.section{padding:100px 24px}
+.section-alt{background:rgba(12,9,24,.6)}
+.label{display:inline-block;color:var(--gold);font-size:.7rem;font-weight:600;letter-spacing:.18em;text-transform:uppercase;margin-bottom:18px;font-family:'Inter',sans-serif}
+.section-heading{font-size:clamp(2.2rem,5vw,3.4rem);font-weight:600;color:var(--text);line-height:1.1;margin-bottom:18px}
+.section-sub{color:var(--muted);font-size:1.05rem;max-width:560px;margin:0 auto}
+.text-center{text-align:center}
 
-/* Scroll animations */
-.aos { opacity: 0; transform: translateY(26px); transition: opacity .55s ease-out, transform .55s ease-out; }
-.aos.visible { opacity: 1; transform: none; }
-.d1{transition-delay:.10s}.d2{transition-delay:.20s}.d3{transition-delay:.30s}
-.d4{transition-delay:.40s}.d5{transition-delay:.50s}.d6{transition-delay:.60s}
+nav{position:sticky;top:0;z-index:200;background:rgba(9,9,15,.92);backdrop-filter:blur(16px);border-bottom:1px solid var(--border)}
+.nav-inner{max-width:1180px;margin:0 auto;padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:66px}
+.brand{font-family:'Cormorant Garamond',serif;font-size:1.4rem;font-weight:700;color:var(--text);text-decoration:none}
+.brand em{color:var(--gold);font-style:normal}
+.nav-links{display:flex;gap:30px;list-style:none}
+.nav-links a{color:var(--muted);text-decoration:none;font-size:.85rem;font-weight:500;transition:color .2s}
+.nav-links a:hover{color:var(--text)}
+.btn-nav{background:var(--purple-d);color:#fff;font-weight:600;font-size:.82rem;padding:9px 20px;border-radius:8px;text-decoration:none;border:none;cursor:pointer;transition:background .15s;display:inline-flex;align-items:center;min-height:38px;font-family:'Inter',sans-serif}
+.btn-nav:hover{background:var(--purple);color:#09090f}
+@media(max-width:680px){.nav-links{display:none}}
 
-.container { max-width: 1160px; margin: 0 auto; padding: 0 20px; }
-.section    { padding: 96px 20px; }
-.section-alt{ background: rgba(15,11,30,.55); }
-.label { display: inline-block; color: var(--purple); font-size: .75rem; font-weight: 700;
-         letter-spacing: .12em; text-transform: uppercase; margin-bottom: 16px; }
-.section-heading { font-size: clamp(2rem, 5vw, 3rem); font-weight: 800; color: var(--text); line-height: 1.15; margin-bottom: 16px; }
-.section-sub { color: var(--muted); font-size: 1.1rem; max-width: 560px; margin: 0 auto; }
-.text-center { text-align: center; }
+.ticker-wrap{background:var(--bg2);border-bottom:1px solid var(--border);overflow:hidden;padding:12px 0}
+.ticker-track{display:flex;width:max-content;animation:ticker 38s linear infinite}
+.ticker-track:hover{animation-play-state:paused}
+.ticker-item{white-space:nowrap;padding:0 24px;font-size:.7rem;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:8px}
+.ticker-item span{color:var(--gold)}
+@keyframes ticker{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
 
-/* ── NAV ── */
-nav { position: sticky; top: 0; z-index: 100;
-      background: rgba(9,9,15,.88); backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border); }
-.nav-inner { max-width: 1160px; margin: 0 auto; padding: 0 20px;
-             display: flex; align-items: center; justify-content: space-between; height: 64px; }
-.brand { font-size: 1.25rem; font-weight: 900; color: var(--text); text-decoration: none; }
-.brand span { color: var(--purple); }
-.nav-links { display: flex; gap: 32px; list-style: none; }
-.nav-links a { color: var(--muted); text-decoration: none; font-size: .875rem; transition: color .2s; }
-.nav-links a:hover { color: var(--text); }
-.btn-purple { background: var(--purple-d); color: #fff; font-weight: 700; font-size: .875rem;
-              padding: 10px 20px; border-radius: 10px; text-decoration: none; border: none; cursor: pointer;
-              transition: background .15s, transform .1s; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; }
-.btn-purple:hover { background: var(--purple); color: #09090f; }
-.btn-purple:active { transform: scale(.97); }
-@media (max-width: 640px) { .nav-links { display: none; } }
+.hero{padding:90px 24px 100px;text-align:center;position:relative;overflow:hidden}
+.hero-glow{position:absolute;top:40%;left:50%;transform:translate(-50%,-50%);width:800px;height:800px;border-radius:50%;pointer-events:none;background:radial-gradient(circle,rgba(124,58,237,.07) 0%,transparent 68%)}
+.hero-eyebrow{display:inline-block;font-size:.72rem;font-weight:600;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);margin-bottom:24px;padding:6px 18px;border:1px solid rgba(201,169,110,.25);border-radius:99px;background:rgba(201,169,110,.05)}
+.hero h1{font-size:clamp(3rem,9vw,6rem);font-weight:700;line-height:1.0;color:var(--text);margin-bottom:12px;letter-spacing:-.025em}
+.hero-sub{font-family:'Cormorant Garamond',serif;font-size:clamp(1.3rem,3vw,2rem);font-weight:400;color:var(--muted);margin-bottom:28px;font-style:italic}
+.hero p{color:var(--muted);font-size:1.05rem;max-width:540px;margin:0 auto 38px;line-height:1.75}
+.hero-ctas{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-bottom:22px}
+.btn-primary{background:var(--purple-d);color:#fff;font-weight:600;font-size:.92rem;padding:15px 32px;border-radius:10px;text-decoration:none;border:none;cursor:pointer;transition:background .15s;display:inline-flex;align-items:center;gap:8px;min-height:52px;font-family:'Inter',sans-serif}
+.btn-primary:hover{background:var(--purple);color:#09090f}
+.btn-outline{border:1px solid var(--border-h);color:var(--muted);font-weight:500;font-size:.92rem;padding:15px 32px;border-radius:10px;text-decoration:none;display:inline-flex;align-items:center;gap:8px;min-height:52px;transition:border-color .2s,color .2s;font-family:'Inter',sans-serif}
+.btn-outline:hover{border-color:var(--purple);color:var(--text)}
+.hero-note{color:var(--muted2);font-size:.78rem;margin-top:4px}
 
-/* ── HERO ── */
-.hero { padding: 80px 20px 96px; text-align: center; position: relative; overflow: hidden; }
-.hero-glow { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
-             width: 700px; height: 700px; border-radius: 50%;
-             background: radial-gradient(circle, rgba(124,58,237,.08) 0%, transparent 70%); pointer-events: none; }
-.badge { display: inline-flex; align-items: center; gap: 8px;
-         border: 1px solid rgba(139,92,246,.3); background: rgba(139,92,246,.08);
-         color: var(--purple); font-size: .8rem; font-weight: 600; padding: 6px 14px; border-radius: 99px; margin-bottom: 28px; }
-.hero h1 { font-size: clamp(2.6rem, 8vw, 4.8rem); font-weight: 900; line-height: 1.05;
-           color: var(--text); margin-bottom: 24px; letter-spacing: -.02em; }
-.hero h1 .accent { color: var(--purple); }
-.hero p { color: var(--muted); font-size: 1.15rem; max-width: 580px; margin: 0 auto 36px; line-height: 1.7; }
-.hero-ctas { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-bottom: 20px; }
-.btn-ghost { border: 1px solid var(--border); color: var(--muted); font-weight: 600; font-size: .95rem;
-             padding: 14px 28px; border-radius: 12px; text-decoration: none; transition: border-color .2s, color .2s;
-             display: inline-flex; align-items: center; gap: 6px; min-height: 52px; }
-.btn-ghost:hover { border-color: var(--border-h); color: var(--text); }
-.btn-purple-lg { font-size: .95rem; padding: 14px 28px; border-radius: 12px; min-height: 52px; }
-.hero-disclaimer { color: var(--muted2); font-size: .82rem; }
-.hero-proof      { color: var(--muted2); font-size: .78rem; margin-top: 8px; }
+.stats-bar{border-top:1px solid var(--border);border-bottom:1px solid var(--border);background:rgba(12,9,24,.5);padding:44px 24px}
+.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;max-width:760px;margin:0 auto;text-align:center}
+.stat-value{font-family:'Cormorant Garamond',serif;font-size:2.2rem;font-weight:600;color:var(--purple);margin-bottom:6px;line-height:1.1}
+.stat-label{color:var(--muted);font-size:.82rem;line-height:1.45}
+@media(max-width:500px){.stats-grid{grid-template-columns:1fr;gap:28px}}
 
-/* ── STATS ── */
-.stats-bar { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
-             background: rgba(15,11,30,.4); padding: 40px 20px; }
-.stats-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 20px; max-width: 700px; margin: 0 auto; text-align: center; }
-.stat-num   { font-size: 2.4rem; font-weight: 900; color: var(--purple); font-variant-numeric: tabular-nums; }
-.stat-label { color: var(--muted); font-size: .82rem; margin-top: 4px; }
-@media (max-width: 500px) { .stats-grid { grid-template-columns: repeat(2,1fr); } }
+.countries{padding:52px 24px;text-align:center;border-bottom:1px solid var(--border)}
+.countries-label{font-size:.68rem;font-weight:600;letter-spacing:.2em;text-transform:uppercase;color:var(--muted2);margin-bottom:20px}
+.countries-list{display:flex;flex-wrap:wrap;gap:10px 26px;justify-content:center}
+.country-item{display:flex;align-items:center;gap:8px;font-size:.88rem;color:var(--muted);font-weight:500}
 
-/* ── FEATURES ── */
-.features-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 18px; margin-top: 56px; }
-.feat-card { border: 1px solid var(--border); background: rgba(30,27,46,.5); border-radius: 18px;
-             padding: 28px; transition: border-color .2s, background .2s; }
-.feat-card:hover { border-color: var(--border-h); background: rgba(30,27,46,.85); }
-.feat-icon { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center;
-             justify-content: center; margin-bottom: 16px; font-size: 1.3rem; }
-.feat-card h3 { font-size: 1rem; font-weight: 700; color: var(--text); margin-bottom: 8px; }
-.feat-card p  { color: var(--muted); font-size: .875rem; line-height: 1.6; }
-@media (max-width: 780px) { .features-grid { grid-template-columns: repeat(2,1fr); } }
-@media (max-width: 500px) { .features-grid { grid-template-columns: 1fr; } }
+.team-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:60px}
+.team-card{border:1px solid var(--border);background:rgba(22,18,40,.5);border-radius:20px;padding:30px;transition:border-color .25s,transform .25s}
+.team-card:hover{border-color:var(--border-h);transform:translateY(-3px)}
+.team-icon{font-size:2rem;margin-bottom:14px}
+.team-role{font-size:.65rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--gold);margin-bottom:6px}
+.team-name{font-family:'Cormorant Garamond',serif;font-size:1.5rem;font-weight:600;color:var(--text);margin-bottom:10px}
+.team-desc{color:var(--muted);font-size:.875rem;line-height:1.65;margin-bottom:18px}
+.team-list{list-style:none;display:flex;flex-direction:column;gap:7px}
+.team-list li{font-size:.82rem;color:var(--muted);padding-left:16px;position:relative;line-height:1.4}
+.team-list li::before{content:'—';position:absolute;left:0;color:var(--muted2)}
+@media(max-width:900px){.team-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:560px){.team-grid{grid-template-columns:1fr}}
 
-/* ── HOW IT WORKS ── */
-.steps-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 40px; margin-top: 56px; text-align: center; }
-.step-num { width: 56px; height: 56px; border-radius: 16px; background: rgba(124,58,237,.1);
-            border: 1px solid rgba(124,58,237,.25); color: var(--purple); font-size: 1.1rem;
-            font-weight: 900; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; }
-.steps-grid h3 { font-size: 1.05rem; font-weight: 700; color: var(--text); margin-bottom: 10px; }
-.steps-grid p  { color: var(--muted); font-size: .875rem; }
-@media (max-width: 640px) { .steps-grid { grid-template-columns: 1fr; gap: 28px; } }
+.steps-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:28px;margin-top:60px}
+.step{text-align:center}
+.step-num{width:52px;height:52px;border-radius:14px;background:rgba(124,58,237,.08);border:1px solid rgba(124,58,237,.22);color:var(--purple);font-family:'Cormorant Garamond',serif;font-size:1.5rem;font-weight:700;display:flex;align-items:center;justify-content:center;margin:0 auto 18px}
+.step h3{font-family:'Cormorant Garamond',serif;font-size:1.15rem;font-weight:600;color:var(--text);margin-bottom:8px}
+.step p{color:var(--muted);font-size:.85rem;line-height:1.6}
+@media(max-width:700px){.steps-grid{grid-template-columns:repeat(2,1fr);gap:24px}}
+@media(max-width:420px){.steps-grid{grid-template-columns:1fr}}
 
-/* ── TESTIMONIALS ── */
-.t-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 20px; margin-top: 56px; }
-.t-card { border: 1px solid var(--border); background: rgba(30,27,46,.5); border-radius: 20px;
-          padding: 28px; display: flex; flex-direction: column; gap: 18px; transition: border-color .2s; }
-.t-card:hover { border-color: var(--border-h); }
-.t-top  { display: flex; align-items: center; gap: 14px; }
-.t-avatar { width: 46px; height: 46px; border-radius: 50%; display: flex; align-items: center;
-            justify-content: center; font-weight: 700; font-size: .8rem; color: #fff; flex-shrink: 0; }
-.av1 { background: linear-gradient(135deg,#f43f5e,#ec4899); }
-.av2 { background: linear-gradient(135deg,#8b5cf6,#6d28d9); }
-.av3 { background: linear-gradient(135deg,#a78bfa,#7c3aed); }
-.t-name  { font-weight: 700; font-size: .9rem; color: var(--text); }
-.t-role  { color: var(--muted); font-size: .78rem; }
-.stars   { color: var(--purple); font-size: .95rem; letter-spacing: 1px; }
-.t-quote { color: #c4b5e4; font-size: .875rem; line-height: 1.65; flex: 1; }
-.t-badge { display: inline-flex; align-items: center; gap: 8px; align-self: flex-start;
-           border: 1px solid rgba(139,92,246,.3); background: rgba(139,92,246,.08);
-           border-radius: 99px; padding: 6px 12px; }
-.t-badge-text { color: var(--purple); font-size: .78rem; font-weight: 700; }
-.t-badge-sub  { color: rgba(167,139,250,.55); font-size: .75rem; }
-@media (max-width: 780px) { .t-grid { grid-template-columns: 1fr; } }
+.guarantee{background:rgba(124,58,237,.05);border:1px solid rgba(124,58,237,.18);border-radius:24px;padding:48px;max-width:820px;margin:0 auto;text-align:center}
+.guarantee-icon{font-size:2.5rem;margin-bottom:16px}
+.guarantee h2{font-family:'Cormorant Garamond',serif;font-size:clamp(1.6rem,3vw,2.2rem);font-weight:600;color:var(--text);margin-bottom:14px}
+.guarantee p{color:var(--muted);font-size:1rem;line-height:1.7;max-width:560px;margin:0 auto 28px}
+.guarantee-list{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;max-width:500px;margin:0 auto 32px;text-align:left}
+.guarantee-list li{display:flex;align-items:center;gap:10px;font-size:.88rem;color:var(--muted);list-style:none}
+.guarantee-list li::before{content:'✓';color:var(--purple);font-weight:700;flex-shrink:0}
+@media(max-width:500px){.guarantee-list{grid-template-columns:1fr}}
 
-/* ── ROI CALC ── */
-.roi-box { border: 1px solid var(--border); background: rgba(30,27,46,.5); border-radius: 20px; padding: 40px; margin-top: 48px; }
-.roi-slider-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.roi-slider-label { color: #c4b5e4; font-size: .9rem; font-weight: 500; }
-.roi-slider-val   { color: var(--purple); font-size: 1.2rem; font-weight: 900; }
-input[type=range] { width: 100%; height: 6px; border-radius: 3px; appearance: none;
-                    background: var(--bg3); accent-color: var(--purple-d); cursor: pointer; margin-bottom: 6px; }
-.roi-range-labels { display: flex; justify-content: space-between; color: var(--muted2); font-size: .75rem; margin-bottom: 28px; }
-.roi-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; }
-.roi-card { border: 1px solid var(--border); background: rgba(9,9,15,.6); border-radius: 14px; padding: 18px; text-align: center; }
-.roi-value     { font-size: 1.6rem; font-weight: 900; }
-.roi-card-label{ color: var(--muted2); font-size: .72rem; margin-top: 4px; }
-.c-green { color: #34d399; } .c-sky { color: #38bdf8; } .c-slate { color: #cbd5e1; } .c-purple { color: var(--purple); }
-@media (max-width: 540px) { .roi-grid { grid-template-columns: repeat(2,1fr); } }
+.results-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;margin-top:56px}
+.result-card{background:rgba(22,18,40,.5);border:1px solid var(--border);border-radius:18px;padding:28px 20px;text-align:center}
+.result-value{font-family:'Cormorant Garamond',serif;font-size:1.55rem;font-weight:600;color:var(--purple);margin-bottom:6px;line-height:1.2}
+.result-label{color:var(--muted);font-size:.82rem;line-height:1.5}
+@media(max-width:800px){.results-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:460px){.results-grid{grid-template-columns:1fr}}
 
-/* ── PRICING ── */
-.pricing-wrap { overflow-x: auto; padding-bottom: 12px; }
-.pricing-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 20px; min-width: 660px; margin-top: 56px; }
-.p-card { border: 1px solid var(--border); background: rgba(30,27,46,.4); border-radius: 20px;
-          padding: 28px; display: flex; flex-direction: column; position: relative; }
-.p-card.featured { border-color: rgba(139,92,246,.5); background: rgba(124,58,237,.05);
-                   box-shadow: 0 0 0 1px rgba(139,92,246,.15); }
-.popular-badge { position: absolute; top: -13px; left: 50%; transform: translateX(-50%);
-                 background: var(--purple-d); color: #fff; font-size: .72rem; font-weight: 800;
-                 padding: 4px 14px; border-radius: 99px; white-space: nowrap; }
-.p-name    { font-size: 1.1rem; font-weight: 800; color: var(--text); margin-bottom: 4px; }
-.p-tagline { color: var(--muted); font-size: .78rem; line-height: 1.4; margin-bottom: 20px; }
-.p-price   { display: flex; align-items: flex-end; gap: 4px; margin-bottom: 24px; }
-.p-amount  { font-size: 2.4rem; font-weight: 900; color: var(--text); }
-.p-period  { color: var(--muted); font-size: .875rem; margin-bottom: 6px; }
-.p-features{ list-style: none; display: flex; flex-direction: column; gap: 10px; flex: 1; margin-bottom: 24px; }
-.p-features li  { display: flex; align-items: flex-start; gap: 10px; font-size: .85rem; color: #c4b5e4; line-height: 1.4; }
-.p-features .chk{ color: var(--muted2); font-size: .9rem; flex-shrink: 0; margin-top: 1px; }
-.p-card.featured .chk { color: var(--purple); }
-.btn-plan { display: flex; align-items: center; justify-content: center; min-height: 44px;
-            border-radius: 12px; font-weight: 700; font-size: .875rem; text-decoration: none;
-            cursor: pointer; transition: all .15s; border: none; }
-.btn-plan-purple { background: var(--purple-d); color: #fff; }
-.btn-plan-purple:hover { background: var(--purple); color: #09090f; }
-.btn-plan-ghost  { border: 1px solid var(--border); color: var(--muted); background: transparent; }
-.btn-plan-ghost:hover { border-color: var(--border-h); color: var(--text); }
+.pricing-wrap{overflow-x:auto;padding-bottom:12px}
+.pricing-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;min-width:680px;margin-top:58px}
+.p-card{border:1px solid var(--border);background:rgba(22,18,40,.45);border-radius:22px;padding:32px;display:flex;flex-direction:column;position:relative;transition:border-color .25s,transform .25s}
+.p-card:hover{border-color:var(--border-h);transform:translateY(-3px)}
+.p-card.featured{border-color:rgba(139,92,246,.4);background:rgba(124,58,237,.06);box-shadow:0 0 0 1px rgba(139,92,246,.12)}
+.popular-badge{position:absolute;top:-14px;left:50%;transform:translateX(-50%);background:var(--purple-d);color:#fff;font-size:.68rem;font-weight:700;padding:4px 16px;border-radius:99px;white-space:nowrap;letter-spacing:.06em;text-transform:uppercase;font-family:'Inter',sans-serif}
+.p-tier{font-size:.68rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--gold);margin-bottom:8px}
+.p-name{font-family:'Cormorant Garamond',serif;font-size:1.8rem;font-weight:600;color:var(--text);margin-bottom:4px}
+.p-tagline{color:var(--muted);font-size:.82rem;margin-bottom:22px;line-height:1.4}
+.p-price{display:flex;align-items:flex-end;gap:4px;margin-bottom:26px}
+.p-amount{font-family:'Cormorant Garamond',serif;font-size:3rem;font-weight:600;color:var(--text)}
+.p-period{color:var(--muted);font-size:.85rem;margin-bottom:8px}
+.p-features{list-style:none;display:flex;flex-direction:column;gap:9px;flex:1;margin-bottom:26px}
+.p-features li{display:flex;align-items:flex-start;gap:10px;font-size:.85rem;color:#c4b5e4;line-height:1.45}
+.p-features li::before{content:'✓';color:var(--muted2);font-weight:700;flex-shrink:0;margin-top:1px}
+.p-card.featured .p-features li::before{color:var(--purple)}
+.btn-plan{display:flex;align-items:center;justify-content:center;min-height:46px;border-radius:11px;font-weight:600;font-size:.88rem;text-decoration:none;letter-spacing:.03em;transition:background .15s,border-color .15s,color .15s;font-family:'Inter',sans-serif}
+.btn-plan-purple{background:var(--purple-d);color:#fff}
+.btn-plan-purple:hover{background:var(--purple);color:#09090f}
+.btn-plan-ghost{border:1px solid var(--border-h);color:var(--muted);background:transparent}
+.btn-plan-ghost:hover{border-color:var(--purple);color:var(--text)}
+.pricing-note{text-align:center;color:var(--muted2);font-size:.78rem;margin-top:20px;padding-top:16px;border-top:1px solid var(--border)}
 
-/* ── AUDIT FORM ── */
-.audit-form { max-width: 520px; margin: 40px auto 0; display: flex; flex-direction: column; gap: 14px; }
-.audit-form input,
-.audit-form select {
-  width: 100%; border: 1px solid var(--border); background: rgba(30,27,46,.7);
-  color: var(--text); padding: 14px 18px; border-radius: 14px; font-size: .95rem;
-  outline: none; transition: border-color .2s; min-height: 52px; appearance: none; }
-.audit-form input::placeholder { color: var(--muted2); }
-.audit-form input:focus,
-.audit-form select:focus { border-color: rgba(139,92,246,.5); }
-.audit-form select option { background: var(--bg2); color: var(--text); }
-.btn-submit { width: 100%; background: var(--purple-d); color: #fff; font-weight: 800; font-size: 1rem;
-              padding: 16px; border-radius: 14px; border: none; cursor: pointer; min-height: 54px;
-              transition: background .15s, transform .1s; }
-.btn-submit:hover { background: var(--purple); color: #09090f; }
-.btn-submit:active { transform: scale(.98); }
-.btn-submit:disabled { opacity: .6; cursor: not-allowed; transform: none; }
-.form-note { color: var(--muted2); font-size: .78rem; text-align: center; }
-.success-box { border: 1px solid rgba(139,92,246,.3); background: rgba(139,92,246,.06);
-               border-radius: 20px; padding: 48px 32px; text-align: center;
-               display: flex; flex-direction: column; align-items: center; gap: 14px;
-               max-width: 480px; margin: 0 auto; }
-.success-icon { font-size: 3rem; }
-.success-box h3 { font-size: 1.3rem; font-weight: 800; color: var(--text); }
-.success-box p  { color: var(--muted); }
+.t-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:58px}
+.t-card{border:1px solid var(--border);background:rgba(22,18,40,.5);border-radius:20px;padding:28px;display:flex;flex-direction:column;gap:16px;transition:border-color .2s,transform .2s}
+.t-card:hover{border-color:var(--border-h);transform:translateY(-2px)}
+.t-stars{color:var(--gold);font-size:.9rem;letter-spacing:2px}
+.t-quote{font-family:'Cormorant Garamond',serif;font-size:1.05rem;font-style:italic;color:var(--text);line-height:1.65;flex:1}
+.t-author{display:flex;align-items:center;gap:12px;border-top:1px solid var(--border);padding-top:14px}
+.t-avatar{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0}
+.t-name{font-weight:600;font-size:.88rem;color:var(--text)}
+.t-info{color:var(--muted2);font-size:.78rem;margin-top:2px}
+@media(max-width:900px){.t-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:560px){.t-grid{grid-template-columns:1fr}}
 
-/* ── FAQ ── */
-.faq-list { display: flex; flex-direction: column; gap: 10px; margin-top: 56px; max-width: 740px; margin-left: auto; margin-right: auto; }
-.faq-item { border: 1px solid var(--border); border-radius: 14px; background: rgba(30,27,46,.4); overflow: hidden; transition: border-color .2s; }
-.faq-item.open { border-color: rgba(139,92,246,.35); background: rgba(124,58,237,.05); }
-.faq-btn  { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px;
-            padding: 20px 24px; background: none; border: none; cursor: pointer; text-align: left; min-height: 56px; }
-.faq-q    { font-size: .95rem; font-weight: 500; color: #e2d9f3; line-height: 1.4; transition: color .2s; }
-.faq-item.open .faq-q   { color: var(--purple); }
-.faq-arrow { flex-shrink: 0; color: var(--muted2); font-size: 1rem; transition: transform .3s, color .2s; }
-.faq-item.open .faq-arrow { transform: rotate(180deg); color: var(--purple); }
-.faq-body { max-height: 0; overflow: hidden; transition: max-height .32s ease-out, opacity .25s; opacity: 0; }
-.faq-item.open .faq-body { max-height: 320px; opacity: 1; }
-.faq-a { padding: 0 24px 20px; color: #9d8fbb; font-size: .875rem; line-height: 1.7; }
+.audit-wrap{max-width:680px;margin:0 auto}
+.audit-benefits{list-style:none;display:flex;flex-direction:column;gap:10px;margin-bottom:36px;text-align:left}
+.audit-benefits li{display:flex;align-items:flex-start;gap:12px;font-size:.92rem;color:var(--muted)}
+.audit-benefits li::before{content:'→';color:var(--purple);font-weight:700;flex-shrink:0;margin-top:1px}
+.form-field{margin-bottom:16px}
+.form-field label{display:block;font-size:.78rem;font-weight:600;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:7px}
+.form-field input,.form-field select{width:100%;background:rgba(22,18,40,.7);border:1px solid var(--border);border-radius:10px;padding:13px 16px;color:var(--text);font-size:.95rem;outline:none;font-family:'Inter',sans-serif;transition:border-color .2s}
+.form-field input:focus,.form-field select:focus{border-color:var(--border-h)}
+.form-field select{cursor:pointer}
+.form-field select option{background:#161228;color:var(--text)}
+.btn-submit{width:100%;background:var(--purple-d);color:#fff;font-weight:600;font-size:.95rem;padding:15px 32px;border-radius:11px;border:none;cursor:pointer;font-family:'Inter',sans-serif;transition:background .15s;min-height:52px;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:8px}
+.btn-submit:hover{background:var(--purple);color:#09090f}
+.form-note{text-align:center;color:var(--muted2);font-size:.78rem;margin-top:14px}
+.form-success{display:none;text-align:center;padding:28px;background:rgba(124,58,237,.07);border:1px solid rgba(124,58,237,.2);border-radius:14px}
+.form-success h3{font-family:'Cormorant Garamond',serif;font-size:1.5rem;color:var(--text);margin-bottom:8px}
+.form-success p{color:var(--muted);font-size:.92rem}
 
-/* ── TRUST ── */
-.trust-bar { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
-             background: rgba(15,11,30,.4); padding: 40px 20px; }
-.trust-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 20px; max-width: 800px; margin: 0 auto; text-align: center; }
-.trust-icon  { width: 42px; height: 42px; border-radius: 12px; background: rgba(124,58,237,.08);
-               display: flex; align-items: center; justify-content: center; margin: 0 auto 10px; font-size: 1.2rem; }
-.trust-label { font-size: .875rem; font-weight: 700; color: var(--text); }
-.trust-sub   { font-size: .75rem; color: var(--muted2); margin-top: 2px; }
-@media (max-width: 540px) { .trust-grid { grid-template-columns: repeat(2,1fr); } }
+.faq-list{max-width:760px;margin:48px auto 0;display:flex;flex-direction:column;gap:10px}
+.faq-item{border:1px solid var(--border);border-radius:14px;overflow:hidden;transition:border-color .2s}
+.faq-item.open{border-color:var(--border-h)}
+.faq-q{width:100%;background:none;border:none;color:var(--text);text-align:left;padding:20px 24px;font-size:.95rem;font-weight:500;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:16px;font-family:'Inter',sans-serif;transition:background .15s}
+.faq-q:hover{background:rgba(139,92,246,.04)}
+.faq-icon{color:var(--purple);font-size:1.3rem;flex-shrink:0;transition:transform .25s;line-height:1}
+.faq-item.open .faq-icon{transform:rotate(45deg)}
+.faq-a{max-height:0;overflow:hidden;transition:max-height .35s ease}
+.faq-a-inner{padding:0 24px 20px;color:var(--muted);font-size:.92rem;line-height:1.72}
 
-/* ── FOOTER ── */
-footer { border-top: 1px solid var(--border); padding: 36px 20px; }
-.footer-inner { max-width: 1160px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
-.footer-copy { color: var(--muted2); font-size: .82rem; }
+.markets-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin-top:48px}
+.market-item{background:rgba(22,18,40,.5);border:1px solid var(--border);border-radius:14px;padding:20px 12px;text-align:center;transition:border-color .2s}
+.market-item:hover{border-color:var(--border-h)}
+.market-flag{font-size:1.8rem;margin-bottom:8px}
+.market-lang{font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+@media(max-width:700px){.markets-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:400px){.markets-grid{grid-template-columns:repeat(2,1fr)}}
 
-/* ── CHAT WIDGET ── */
-#chat-trigger {
-  position: fixed; bottom: 24px; right: 24px; z-index: 200;
-  background: var(--purple-d); color: #fff; border: none; border-radius: 99px;
-  padding: 14px 22px; font-weight: 700; font-size: .875rem; cursor: pointer;
-  display: flex; align-items: center; gap: 8px;
-  box-shadow: 0 8px 32px rgba(124,58,237,.4);
-  transition: background .15s, transform .1s;
-}
-#chat-trigger:hover { background: var(--purple); color: #09090f; }
-#chat-trigger:active { transform: scale(.95); }
-#chat-widget {
-  position: fixed; bottom: 24px; right: 24px; z-index: 200; width: 350px;
-  border: 1px solid rgba(139,92,246,.25); background: var(--bg2); border-radius: 20px;
-  box-shadow: 0 24px 64px rgba(0,0,0,.7); overflow: hidden; display: none; flex-direction: column;
-}
-.chat-header { background: var(--bg3); border-bottom: 1px solid var(--border);
-               padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; }
-.chat-agent  { display: flex; align-items: center; gap: 12px; }
-.chat-avatar { width: 36px; height: 36px; border-radius: 50%;
-               background: linear-gradient(135deg,var(--purple-d),#6d28d9);
-               display: flex; align-items: center; justify-content: center;
-               font-weight: 800; font-size: .72rem; color: #fff; position: relative; }
-.chat-dot    { position: absolute; bottom: -2px; right: -2px; width: 11px; height: 11px;
-               background: #34d399; border-radius: 50%; border: 2px solid var(--bg3); }
-.chat-agent-name   { font-size: .875rem; font-weight: 700; color: var(--text); }
-.chat-agent-status { font-size: .72rem; color: #34d399; }
-#chat-close { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 1.2rem; padding: 4px; min-width: 32px; min-height: 32px; }
-#chat-close:hover { color: var(--text); }
-.chat-messages { padding: 16px; display: flex; flex-direction: column; gap: 10px; max-height: 300px; overflow-y: auto; min-height: 160px; }
-.chat-msg        { display: flex; }
-.chat-msg.user   { justify-content: flex-end; }
-.chat-bubble     { max-width: 85%; border-radius: 16px; padding: 10px 14px; font-size: .875rem; line-height: 1.5; }
-.chat-msg.user .chat-bubble { background: var(--purple-d); color: #fff; font-weight: 600; border-bottom-right-radius: 4px; }
-.chat-msg.ai .chat-bubble   { background: var(--bg3); color: #e2d9f3; border-bottom-left-radius: 4px; }
-.chat-typing { display: flex; align-items: center; gap: 4px; padding: 10px 14px;
-               background: var(--bg3); border-radius: 16px; border-bottom-left-radius: 4px;
-               width: fit-content; }
-.typing-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); animation: bounce .9s infinite; }
-.typing-dot:nth-child(2) { animation-delay: .15s; }
-.typing-dot:nth-child(3) { animation-delay: .3s; }
-@keyframes bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-5px)} }
-.chat-input-row { display: flex; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--border); background: var(--bg2); }
-.chat-input { flex: 1; border: 1px solid var(--border); background: var(--bg3); color: var(--text);
-              padding: 10px 14px; border-radius: 12px; font-size: .875rem; outline: none;
-              transition: border-color .2s; resize: none; min-height: 42px; max-height: 100px; font-family: inherit; }
-.chat-input::placeholder { color: var(--muted2); }
-.chat-input:focus { border-color: rgba(139,92,246,.5); }
-.chat-send { background: var(--purple-d); color: #fff; border: none; border-radius: 10px;
-             width: 42px; height: 42px; cursor: pointer; font-size: 1rem; display: flex; align-items: center; justify-content: center;
-             transition: background .15s; flex-shrink: 0; }
-.chat-send:hover { background: var(--purple); }
-.chat-send:disabled { opacity: .5; cursor: not-allowed; }
-.chat-intro { padding: 16px; background: rgba(124,58,237,.06); border-bottom: 1px solid var(--border);
-              font-size: .8rem; color: var(--muted); text-align: center; line-height: 1.5; }
-.chat-intro strong { color: var(--purple); }
+footer{background:var(--bg2);border-top:1px solid var(--border);padding:60px 24px 32px}
+.footer-top{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:40px;margin-bottom:48px}
+.footer-brand{font-family:'Cormorant Garamond',serif;font-size:1.4rem;font-weight:700;color:var(--text);margin-bottom:10px}
+.footer-brand em{color:var(--gold);font-style:normal}
+.footer-tagline{color:var(--muted);font-size:.85rem;line-height:1.6;max-width:240px}
+.footer-col h4{font-size:.7rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);margin-bottom:14px}
+.footer-col ul{list-style:none;display:flex;flex-direction:column;gap:8px}
+.footer-col a{color:var(--muted);text-decoration:none;font-size:.85rem;transition:color .2s}
+.footer-col a:hover{color:var(--text)}
+.footer-bottom{border-top:1px solid var(--border);padding-top:24px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+.footer-copy{color:var(--muted2);font-size:.8rem}
+.footer-langs{display:flex;gap:12px}
+.footer-langs a{color:var(--muted2);text-decoration:none;font-size:.78rem;font-weight:600;letter-spacing:.06em;transition:color .2s}
+.footer-langs a:hover{color:var(--text)}
+@media(max-width:780px){.footer-top{grid-template-columns:1fr 1fr}}
+@media(max-width:460px){.footer-top{grid-template-columns:1fr}}
+
+.chat-trigger{position:fixed;bottom:26px;right:26px;z-index:300;width:56px;height:56px;border-radius:50%;background:var(--purple-d);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 32px rgba(124,58,237,.4);transition:transform .2s,background .2s}
+.chat-trigger:hover{transform:scale(1.07);background:var(--purple)}
+.chat-trigger svg{width:24px;height:24px;fill:#fff}
+.chat-dot{position:absolute;bottom:-1px;right:-1px;width:12px;height:12px;background:#22c55e;border-radius:50%;border:2px solid var(--bg);animation:pulse 2.4s infinite}
+@keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.25);opacity:.7}}
+.chat-box{position:fixed;bottom:26px;right:26px;z-index:300;width:360px;max-height:520px;background:var(--bg3);border:1px solid var(--border-h);border-radius:20px;display:none;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.5);overflow:hidden}
+.chat-header{background:var(--purple-d);padding:16px 18px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+.chat-title{color:#fff;font-weight:700;font-size:.9rem;font-family:'Inter',sans-serif}
+.chat-status{color:rgba(255,255,255,.7);font-size:.75rem;margin-top:2px}
+.chat-close{background:none;border:none;color:rgba(255,255,255,.7);font-size:1.3rem;cursor:pointer;padding:2px 6px;line-height:1}
+.chat-close:hover{color:#fff}
+.chat-msgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px}
+.chat-bubble{max-width:82%;padding:10px 14px;border-radius:14px;font-size:.875rem;line-height:1.55}
+.chat-bubble.user{background:var(--purple-d);color:#fff;align-self:flex-end;border-radius:14px 14px 4px 14px}
+.chat-bubble.ai{background:rgba(30,27,46,.9);color:var(--text);align-self:flex-start;border-radius:14px 14px 14px 4px}
+.chat-typing{display:none;align-self:flex-start;padding:10px 14px;background:rgba(30,27,46,.9);border-radius:14px;gap:5px;align-items:center}
+.chat-typing span{width:6px;height:6px;background:var(--muted);border-radius:50%;animation:blink 1.2s infinite both}
+.chat-typing span:nth-child(2){animation-delay:.2s}
+.chat-typing span:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}
+.chat-input-row{padding:12px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0}
+.chat-input{flex:1;background:rgba(22,18,40,.8);border:1px solid var(--border);border-radius:10px;padding:10px 13px;color:var(--text);font-size:.875rem;outline:none;resize:none;max-height:80px;font-family:'Inter',sans-serif;transition:border-color .2s}
+.chat-input:focus{border-color:var(--border-h)}
+.chat-send{background:var(--purple-d);border:none;color:#fff;border-radius:10px;padding:10px 14px;cursor:pointer;transition:background .15s;flex-shrink:0}
+.chat-send:hover{background:var(--purple)}
+.chat-send svg{width:16px;height:16px;fill:#fff;display:block}
+@media(max-width:420px){.chat-box{width:calc(100vw - 20px);right:10px;bottom:10px}}
 </style>
 </head>
 <body>
 
-<!-- ── NAV ────────────────────────────────── -->
 <nav>
   <div class="nav-inner">
-    <a class="brand" href="#">AIBeautyKit<span>.</span></a>
+    <a class="brand" href="#">AI<em>Beauty</em>Kit</a>
     <ul class="nav-links">
-      <li><a href="#features">Возможности</a></li>
-      <li><a href="#testimonials">Отзывы</a></li>
+      <li><a href="#team">ИИ-команда</a></li>
+      <li><a href="#results">Результаты</a></li>
       <li><a href="#pricing">Цены</a></li>
-      <li><a href="#faq">FAQ</a></li>
+      <li><a href="#audit">Бесплатный аудит</a></li>
     </ul>
-    <a href="#audit" class="btn-purple">Бесплатный аудит</a>
+    <a class="btn-nav" href="#audit">Начать →</a>
   </div>
 </nav>
 
-<!-- ── HERO ───────────────────────────────── -->
-<section class="hero">
-  <div class="hero-glow"></div>
-  <div class="badge aos">✨ AI-команда из 6 специалистов в одной подписке</div>
-  <h1 class="aos">Ваш AI-администратор<br><span class="accent">работает 24/7</span></h1>
-  <p class="aos">Запись клиентов, контент, SEO и Instagram — пока вы занимаетесь любимым делом. Больше никаких потерянных заявок и пустых окошек.</p>
-  <div class="hero-ctas aos">
-    <a href="#audit" class="btn-purple btn-purple-lg">Получить бесплатный аудит →</a>
-    <a href="#features" class="btn-ghost">Как это работает ›</a>
-  </div>
-  <p class="hero-disclaimer aos">Бесплатный аудит за 24 часа · Без обязательств · GDPR</p>
-  <p class="hero-proof aos">⭐ 500+ мастеров в 8 европейских странах</p>
-</section>
-
-<!-- ── STATS ──────────────────────────────── -->
-<div class="stats-bar">
-  <div class="stats-grid">
-    <div class="aos d1"><div class="stat-num" data-target="500" data-suffix="+">0+</div><div class="stat-label">Мастеров красоты</div></div>
-    <div class="aos d2"><div class="stat-num" data-target="8" data-suffix="">0</div><div class="stat-label">Стран Европы</div></div>
-    <div class="aos d3"><div class="stat-num" data-target="15" data-suffix="ч">0ч</div><div class="stat-label">Экономия в неделю</div></div>
-    <div class="aos d4"><div class="stat-num" data-target="30" data-suffix="%">0%</div><div class="stat-label">Больше записей</div></div>
+<div class="ticker-wrap">
+  <div class="ticker-track">
+    <div class="ticker-item"><span>✦</span> ИИ-АДМИНИСТРАТОР</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span> КОНТЕНТ-МЕЙКЕР</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span> КЛИЕНТСКИЙ СЕРВИС</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span> МАРКЕТОЛОГ</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span> АНАЛИТИК</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span> МЕНЕДЖЕР ПРОДАЖ</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span> РАБОТАЕТ 24/7</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span> ДВЕНАДЦАТЬ ЯЗЫКОВ</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span> ОТ €49/МЕС</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span> GDPR</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span> ИИ-АДМИНИСТРАТОР</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span> КОНТЕНТ-МЕЙКЕР</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span> КЛИЕНТСКИЙ СЕРВИС</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span> МАРКЕТОЛОГ</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span> АНАЛИТИК</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span> МЕНЕДЖЕР ПРОДАЖ</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span> РАБОТАЕТ 24/7</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span> ДВЕНАДЦАТЬ ЯЗЫКОВ</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span> ОТ €49/МЕС</div><div class="ticker-item">·</div>
+    <div class="ticker-item"><span>✦</span> GDPR</div><div class="ticker-item">·</div>
   </div>
 </div>
 
-<!-- ── FEATURES ───────────────────────────── -->
-<section class="section" id="features">
+<section class="hero">
+  <div class="hero-glow"></div>
+  <div class="aos">
+    <div class="hero-eyebrow">AIBeautyKit 3.0 — Новая версия</div>
+    <h1>Твоя ИИ-команда<br>из шести.</h1>
+    <p class="hero-sub">За €49 в месяц.</p>
+    <p>Хватит тянуть всё в одиночку. Шесть ИИ-специалистов возьмут на себя запись, контент, общение с клиентами и маркетинг — пока ты занимаешься любимым делом.</p>
+    <div class="hero-ctas">
+      <a class="btn-primary" href="#audit">Получить бесплатный аудит →</a>
+      <a class="btn-outline" href="#team">Познакомиться с командой</a>
+    </div>
+    <p class="hero-note">Бесплатный аудит · Без обязательств · GDPR</p>
+  </div>
+</section>
+
+<div class="stats-bar">
+  <div class="stats-grid">
+    <div class="aos d1"><div class="stat-value">Сотни</div><div class="stat-label">мастеров уже используют AIBeautyKit</div></div>
+    <div class="aos d2"><div class="stat-value">Пятнадцать часов</div><div class="stat-label">экономии в неделю в среднем</div></div>
+    <div class="aos d3"><div class="stat-value">Больше</div><div class="stat-label">постоянных клиентов с первого месяца</div></div>
+  </div>
+</div>
+
+<div class="countries">
+  <p class="countries-label">Работают с мастерами из</p>
+  <div class="countries-list">
+    <div class="country-item">🇫🇮 Финляндии</div>
+    <div class="country-item">🇸🇪 Швеции</div>
+    <div class="country-item">🇩🇪 Германии</div>
+    <div class="country-item">🇳🇱 Нидерландов</div>
+    <div class="country-item">🇵🇱 Польши</div>
+    <div class="country-item">🇺🇸 США</div>
+    <div class="country-item">🇨🇦 Канады</div>
+  </div>
+</div>
+
+<section class="section" id="team">
   <div class="container text-center">
-    <div class="aos"><span class="label">AI-команда</span>
-    <h2 class="section-heading">6 специалистов. Одна подписка.</h2>
-    <p class="section-sub">Каждый AI работает круглосуточно, чтобы вы могли сосредоточиться на своём мастерстве.</p></div>
-    <div class="features-grid">
-      <div class="feat-card aos d1">
-        <div class="feat-icon" style="background:rgba(56,189,248,.1)">📅</div>
-        <h3>AI-Администратор</h3>
-        <p>Принимает запись через Instagram DM, WhatsApp и сайт 24/7. Никогда не пропустит клиента, никогда не устаёт.</p>
+    <div class="aos">
+      <span class="label">Твоя ИИ-команда</span>
+      <h2 class="section-heading">Шесть специалистов. Одна подписка.</h2>
+      <p class="section-sub">Каждый ИИ обучен специально для бьюти-бизнеса. Вместе они делают всё, что делал бы целый офис — без зарплат, больничных и выходных.</p>
+    </div>
+    <div class="team-grid">
+      <div class="team-card aos d1">
+        <div class="team-icon">📅</div><div class="team-role">Администратор</div>
+        <div class="team-name">Ария</div>
+        <p class="team-desc">Принимает все записи, отправляет напоминания, переносит визиты и возвращает клиентов после отмены — круглосуточно, в любом часовом поясе.</p>
+        <ul class="team-list"><li>Умная запись и перенос</li><li>Автонапоминания клиентам</li><li>Управление листом ожидания</li><li>Работа с отменами и no-show</li></ul>
       </div>
-      <div class="feat-card aos d2">
-        <div class="feat-icon" style="background:rgba(244,63,94,.1)">📣</div>
-        <h3>AI-Маркетолог</h3>
-        <p>Создаёт сезонные акции, объявления о флеш-распродажах и реферальные программы автоматически.</p>
+      <div class="team-card aos d2">
+        <div class="team-icon">✍️</div><div class="team-role">Контент-мейкер</div>
+        <div class="team-name">Селеста</div>
+        <p class="team-desc">Пишет подписи для Instagram, идеи для сторис, посты и рекламные тексты — в твоём стиле, каждый раз по-новому.</p>
+        <ul class="team-list"><li>Тексты для Instagram и TikTok</li><li>Шаблоны для before/after</li><li>Сезонные акции и кампании</li><li>Email-рассылки</li></ul>
       </div>
-      <div class="feat-card aos d3">
-        <div class="feat-icon" style="background:rgba(139,92,246,.1)">🎬</div>
-        <h3>AI-Видеограф</h3>
-        <p>Пишет хуки для Reels, сценарии и подписи, которые останавливают скролл. Всегда в трендах.</p>
+      <div class="team-card aos d3">
+        <div class="team-icon">💬</div><div class="team-role">Клиентский сервис</div>
+        <div class="team-name">Луна</div>
+        <p class="team-desc">Мгновенно отвечает в директ, обрабатывает вопросы, собирает отзывы и делает каждого клиента VIP-гостем.</p>
+        <ul class="team-list"><li>Мгновенные ответы в директ</li><li>Автозапрос отзывов</li><li>Программы лояльности</li><li>Работа с недовольными клиентами</li></ul>
       </div>
-      <div class="feat-card aos d4">
-        <div class="feat-icon" style="background:rgba(52,211,153,.1)">🔍</div>
-        <h3>AI-SEO специалист</h3>
-        <p>Оптимизирует ваш Google Business, строит локальные ключевые слова и помогает новым клиентам найти вас.</p>
+      <div class="team-card aos d1">
+        <div class="team-icon">📣</div><div class="team-role">Маркетолог</div>
+        <div class="team-name">Майя</div>
+        <p class="team-desc">Планирует акции, сезонные кампании, реферальные программы — всегда на основе данных, без интуитивных догадок.</p>
+        <ul class="team-list"><li>Месячный календарь промо</li><li>Реферальная программа</li><li>Флеш-распродажи</li><li>Мониторинг конкурентов</li></ul>
       </div>
-      <div class="feat-card aos d5">
-        <div class="feat-icon" style="background:rgba(167,139,250,.1)">🖼️</div>
-        <h3>AI-Контент Мастер</h3>
-        <p>Создаёт ежедневные посты в Instagram, Stories, карусели и хэштеги — в вашем стиле.</p>
+      <div class="team-card aos d2">
+        <div class="team-icon">📊</div><div class="team-role">Аналитик</div>
+        <div class="team-name">Сейдж</div>
+        <p class="team-desc">Отслеживает выручку, удержание клиентов, топовые услуги и пиковые часы — и говорит, что нужно сделать прямо сейчас.</p>
+        <ul class="team-list"><li>Отчёты по выручке и записям</li><li>Анализ удержания клиентов</li><li>Лучшее время для публикаций</li><li>Ежемесячные сводки роста</li></ul>
       </div>
-      <div class="feat-card aos d6">
-        <div class="feat-icon" style="background:rgba(236,72,153,.1)">💬</div>
-        <h3>AI-Комьюнити Менеджер</h3>
-        <p>Отвечает на комментарии и DM, поддерживает живое сообщество — даже пока вы с клиентом.</p>
+      <div class="team-card aos d3">
+        <div class="team-icon">💎</div><div class="team-role">Менеджер продаж</div>
+        <div class="team-name">Вивьен</div>
+        <p class="team-desc">Находит возможности для допродаж, отправляет персональные предложения нужным клиентам в нужный момент — и поднимает средний чек.</p>
+        <ul class="team-list"><li>Умные допродажи</li><li>VIP-сценарии для постоянных</li><li>Пакеты и наборы услуг</li><li>Напоминания о повторной записи</li></ul>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ── HOW IT WORKS ────────────────────────── -->
 <section class="section section-alt">
   <div class="container text-center">
-    <div class="aos"><span class="label">Как это работает</span>
-    <h2 class="section-heading">Запуск за 20 минут</h2></div>
+    <div class="aos">
+      <span class="label">Как это работает</span>
+      <h2 class="section-heading">Запуск за десять минут</h2>
+      <p class="section-sub">Никаких технических знаний. Никаких сложных настроек. Ответь на пять вопросов — и команда сразу начинает работать.</p>
+    </div>
     <div class="steps-grid">
-      <div class="aos d1">
-        <div class="step-num">01</div>
-        <h3>Подключите аккаунты</h3>
-        <p>Привяжите Instagram, вашу CRM (Timma / Vello) и WhatsApp в один клик.</p>
-      </div>
-      <div class="aos d2">
-        <div class="step-num">02</div>
-        <h3>Обучите AI под ваш стиль</h3>
-        <p>Ответьте на 10 простых вопросов о ваших услугах, ценах и тоне общения.</p>
-      </div>
-      <div class="aos d3">
-        <div class="step-num">03</div>
-        <h3>Смотрите, как он работает</h3>
-        <p>AI-команда начинает создавать контент, принимать запись и продвигать вас с первого дня.</p>
-      </div>
+      <div class="step aos d1"><div class="step-num">01</div><h3>Регистрация</h3><p>Выбери тариф и введи данные о своём бизнесе. Займёт две минуты.</p></div>
+      <div class="step aos d2"><div class="step-num">02</div><h3>Обучение ИИ</h3><p>Ответь на пять вопросов. ИИ изучит твой голос, услуги и цены.</p></div>
+      <div class="step aos d3"><div class="step-num">03</div><h3>Подключение</h3><p>Привяжи календарь записи и Instagram одним кликом.</p></div>
+      <div class="step aos d4"><div class="step-num">04</div><h3>Работает</h3><p>Команда начинает сразу. Тебя уведомляют только о важном.</p></div>
     </div>
   </div>
 </section>
 
-<!-- ── TESTIMONIALS ────────────────────────── -->
-<section class="section" id="testimonials">
+<section class="section">
+  <div class="container">
+    <div class="guarantee aos">
+      <div class="guarantee-icon">🛡️</div>
+      <h2>Результаты за тридцать дней — или вернём деньги</h2>
+      <p>Мы так уверены в том, что AIBeautyKit сэкономит тебе время и увеличит выручку, что даём полную гарантию возврата в течение тридцати дней. Без вопросов и без бюрократии.</p>
+      <ul class="guarantee-list">
+        <li>Гарантия возврата тридцать дней</li><li>Без контракта — отмени в любой момент</li>
+        <li>GDPR — твои данные в безопасности</li><li>Все данные принадлежат тебе</li>
+      </ul>
+      <a class="btn-primary" href="#audit">Сначала получить бесплатный аудит →</a>
+    </div>
+  </div>
+</section>
+
+<section class="section section-alt" id="results">
   <div class="container text-center">
-    <div class="aos"><span class="label">Реальные результаты</span>
-    <h2 class="section-heading">Мастера, которые перестали делать всё сами</h2>
-    <p class="section-sub">Они тоже сомневались. Потом получили первую запись через AI в 2 часа ночи.</p></div>
-    <div class="t-grid">
-      <article class="t-card aos d1">
-        <div class="t-top"><div class="t-avatar av1">АК</div>
-        <div><div class="t-name">Анна К.</div><div class="t-role">Мастер маникюра · Хельсинки</div></div></div>
-        <div class="stars">★★★★★</div>
-        <blockquote class="t-quote">«Я совсем не разбираюсь в технологиях, но настройка заняла 20 минут. Уже на первой неделе — три новые записи ночью, пока я спала. За три недели количество клиентов выросло на 34%.»</blockquote>
-        <div class="t-badge"><span class="t-badge-text">📈 +34% записей</span><span class="t-badge-sub">за 3 недели</span></div>
-      </article>
-      <article class="t-card aos d2">
-        <div class="t-top"><div class="t-avatar av2">МР</div>
-        <div><div class="t-name">Маша Р.</div><div class="t-role">Мастер ресниц · Тампере</div></div></div>
-        <div class="stars">★★★★★</div>
-        <blockquote class="t-quote">«Раньше каждое воскресенье тратила на посты. Теперь AIBeautyKit делает это автоматически. Экономлю минимум 12 часов в неделю, а контент стал профессиональнее, чем был у меня.»</blockquote>
-        <div class="t-badge"><span class="t-badge-text">⏱ 12 часов в неделю</span><span class="t-badge-sub">сэкономлено</span></div>
-      </article>
-      <article class="t-card aos d3">
-        <div class="t-top"><div class="t-avatar av3">ЕВ</div>
-        <div><div class="t-name">Елена В.</div><div class="t-role">Парикмахер · Эспоо</div></div></div>
-        <div class="stars">★★★★★</div>
-        <blockquote class="t-quote">«За два месяца Instagram вырос с 400 до 1200 подписчиков. Главное — это местные подписчики, которые стали реальными клиентами. Теперь запись расписана на две недели вперёд.»</blockquote>
-        <div class="t-badge"><span class="t-badge-text">📊 400 → 1200</span><span class="t-badge-sub">подписчиков за 2 месяца</span></div>
-      </article>
+    <div class="aos">
+      <span class="label">Реальные результаты</span>
+      <h2 class="section-heading">Цифры, которые говорят сами</h2>
+      <p class="section-sub">Данные мастеров по всей Европе и Северной Америке, которые уже используют AIBeautyKit.</p>
+    </div>
+    <div class="results-grid">
+      <div class="result-card aos d1"><div class="result-value">Пятнадцать часов</div><div class="result-label">экономии в неделю в среднем</div></div>
+      <div class="result-card aos d2"><div class="result-value">Сотни евро</div><div class="result-label">дополнительной выручки в месяц</div></div>
+      <div class="result-card aos d3"><div class="result-value">Значительный рост</div><div class="result-label">удержания клиентов</div></div>
+      <div class="result-card aos d4"><div class="result-value">Сотни мастеров</div><div class="result-label">уже используют AIBeautyKit</div></div>
     </div>
   </div>
 </section>
 
-<!-- ── ROI CALCULATOR ──────────────────────── -->
-<section class="section section-alt" id="roi">
-  <div class="container text-center">
-    <div class="aos"><span class="label">Окупаемость</span>
-    <h2 class="section-heading">Первый месяц окупает себя</h2>
-    <p class="section-sub">Двигайте ползунок, чтобы рассчитать личный ROI.</p></div>
-    <div class="roi-box aos">
-      <div class="roi-slider-row">
-        <span class="roi-slider-label">Клиентов в месяц</span>
-        <span class="roi-slider-val" id="roi-num">20</span>
-      </div>
-      <input type="range" id="roi-slider" min="5" max="60" value="20">
-      <div class="roi-range-labels"><span>5</span><span>60</span></div>
-      <div class="roi-grid">
-        <div class="roi-card"><div class="roi-value c-green" id="roi-revenue">+€351</div><div class="roi-card-label">Доп. выручка</div></div>
-        <div class="roi-card"><div class="roi-value c-sky">60ч</div><div class="roi-card-label">Сэкономлено в месяц</div></div>
-        <div class="roi-card"><div class="roi-value c-slate">€89</div><div class="roi-card-label">Стоимость Pro</div></div>
-        <div class="roi-card"><div class="roi-value c-purple" id="roi-x">294%</div><div class="roi-card-label">ROI</div></div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ── PRICING ─────────────────────────────── -->
-<!--
-  ╔══════════════════════════════════════════════════════════════════╗
-  ║  STRIPE PAYMENT LINKS — заполните после создания в Stripe       ║
-  ║  1. Войдите в dashboard.stripe.com                              ║
-  ║  2. Payments → Payment Links → + New                            ║
-  ║  3. Создайте продукт (€49, €89 или €149), настройте             ║
-  ║     Success URL: https://ВАШ-ДОМЕН/thank-you.html               ║
-  ║  4. Скопируйте ссылку и вставьте ниже вместо PLACEHOLDER        ║
-  ╚══════════════════════════════════════════════════════════════════╝
--->
 <section class="section" id="pricing">
   <div class="container text-center">
-    <div class="aos"><span class="label">Тарифы</span>
-    <h2 class="section-heading">Одна цена. Полная AI-команда.</h2>
-    <p class="section-sub">Никаких скрытых платежей. Отмена в любой момент.</p></div>
+    <div class="aos">
+      <span class="label">Тарифы</span>
+      <h2 class="section-heading">Честные цены</h2>
+      <p class="section-sub">Никаких скрытых платежей. Никаких долгосрочных договоров. Отмена в любой момент. Все тарифы защищены тридцатидневной гарантией возврата.</p>
+    </div>
     <div class="pricing-wrap">
       <div class="pricing-grid">
-
-        <!-- Starter -->
-        <div class="p-card d1">
-          <div class="p-name">Starter</div>
+        <div class="p-card">
+          <div class="p-tier">Старт</div><div class="p-name">Starter</div>
           <div class="p-tagline">Для одиночных мастеров — отличный контент</div>
           <div class="p-price"><span class="p-amount">€49</span><span class="p-period">/мес</span></div>
           <ul class="p-features">
-            <li><span class="chk">✓</span>AI-Контент Мастер</li>
-            <li><span class="chk">✓</span>Ежедневные посты и подписи Instagram</li>
-            <li><span class="chk">✓</span>Генератор хэштегов</li>
-            <li><span class="chk">✓</span>Контент-план на месяц</li>
-            <li><span class="chk">✓</span>До 100 постов в месяц</li>
-            <li><span class="chk">✓</span>1 аккаунт в соцсетях</li>
-            <li><span class="chk">✓</span>Поддержка по email</li>
+            <li>Ария: ИИ-администратор</li><li>Селеста: Контент-мейкер</li>
+            <li>Луна: Клиентский сервис (базовый)</li><li>Пятьдесят ИИ-ответов в месяц</li>
+            <li>Генератор подписей для Instagram</li><li>Поддержка по email и чату</li>
           </ul>
-          <!-- ВСТАВЬТЕ STRIPE-ССЫЛКУ STARTER СЮДА ↓ -->
           <a href="https://buy.stripe.com/9B6cN5bAP96814ScWlgYU01" class="btn-plan btn-plan-ghost">Начать</a>
         </div>
-
-        <!-- Pro (Featured) -->
-        <div class="p-card featured d2">
+        <div class="p-card featured">
           <div class="popular-badge">Популярный выбор</div>
-          <div class="p-name">Pro</div>
-          <div class="p-tagline">Полная AI-команда — выбор 80% мастеров</div>
+          <div class="p-tier">Про</div><div class="p-name">Pro</div>
+          <div class="p-tagline">Полная ИИ-команда — выбор большинства мастеров</div>
           <div class="p-price"><span class="p-amount">€89</span><span class="p-period">/мес</span></div>
           <ul class="p-features">
-            <li><span class="chk">✓</span>Всё из Starter</li>
-            <li><span class="chk">✓</span>AI-Администратор (запись 24/7)</li>
-            <li><span class="chk">✓</span>AI-SEO специалист</li>
-            <li><span class="chk">✓</span>AI-Маркетолог и Комьюнити</li>
-            <li><span class="chk">✓</span>Сценарии Reels и хуки</li>
-            <li><span class="chk">✓</span>Автопубликация в Instagram</li>
-            <li><span class="chk">✓</span>Интеграция Timma / Vello</li>
-            <li><span class="chk">✓</span>3 аккаунта в соцсетях</li>
-            <li><span class="chk">✓</span>Приоритетная поддержка (2ч)</li>
+            <li>Вся команда из шести специалистов</li><li>Неограниченные ИИ-ответы</li>
+            <li>Вивьен: Движок допродаж</li><li>Сейдж: Полная аналитика</li>
+            <li>Майя: Ежемесячные стратегии</li><li>Поддержка на двенадцати языках</li>
+            <li>Приоритетная поддержка</li>
           </ul>
-          <!-- ВСТАВЬТЕ STRIPE-ССЫЛКУ PRO СЮДА ↓ -->
           <a href="https://buy.stripe.com/eVqeVd9sHeqsfZM5tTgYU02" class="btn-plan btn-plan-purple">Начать</a>
         </div>
-
-        <!-- Agency -->
-        <div class="p-card d3">
-          <div class="p-name">Agency</div>
+        <div class="p-card">
+          <div class="p-tier">Агентство</div><div class="p-name">Agency</div>
           <div class="p-tagline">Для студий и команд нескольких мастеров</div>
           <div class="p-price"><span class="p-amount">€149</span><span class="p-period">/мес</span></div>
           <ul class="p-features">
-            <li><span class="chk">✓</span>Всё из Pro</li>
-            <li><span class="chk">✓</span>До 5 мастеров красоты</li>
-            <li><span class="chk">✓</span>White-label AI-ассистент</li>
-            <li><span class="chk">✓</span>Выделенный менеджер аккаунта</li>
-            <li><span class="chk">✓</span>Индивидуальный голос бренда</li>
-            <li><span class="chk">✓</span>Расширенная аналитика</li>
-            <li><span class="chk">✓</span>API-доступ</li>
-            <li><span class="chk">✓</span>SLA-поддержка</li>
+            <li>Всё из Pro</li><li>До пяти мастеров / кресел</li>
+            <li>Белые отчёты для клиентов</li><li>Кастомный голос и стиль ИИ</li>
+            <li>Индивидуальный онбординг-звонок</li><li>API-доступ</li>
           </ul>
-          <!-- ВСТАВЬТЕ STRIPE-ССЫЛКУ AGENCY СЮДА ↓ -->
           <a href="https://buy.stripe.com/28E9AT34jdmobJw9K9gYU00" class="btn-plan btn-plan-ghost">Начать</a>
         </div>
+      </div>
+    </div>
+    <p class="pricing-note">✦ Все тарифы защищены тридцатидневной гарантией · Отмена в любой момент</p>
+  </div>
+</section>
 
+<section class="section section-alt">
+  <div class="container text-center">
+    <div class="aos">
+      <span class="label">Истории клиентов</span>
+      <h2 class="section-heading">Мастера в восторге</h2>
+    </div>
+    <div class="t-grid">
+      <div class="t-card aos d1">
+        <div class="t-stars">★★★★★</div>
+        <div class="t-quote">«Раньше каждое воскресенье я тратила на подписи и напоминания. Теперь AIBeautyKit делает всё это. Я буквально вернула себе выходные.»</div>
+        <div class="t-author"><div class="t-avatar">💅</div><div><div class="t-name">Анна К.</div><div class="t-info">Nail-мастер · Хельсинки, Финляндия</div></div></div>
+      </div>
+      <div class="t-card aos d2">
+        <div class="t-stars">★★★★★</div>
+        <div class="t-quote">«Одна только функция допродаж окупает всю подписку. Мой средний чек вырос с шестидесяти пяти до девяноста четырёх евро за шесть недель.»</div>
+        <div class="t-author"><div class="t-avatar">👁️</div><div><div class="t-name">Прия М.</div><div class="t-info">Lash-мастер · Амстердам</div></div></div>
+      </div>
+      <div class="t-card aos d3">
+        <div class="t-stars">★★★★★</div>
+        <div class="t-quote">«Была скептиком насчёт ИИ, но настройка заняла восемь минут. На следующее утро у меня было три новых записи — пришли ночью, пока я спала.»</div>
+        <div class="t-author"><div class="t-avatar">💇</div><div><div class="t-name">Зофья Р.</div><div class="t-info">Стилист · Берлин, Германия</div></div></div>
+      </div>
+      <div class="t-card aos d1">
+        <div class="t-stars">★★★★★</div>
+        <div class="t-quote">«Клиенты говорят, что мой Instagram выглядит очень профессионально. Они не знают, что это ИИ. Я просто выбираю лучший вариант и публикую.»</div>
+        <div class="t-author"><div class="t-avatar">✨</div><div><div class="t-name">Мария Т.</div><div class="t-info">Косметолог · Торонто, Канада</div></div></div>
+      </div>
+      <div class="t-card aos d2">
+        <div class="t-stars">★★★★★</div>
+        <div class="t-quote">«AIBeautyKit показал, что по четвергам у меня пустые окошки. ИИ предложил флеш-акцию — я заполнила их за два часа. Невероятно.»</div>
+        <div class="t-author"><div class="t-avatar">📊</div><div><div class="t-name">Каролина Б.</div><div class="t-info">Владелица салона · Варшава</div></div></div>
+      </div>
+      <div class="t-card aos d3">
+        <div class="t-stars">★★★★★</div>
+        <div class="t-quote">«Как соло-мастер я тонула в административных делах. AIBeautyKit вернул мне четыре часа каждый день. Теперь я принимаю больше клиентов.»</div>
+        <div class="t-author"><div class="t-avatar">🌸</div><div><div class="t-name">Юки Х.</div><div class="t-info">Nail-мастер · Стокгольм</div></div></div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ── AUDIT FORM (Priority 1) ────────────── -->
-<!--
-  ╔══════════════════════════════════════════════════════════════════╗
-  ║  FORMSPREE — заполните перед деплоем                            ║
-  ║  1. Зарегистрируйтесь на formspree.io (бесплатно)               ║
-  ║  2. Dashboard → + New Form → дайте имя "AIBeautyKit Audit"      ║
-  ║  3. Скопируйте ID формы (выглядит как xvoaqlzr)                 ║
-  ║  4. Замените YOUR_FORMSPREE_ID ниже на ваш ID                   ║
-  ╚══════════════════════════════════════════════════════════════════╝
--->
-<section class="section section-alt" id="audit">
+<section class="section" id="audit">
   <div class="container text-center">
-    <div class="aos"><span class="label">Бесплатный аудит</span>
-    <h2 class="section-heading">Узнайте, сколько времени<br>вы теряете каждую неделю</h2>
-    <p class="section-sub" style="margin-bottom:0">Заполните форму — мы проведём персональный аудит вашего бизнеса и ответим за 24 часа.</p></div>
-
-    <form
-      id="audit-form"
-      class="audit-form aos"
-      action="https://formspree.io/f/mjglzlaa"
-      method="POST"
-    >
-      <input type="text"  name="name"           placeholder="Ваше имя" required>
-      <input type="email" name="email"           placeholder="Email" required>
-      <select name="specialization" required>
-        <option value="" disabled selected>Ваша специализация</option>
-        <option value="nails">Мастер маникюра / педикюра</option>
-        <option value="hair">Парикмахер / стилист</option>
-        <option value="lashes">Мастер ресниц / бровей</option>
-        <option value="makeup">Визажист</option>
-        <option value="cosmetology">Косметолог / эстетист</option>
-        <option value="salon">Владелец салона / студии</option>
-        <option value="other">Другое</option>
-      </select>
-      <!-- скрытое поле — Formspree отправит это в теме письма -->
-      <input type="hidden" name="_subject" value="Новая заявка на аудит AIBeautyKit">
-      <button type="submit" class="btn-submit" id="audit-submit">
-        Получить бесплатный аудит →
-      </button>
-      <p class="form-note">Без спама · Без обязательств · Ответим за 24 часа</p>
-    </form>
-
-    <div id="audit-success" class="success-box" style="display:none">
-      <div class="success-icon">✅</div>
-      <h3>Заявка отправлена!</h3>
-      <p>Мы получили ваши данные и свяжемся с вами в течение 24 часов. Проверьте почту.</p>
+    <div class="aos">
+      <span class="label">Бесплатный аудит</span>
+      <h2 class="section-heading">Получи персональный ИИ-отчёт для твоего бизнеса</h2>
+      <p class="section-sub" style="margin-bottom:32px">Через сорок восемь часов ты получишь индивидуальный отчёт с конкретными точками роста — специально для твоей специализации и рынка.</p>
+    </div>
+    <div class="audit-wrap aos">
+      <ul class="audit-benefits">
+        <li>Где ты теряешь время — выявим точно</li>
+        <li>Почему клиенты не возвращаются и как это исправить</li>
+        <li>Персональная рекомендация по настройке ИИ</li>
+        <li>Оценка потенциального роста выручки</li>
+        <li>Полностью бесплатно и без обязательств</li>
+      </ul>
+      <form id="audit-form" action="https://formspree.io/f/mjglzlaa" method="POST">
+        <div class="form-field"><label for="f-name">Твоё имя</label><input id="f-name" type="text" name="name" placeholder="Анна" required></div>
+        <div class="form-field"><label for="f-email">Email</label><input id="f-email" type="email" name="email" placeholder="anna@salon.com" required></div>
+        <div class="form-field">
+          <label for="f-spec">Твоя специализация</label>
+          <select id="f-spec" name="specialization" required>
+            <option value="" disabled selected>Выбери специализацию…</option>
+            <option>Nail-мастер</option><option>Lash-мастер</option>
+            <option>Парикмахер / стилист</option><option>Косметолог</option>
+            <option>Бровист</option><option>Владелец салона (несколько услуг)</option>
+            <option>Другая бьюти-специализация</option>
+          </select>
+        </div>
+        <button type="submit" class="btn-submit">Отправить — получить аудит →</button>
+      </form>
+      <div class="form-success" id="form-success">
+        <h3>Заявка принята ✓</h3>
+        <p>Мы свяжемся с тобой в течение сорока восьми часов с персональным отчётом.</p>
+      </div>
+      <p class="form-note">Никакого спама. Отписка в один клик. Соответствует GDPR.</p>
     </div>
   </div>
 </section>
 
-<!-- ── FAQ ────────────────────────────────── -->
-<section class="section" id="faq">
+<section class="section section-alt">
   <div class="container text-center">
-    <div class="aos"><span class="label">Вопросы и ответы</span>
-    <h2 class="section-heading">Всё, что нужно знать</h2>
-    <p class="section-sub">Мастера спрашивают об этом каждый день. Честные ответы — без воды.</p></div>
+    <div class="aos"><span class="label">FAQ</span><h2 class="section-heading">Частые вопросы</h2></div>
     <div class="faq-list">
-      <div class="faq-item aos">
-        <button class="faq-btn"><h3 class="faq-q">Нужно ли знать ChatGPT или другие AI-инструменты?</h3><span class="faq-arrow">▾</span></button>
-        <div class="faq-body"><p class="faq-a">Совсем нет. AIBeautyKit создан для занятых мастеров, а не для технических специалистов. Настройка один раз занимает около 20 минут — и дальше AI делает всё сам.</p></div>
-      </div>
-      <div class="faq-item aos">
-        <button class="faq-btn"><h3 class="faq-q">Будет ли он публиковать посты автоматически в Instagram?</h3><span class="faq-arrow">▾</span></button>
-        <div class="faq-body"><p class="faq-a">Да! На тарифах Pro и Agency AIBeautyKit подключается к вашему Instagram и публикует контент автоматически — Reels, подписи, хэштеги и Stories. На Starter вы получаете готовые черновики для быстрой публикации.</p></div>
-      </div>
-      <div class="faq-item aos">
-        <button class="faq-btn"><h3 class="faq-q">Работает ли он на финском и русском языках?</h3><span class="faq-arrow">▾</span></button>
-        <div class="faq-body"><p class="faq-a">Абсолютно. AIBeautyKit поддерживает финский и русский из коробки. AI-администратор автоматически определяет язык клиента и отвечает на нём. Весь контент создаётся на выбранном вами языке.</p></div>
-      </div>
-      <div class="faq-item aos">
-        <button class="faq-btn"><h3 class="faq-q">Что если я уже использую Timma или Vello?</h3><span class="faq-arrow">▾</span></button>
-        <div class="faq-body"><p class="faq-a">AIBeautyKit легко интегрируется с Timma и Vello. Ваш AI-администратор подключается к существующему календарю, так что клиенты записываются через привычную систему — просто разговор ведёт AI круглосуточно.</p></div>
-      </div>
-      <div class="faq-item aos">
-        <button class="faq-btn"><h3 class="faq-q">Как быстро будут видны результаты?</h3><span class="faq-arrow">▾</span></button>
-        <div class="faq-body"><p class="faq-a">Большинство мастеров получают первые автоматические записи в течение 48 часов. Результаты по контенту появляются за 2–4 недели. Полная окупаемость, как правило, видна к концу первого месяца.</p></div>
-      </div>
-      <div class="faq-item aos">
-        <button class="faq-btn"><h3 class="faq-q">Мои данные клиентов в безопасности? GDPR?</h3><span class="faq-arrow">▾</span></button>
-        <div class="faq-body"><p class="faq-a">100% соответствие GDPR. Все данные хранятся на серверах ЕС в Хельсинки, Финляндия. Данные клиентов зашифрованы при хранении и передаче и никогда не передаются третьим лицам.</p></div>
-      </div>
-      <div class="faq-item aos">
-        <button class="faq-btn"><h3 class="faq-q">Можно ли отменить подписку в любой момент?</h3><span class="faq-arrow">▾</span></button>
-        <div class="faq-body"><p class="faq-a">Да, отмена одним кликом из личного кабинета. Никаких долгосрочных договоров и штрафов за отмену. Подписка действует до конца текущего расчётного периода, затем прекращается.</p></div>
-      </div>
+      <div class="faq-item"><button class="faq-q">Нужны ли технические знания? <span class="faq-icon">+</span></button><div class="faq-a"><div class="faq-a-inner">Совсем нет. Если ты умеешь пользоваться Instagram или WhatsApp — ты справишься с AIBeautyKit. Настройка занимает до десяти минут. Мы проведём тебя через каждый шаг. Никакого кода.</div></div></div>
+      <div class="faq-item"><button class="faq-q">Как ИИ учится писать в моём стиле? <span class="faq-icon">+</span></button><div class="faq-a"><div class="faq-a-inner">При настройке ты отвечаешь на пять простых вопросов о своих услугах, тоне общения и целевых клиентах. ИИ адаптируется под твой стиль. Ты можешь оценивать результаты, и со временем ИИ становится точнее.</div></div></div>
+      <div class="faq-item"><button class="faq-q">С какими системами записи интегрируется? <span class="faq-icon">+</span></button><div class="faq-a"><div class="faq-a-inner">AIBeautyKit подключается к Fresha, Vagaro, Booksy, Timely, Acuity Scheduling и Google Календарю. Новые интеграции добавляются ежемесячно. Также доступна встроенная лёгкая страница онлайн-записи.</div></div></div>
+      <div class="faq-item"><button class="faq-q">Мои данные клиентов в безопасности? <span class="faq-icon">+</span></button><div class="faq-a"><div class="faq-a-inner">Абсолютно. Все данные зашифрованы, хранятся на серверах в ЕС и соответствуют GDPR. Твои данные принадлежат тебе — мы никому их не продаём и не передаём. Ты можешь экспортировать или удалить всё в любой момент.</div></div></div>
+      <div class="faq-item"><button class="faq-q">Что означает гарантия тридцать дней? <span class="faq-icon">+</span></button><div class="faq-a"><div class="faq-a-inner">Если в течение тридцати дней ты почувствуешь, что AIBeautyKit не сэкономил тебе время — напиши нам, и мы вернём каждый цент. Без вопросов, без форм, без ожидания.</div></div></div>
+      <div class="faq-item"><button class="faq-q">Работает ли это для nail, lash, hair и других специализаций? <span class="faq-icon">+</span></button><div class="faq-a"><div class="faq-a-inner">Да! AIBeautyKit обучен для nail-мастеров, lash-мастеров, парикмахеров, косметологов, бровистов и владельцев салонов. ИИ понимает твои конкретные услуги, терминологию и особенности общения с клиентами.</div></div></div>
     </div>
   </div>
 </section>
 
-<!-- ── TRUST BADGES ────────────────────────── -->
-<div class="trust-bar">
-  <div class="trust-grid">
-    <div class="aos d1"><div class="trust-icon">🛡️</div><div class="trust-label">GDPR</div><div class="trust-sub">Серверы ЕС · Хельсинки</div></div>
-    <div class="aos d2"><div class="trust-icon">🌍</div><div class="trust-label">8 стран</div><div class="trust-sub">Финляндия, Эстония и др.</div></div>
-    <div class="aos d3"><div class="trust-icon">⏰</div><div class="trust-label">24/7</div><div class="trust-sub">Никогда не пропустит запись</div></div>
-    <div class="aos d4"><div class="trust-icon">⚡</div><div class="trust-label">ROI 10–15x</div><div class="trust-sub">В первый месяц</div></div>
+<section class="section">
+  <div class="container text-center">
+    <div class="aos">
+      <span class="label">Охват рынков</span>
+      <h2 class="section-heading">Для мастеров по всему миру</h2>
+      <p class="section-sub">AIBeautyKit говорит на языке твоих клиентов — буквально. Доступен по всей Европе и Северной Америке.</p>
+    </div>
+    <div class="markets-grid">
+      <div class="market-item aos d1"><div class="market-flag">🇺🇸</div><div class="market-lang">English</div></div>
+      <div class="market-item aos d2"><div class="market-flag">🇫🇮</div><div class="market-lang">Suomi</div></div>
+      <div class="market-item aos d3"><div class="market-flag">🇸🇪</div><div class="market-lang">Svenska</div></div>
+      <div class="market-item aos d4"><div class="market-flag">🇩🇪</div><div class="market-lang">Deutsch</div></div>
+      <div class="market-item aos d5"><div class="market-flag">🇫🇷</div><div class="market-lang">Français</div></div>
+      <div class="market-item aos d6"><div class="market-flag">🇷🇺</div><div class="market-lang">Русский</div></div>
+    </div>
   </div>
-</div>
+</section>
 
-<!-- ── FOOTER ──────────────────────────────── -->
 <footer>
-  <div class="footer-inner">
-    <div><a class="brand" href="#">AIBeautyKit<span>.</span></a>
-    <p style="color:var(--muted2);font-size:.82rem;margin-top:4px">AI-инструменты для профессионалов красоты.</p></div>
-    <p class="footer-copy">© 2025 AIBeautyKit. Все права защищены.</p>
+  <div class="container">
+    <div class="footer-top">
+      <div>
+        <div class="footer-brand">AI<em>Beauty</em>Kit</div>
+        <p class="footer-tagline">Твоя ИИ-команда из шести специалистов — создана специально для бьюти-мастеров в Европе и Северной Америке.</p>
+      </div>
+      <div class="footer-col"><h4>Продукт</h4><ul><li><a href="#team">ИИ-команда</a></li><li><a href="#pricing">Тарифы</a></li><li><a href="#results">Результаты</a></li><li><a href="#audit">FAQ</a></li></ul></div>
+      <div class="footer-col"><h4>Компания</h4><ul><li><a href="#">О нас</a></li><li><a href="#">Блог</a></li><li><a href="#">Карьера</a></li><li><a href="#">Контакты</a></li></ul></div>
+      <div class="footer-col"><h4>Документы</h4><ul><li><a href="#">Конфиденциальность</a></li><li><a href="#">Условия</a></li><li><a href="#">GDPR</a></li><li><a href="#">Возврат средств</a></li></ul></div>
+    </div>
+    <div class="footer-bottom">
+      <span class="footer-copy">© 2025 AIBeautyKit · Хельсинки, Финляндия 🇫🇮</span>
+      <div class="footer-langs"><a href="#">EN</a><a href="#">RU</a><a href="#">FI</a><a href="#">SV</a><a href="#">DE</a><a href="#">FR</a></div>
+    </div>
   </div>
 </footer>
 
-<!-- ═══════════════════════════════════════════
-     CHAT WIDGET (Priority 3) — Claude API
-     Кнопка в правом нижнем углу
-     ═══════════════════════════════════════════ -->
-<button id="chat-trigger" aria-label="Открыть чат">💬 Спросить AI</button>
-
-<div id="chat-widget" role="dialog" aria-label="AIBeautyKit чат">
+<button class="chat-trigger" id="chatTrigger" aria-label="Открыть чат">
+  <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+  <span class="chat-dot"></span>
+</button>
+<div class="chat-box" id="chatBox">
   <div class="chat-header">
-    <div class="chat-agent">
-      <div class="chat-avatar">AI<div class="chat-dot"></div></div>
-      <div>
-        <div class="chat-agent-name">AIBeautyKit Ассистент</div>
-        <div class="chat-agent-status">Онлайн · отвечает мгновенно</div>
-      </div>
-    </div>
-    <button id="chat-close" aria-label="Закрыть чат">✕</button>
+    <div><div class="chat-title">💜 AIBeautyKit Ассистент</div><div class="chat-status">Онлайн · Отвечает мгновенно</div></div>
+    <button class="chat-close" id="chatClose">×</button>
   </div>
-  <div class="chat-intro">
-    Привет! Я AI-ассистент <strong>AIBeautyKit</strong>. Спросите меня о возможностях, тарифах или как начать. Говорю на 🇷🇺 🇫🇮 🇬🇧 🇩🇪
+  <div class="chat-msgs" id="chatMsgs">
+    <div class="chat-bubble ai">Привет! Я помогу выбрать подходящий тариф или расскажу об ИИ-команде. Что тебя интересует?</div>
   </div>
-  <div class="chat-messages" id="chat-messages"></div>
+  <div class="chat-typing" id="chatTyping"><span></span><span></span><span></span></div>
   <div class="chat-input-row">
-    <textarea
-      class="chat-input"
-      id="chat-input"
-      placeholder="Напишите сообщение…"
-      rows="1"
-      maxlength="500"
-    ></textarea>
-    <button class="chat-send" id="chat-send" aria-label="Отправить">➤</button>
+    <textarea class="chat-input" id="chatInput" placeholder="Написать сообщение…" rows="1"></textarea>
+    <button class="chat-send" id="chatSend"><svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button>
   </div>
 </div>
 
-<!-- ═══════════════════════════════ SCRIPTS ══ -->
 <script>
-// ── Scroll animations ──────────────────────
-const scrollObs = new IntersectionObserver(entries => {
-  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
-}, { threshold: 0.08 });
-document.querySelectorAll('.aos').forEach(el => scrollObs.observe(el));
+const obs=new IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible')});},{threshold:.12});
+document.querySelectorAll('.aos').forEach(el=>obs.observe(el));
 
-// ── Counter animations ─────────────────────
-const counterObs = new IntersectionObserver(entries => {
-  entries.forEach(e => {
-    if (!e.isIntersecting) return;
-    const el = e.target;
-    const target = +el.dataset.target, suffix = el.dataset.suffix || '';
-    let v = 0;
-    const inc = target / (1800 / (1000 / 60));
-    const id = setInterval(() => {
-      v = Math.min(v + inc, target);
-      el.textContent = Math.floor(v) + suffix;
-      if (v >= target) clearInterval(id);
-    }, 1000 / 60);
-    counterObs.unobserve(el);
-  });
-}, { threshold: 0.5 });
-document.querySelectorAll('[data-target]').forEach(el => counterObs.observe(el));
-
-// ── FAQ accordion ──────────────────────────
-document.querySelectorAll('.faq-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const item = btn.closest('.faq-item');
-    const open = item.classList.contains('open');
-    document.querySelectorAll('.faq-item.open').forEach(i => i.classList.remove('open'));
-    if (!open) item.classList.add('open');
+document.querySelectorAll('.faq-q').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    const item=btn.closest('.faq-item'),a=item.querySelector('.faq-a'),open=item.classList.toggle('open');
+    a.style.maxHeight=open?a.scrollHeight+'px':'0';
   });
 });
 
-// ── ROI calculator ─────────────────────────
-const slider = document.getElementById('roi-slider');
-slider.addEventListener('input', () => {
-  const c = +slider.value;
-  document.getElementById('roi-num').textContent = c;
-  const extra = Math.round(c * 0.27) * 65;
-  const roi   = Math.round(((extra - 89) / 89) * 100);
-  document.getElementById('roi-revenue').textContent = '+€' + extra;
-  document.getElementById('roi-x').textContent = roi + '%';
-});
-
-// ── AUDIT FORM — Formspree AJAX ────────────
-// After creating your Formspree form, replace YOUR_FORMSPREE_ID in the
-// form's action attribute above with your actual form ID (e.g. xvoaqlzr).
-document.getElementById('audit-form').addEventListener('submit', async function(e) {
+document.getElementById('audit-form').addEventListener('submit',async function(e){
   e.preventDefault();
-  const btn = document.getElementById('audit-submit');
-  btn.disabled = true;
-  btn.textContent = 'Отправляем…';
-
-  try {
-    const res = await fetch(this.action, {
-      method: 'POST',
-      body: new FormData(this),
-      headers: { 'Accept': 'application/json' }
-    });
-    if (res.ok) {
-      this.style.display = 'none';
-      document.getElementById('audit-success').style.display = 'flex';
-    } else {
-      btn.disabled = false;
-      btn.textContent = 'Получить бесплатный аудит →';
-      alert('Ошибка отправки. Пожалуйста, попробуйте ещё раз или напишите нам напрямую.');
-    }
-  } catch {
-    btn.disabled = false;
-    btn.textContent = 'Получить бесплатный аудит →';
-    alert('Проблема с сетью. Пожалуйста, проверьте соединение и попробуйте ещё раз.');
-  }
+  const btn=this.querySelector('.btn-submit');
+  btn.textContent='Отправляем…';btn.disabled=true;
+  try{
+    const res=await fetch(this.action,{method:'POST',body:new FormData(this),headers:{'Accept':'application/json'}});
+    if(res.ok){this.style.display='none';document.getElementById('form-success').style.display='block';}
+    else{btn.textContent='Ошибка. Попробуй ещё раз.';btn.disabled=false;}
+  }catch{btn.textContent='Ошибка сети.';btn.disabled=false;}
 });
 
-// ── CHAT WIDGET ───────────────────────────
-const trigger  = document.getElementById('chat-trigger');
-const widget   = document.getElementById('chat-widget');
-const closeBtn = document.getElementById('chat-close');
-const msgsEl   = document.getElementById('chat-messages');
-const inputEl  = document.getElementById('chat-input');
-const sendBtn  = document.getElementById('chat-send');
+const trigger=document.getElementById('chatTrigger'),box=document.getElementById('chatBox'),
+      closeBtn=document.getElementById('chatClose'),msgsEl=document.getElementById('chatMsgs'),
+      inputEl=document.getElementById('chatInput'),sendBtn=document.getElementById('chatSend'),
+      typingEl=document.getElementById('chatTyping');
+let isOpen=false,busy=false,history=[];
 
-let history = [];   // [{role:'user'|'assistant', content:'...'}]
-let busy    = false;
+trigger.addEventListener('click',()=>{isOpen=true;box.style.display='flex';trigger.style.display='none';inputEl.focus();});
+closeBtn.addEventListener('click',()=>{isOpen=false;box.style.display='none';trigger.style.display='flex';});
 
-trigger.addEventListener('click', () => {
-  widget.style.display = 'flex';
-  widget.style.flexDirection = 'column';
-  trigger.style.display = 'none';
-  inputEl.focus();
-});
-closeBtn.addEventListener('click', () => {
-  widget.style.display = 'none';
-  trigger.style.display = 'flex';
-});
+function addBubble(role,text){const d=document.createElement('div');d.className='chat-bubble '+role;d.textContent=text;msgsEl.appendChild(d);msgsEl.scrollTop=msgsEl.scrollHeight;}
+function showTyping(v){typingEl.style.display=v?'flex':'none';if(v)msgsEl.scrollTop=msgsEl.scrollHeight;}
 
-function addBubble(role, text) {
-  const row = document.createElement('div');
-  row.className = 'chat-msg ' + role;
-  const b = document.createElement('div');
-  b.className = 'chat-bubble';
-  b.textContent = text;
-  row.appendChild(b);
-  msgsEl.appendChild(row);
-  msgsEl.scrollTop = msgsEl.scrollHeight;
-  return b;
+async function sendMessage(){
+  const text=inputEl.value.trim();if(!text||busy)return;
+  busy=true;sendBtn.disabled=true;addBubble('user',text);history.push({role:'user',content:text});
+  inputEl.value='';inputEl.style.height='auto';showTyping(true);
+  try{
+    const res=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:history.slice(-20)})});
+    showTyping(false);if(!res.ok)throw new Error();
+    const data=await res.json(),reply=data.content||'Извините, не удалось получить ответ.';
+    history.push({role:'assistant',content:reply});addBubble('ai',reply);
+  }catch{showTyping(false);addBubble('ai','Извините, произошла ошибка. Попробуй ещё раз.');}
+  finally{busy=false;sendBtn.disabled=false;inputEl.focus();}
 }
-
-function showTyping() {
-  const row = document.createElement('div');
-  row.className = 'chat-msg ai';
-  row.id = 'typing-row';
-  const t = document.createElement('div');
-  t.className = 'chat-typing';
-  t.innerHTML = '<div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>';
-  row.appendChild(t);
-  msgsEl.appendChild(row);
-  msgsEl.scrollTop = msgsEl.scrollHeight;
-}
-
-function hideTyping() {
-  const r = document.getElementById('typing-row');
-  if (r) r.remove();
-}
-
-async function sendMessage() {
-  const text = inputEl.value.trim();
-  if (!text || busy) return;
-
-  busy = true;
-  sendBtn.disabled = true;
-  inputEl.value = '';
-  inputEl.style.height = 'auto';
-
-  addBubble('user', text);
-  history.push({ role: 'user', content: text });
-  showTyping();
-
-  try {
-    const res = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: history })
-    });
-
-    hideTyping();
-
-    if (!res.ok) throw new Error('server error');
-
-    const data   = await res.json();
-    const reply  = data.content || 'Извините, не удалось получить ответ.';
-    history.push({ role: 'assistant', content: reply });
-    addBubble('ai', reply);
-  } catch {
-    hideTyping();
-    addBubble('ai', 'Извините, произошла ошибка. Пожалуйста, попробуйте ещё раз.');
-  } finally {
-    busy = false;
-    sendBtn.disabled = false;
-    inputEl.focus();
-  }
-}
-
-sendBtn.addEventListener('click', sendMessage);
-inputEl.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-});
-inputEl.addEventListener('input', () => {
-  inputEl.style.height = 'auto';
-  inputEl.style.height = Math.min(inputEl.scrollHeight, 100) + 'px';
-});
-
-// ── Stripe buttons ─────────────────────────
-document.querySelectorAll('a[href^="https://buy.stripe.com"]').forEach(function(link) {
-  link.addEventListener('click', function(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    window.open(this.getAttribute('href'), '_blank');
-  });
-});
+sendBtn.addEventListener('click',sendMessage);
+inputEl.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();}});
+inputEl.addEventListener('input',()=>{inputEl.style.height='auto';inputEl.style.height=Math.min(inputEl.scrollHeight,80)+'px';});
 </script>
 </body>
 </html>
