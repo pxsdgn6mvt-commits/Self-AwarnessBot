@@ -467,7 +467,7 @@ footer { border-top: 1px solid var(--border); padding: 36px 20px; }
       <div class="pricing-grid">
 
         <!-- Starter -->
-        <div class="p-card">
+        <div class="p-card d1">
           <div class="p-name">Starter</div>
           <div class="p-tagline">Для одиночных мастеров — отличный контент</div>
           <div class="p-price"><span class="p-amount">€49</span><span class="p-period">/мес</span></div>
@@ -481,11 +481,11 @@ footer { border-top: 1px solid var(--border); padding: 36px 20px; }
             <li><span class="chk">✓</span>Поддержка по email</li>
           </ul>
           <!-- ВСТАВЬТЕ STRIPE-ССЫЛКУ STARTER СЮДА ↓ -->
-          <a href="https://buy.stripe.com/9B6cN5bAP96814ScWlgYU01" class="btn-plan btn-plan-ghost">Начать</a>
+          <a href="https://buy.stripe.com/9B6cN5bAP96814ScWlgYU01" class="btn-plan btn-plan-ghost stripe-link">Начать</a>
         </div>
 
         <!-- Pro (Featured) -->
-        <div class="p-card featured">
+        <div class="p-card featured d2">
           <div class="popular-badge">Популярный выбор</div>
           <div class="p-name">Pro</div>
           <div class="p-tagline">Полная AI-команда — выбор 80% мастеров</div>
@@ -502,11 +502,11 @@ footer { border-top: 1px solid var(--border); padding: 36px 20px; }
             <li><span class="chk">✓</span>Приоритетная поддержка (2ч)</li>
           </ul>
           <!-- ВСТАВЬТЕ STRIPE-ССЫЛКУ PRO СЮДА ↓ -->
-          <a href="https://buy.stripe.com/eVqeVd9sHeqsfZM5tTgYU02" class="btn-plan btn-plan-purple">Начать</a>
+          <a href="https://buy.stripe.com/eVqeVd9sHeqsfZM5tTgYU02" class="btn-plan btn-plan-purple stripe-link">Начать</a>
         </div>
 
         <!-- Agency -->
-        <div class="p-card">
+        <div class="p-card d3">
           <div class="p-name">Agency</div>
           <div class="p-tagline">Для студий и команд нескольких мастеров</div>
           <div class="p-price"><span class="p-amount">€149</span><span class="p-period">/мес</span></div>
@@ -521,7 +521,7 @@ footer { border-top: 1px solid var(--border); padding: 36px 20px; }
             <li><span class="chk">✓</span>SLA-поддержка</li>
           </ul>
           <!-- ВСТАВЬТЕ STRIPE-ССЫЛКУ AGENCY СЮДА ↓ -->
-          <a href="https://buy.stripe.com/28E9AT34jdmobJw9K9gYU00" class="btn-plan btn-plan-ghost">Начать</a>
+          <a href="https://buy.stripe.com/28E9AT34jdmobJw9K9gYU00" class="btn-plan btn-plan-ghost stripe-link">Начать</a>
         </div>
 
       </div>
@@ -845,12 +845,12 @@ inputEl.addEventListener('input', () => {
   inputEl.style.height = Math.min(inputEl.scrollHeight, 100) + 'px';
 });
 
-// ── Stripe payment buttons — guaranteed navigation ─────────────
-document.querySelectorAll('a[href^="https://buy.stripe.com"]').forEach(function(link) {
+document.querySelectorAll('.stripe-link').forEach(function(link) {
   link.addEventListener('click', function(e) {
     e.preventDefault();
     e.stopPropagation();
-    window.open(this.getAttribute('href'), '_blank');
+    var url = this.getAttribute('href');
+    window.location.href = url;
   });
 });
 </script>
