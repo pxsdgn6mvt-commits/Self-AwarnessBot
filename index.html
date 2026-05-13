@@ -467,7 +467,7 @@ footer { border-top: 1px solid var(--border); padding: 36px 20px; }
       <div class="pricing-grid">
 
         <!-- Starter -->
-        <div class="p-card aos d1">
+        <div class="p-card">
           <div class="p-name">Starter</div>
           <div class="p-tagline">Для одиночных мастеров — отличный контент</div>
           <div class="p-price"><span class="p-amount">€49</span><span class="p-period">/мес</span></div>
@@ -485,7 +485,7 @@ footer { border-top: 1px solid var(--border); padding: 36px 20px; }
         </div>
 
         <!-- Pro (Featured) -->
-        <div class="p-card featured aos d2">
+        <div class="p-card featured">
           <div class="popular-badge">Популярный выбор</div>
           <div class="p-name">Pro</div>
           <div class="p-tagline">Полная AI-команда — выбор 80% мастеров</div>
@@ -506,7 +506,7 @@ footer { border-top: 1px solid var(--border); padding: 36px 20px; }
         </div>
 
         <!-- Agency -->
-        <div class="p-card aos d3">
+        <div class="p-card">
           <div class="p-name">Agency</div>
           <div class="p-tagline">Для студий и команд нескольких мастеров</div>
           <div class="p-price"><span class="p-amount">€149</span><span class="p-period">/мес</span></div>
@@ -850,7 +850,7 @@ document.querySelectorAll('a[href^="https://buy.stripe.com"]').forEach(function(
   link.addEventListener('click', function(e) {
     e.preventDefault();
     e.stopPropagation();
-    window.location.assign(this.getAttribute('href'));
+    window.open(this.getAttribute('href'), '_blank');
   });
 });
 </script>
