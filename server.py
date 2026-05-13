@@ -15,7 +15,8 @@ from flask import Flask, request, jsonify, send_from_directory
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
-app = Flask(__name__, static_folder=".")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+app = Flask(__name__, static_folder=BASE_DIR)
 
 SALES_SYSTEM_PROMPT = (
     "You are an AIBeautyKit sales assistant. "
@@ -31,13 +32,13 @@ SALES_SYSTEM_PROMPT = (
 
 @app.route("/")
 def index():
-    return send_from_directory(".", "index.html")
+    return send_from_directory(BASE_DIR, "index.html")
 
 
 @app.route("/thank-you")
 @app.route("/thank-you.html")
 def thank_you():
-    return send_from_directory(".", "thank-you.html")
+    return send_from_directory(BASE_DIR, "thank-you.html")
 
 
 @app.route("/api/chat", methods=["POST"])
