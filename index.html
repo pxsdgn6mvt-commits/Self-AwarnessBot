@@ -266,6 +266,11 @@ footer{background:var(--dark-s);border-top:1px solid rgba(255,255,255,.06);paddi
   .team-grid{grid-template-columns:repeat(2,1fr)}
   .t-grid{grid-template-columns:repeat(2,1fr)}
 }
+/* Force 1-col team/testimonials on narrow screens */
+@media(max-width:560px){
+  .team-grid{grid-template-columns:1fr!important}
+  .t-grid{grid-template-columns:1fr!important}
+}
 
 /* ── MOBILE 768px ── */
 @media(max-width:768px){
@@ -303,10 +308,9 @@ footer{background:var(--dark-s);border-top:1px solid rgba(255,255,255,.06);paddi
   .results-right{gap:14px}
   .rc{padding:22px 16px}
   .rc-num{font-size:2.2rem}
-  /* Pricing — stack vertically, featured card on top */
+  /* Pricing — stack vertically, keep original order 49→89→149 */
   .pricing-wrap{overflow-x:visible;padding-bottom:0}
   .pricing-grid{grid-template-columns:1fr;min-width:0;gap:16px}
-  .pc.featured{order:-1}
   /* Audit */
   .audit-wrap{max-width:100%}
   /* Footer */
