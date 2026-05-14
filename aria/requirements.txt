@@ -1,0 +1,18 @@
+# Telegram
+aiogram==3.13.1
+
+# Anthropic
+anthropic==0.40.0
+
+# Database
+asyncpg==0.30.0
+
+# Scheduler
+APScheduler==3.10.4
+
+# Config
+python-dotenv==1.0.1
+
+# Google Calendar (optional — install only if using Google adapter)
+# google-api-python-client==2.151.0
+# google-auth==2.36.0
