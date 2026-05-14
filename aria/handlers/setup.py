@@ -14,6 +14,8 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message
 
 import aria.db.repo as repo
+from aria.filters import SetupRequired
+from aria.middleware import TenantMiddleware
 from aria.services.booking import invalidate_adapter
 from aria.tenant import TenantConfig
 
@@ -29,11 +31,8 @@ class Setup(StatesGroup):
     google_cal   = State()
 
 
-@router.message(CommandStart())
+@router.message(CommandStart(), SetupRequired())
 async def setup_start(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
-    if tenant.setup_complete:
-        return  # let the normal start handler take over
-
     # First person to /start becomes the owner
     await repo.update_tenant(tenant.id, owner_tg_id=message.from_user.id)
 
@@ -100,6 +99,7 @@ async def setup_google_cal(message: Message, state: FSMContext, tenant: TenantCo
         setup_complete=True,
     )
     invalidate_adapter(tenant.id)
+    TenantMiddleware.invalidate(tenant.bot_token)
     await state.clear()
 
     gcal_note = (

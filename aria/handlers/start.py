@@ -10,17 +10,15 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 import aria.db.repo as repo
+from aria.filters import SetupDone
 from aria.tenant import TenantConfig
 
 log = logging.getLogger(__name__)
 router = Router()
 
 
-@router.message(CommandStart())
+@router.message(CommandStart(), SetupDone())
 async def cmd_start(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
-    if not tenant.setup_complete:
-        return  # setup.py handler will catch this
-
     await repo.upsert_client(tenant.id, message.from_user.id,
                               message.from_user.language_code or "ru")
     await repo.clear_history(tenant.id, message.from_user.id)
