@@ -61,7 +61,7 @@ async def _ensure_initial_tenant() -> None:
 
 def _make_dispatcher(tenant: TenantConfig) -> Dispatcher:
     dp = Dispatcher(storage=MemoryStorage())
-    dp.update.middleware(TenantMiddleware(tenant))
+    dp.update.middleware(TenantMiddleware(tenant.id))
     # Order: setup wizard first (intercepts /start when not configured)
     # then admin commands, then normal start/help, then catch-all chat
     dp.include_router(setup_router)
@@ -80,7 +80,7 @@ async def _run_tenant(tenant: TenantConfig) -> None:
     me = await bot.get_me()
     log.info("Bot @%s started (tenant #%d: %s)", me.username, tenant.id, tenant.salon_name)
     try:
-        await dp.start_polling(bot, drop_pending_updates=True,
+        await dp.start_polling(bot, drop_pending_updates=False,
                                allowed_updates=dp.resolve_used_update_types())
     except Exception:
         log.exception("Bot for tenant #%d crashed", tenant.id)
@@ -89,9 +89,9 @@ async def _run_tenant(tenant: TenantConfig) -> None:
 
 
 async def _watch_tenants() -> None:
-    """Poll for new or deactivated tenants every 60 seconds."""
+    """Poll for new or deactivated tenants every 10 seconds."""
     while True:
-        await asyncio.sleep(60)
+        await asyncio.sleep(10)
         try:
             rows = await list_active_tenants()
             active_ids = {r["id"] for r in rows}
