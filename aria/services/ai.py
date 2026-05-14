@@ -57,6 +57,8 @@ STYLE:
 - Confirm every action: "Готово — Катя записана на 16 мая в 14:00".
 - If something is unclear, ask one short question.
 - NEVER say a booking was saved to Google Calendar unless the tool result contains "google_calendar": true.
+- If tool result contains "error": "calendar_not_found" — tell the owner to share the calendar with the service account (check bot setup step).
+- If tool result contains "error": "calendar_api_disabled" — tell the owner the Google Calendar API needs to be enabled in Google Cloud Console.
 
 SALON INFO:
 Salon: {tenant.salon_name}
@@ -274,7 +276,14 @@ async def chat(user_id: int, user_text: str, bot: Any, tenant: "TenantConfig") -
                 result = await _exec_tool(tc.name, tc.input, tenant, owner_id=user_id)
             except Exception as exc:
                 log.exception("Tool %s failed", tc.name)
-                result = json.dumps({"error": str(exc)})
+                if "404" in str(exc) or "Not Found" in str(exc):
+                    result = json.dumps({"error": "calendar_not_found",
+                                         "hint": "Service account has no access to this calendar. Share the calendar with the service account email (Editor role)."})
+                elif "403" in str(exc) or "disabled" in str(exc):
+                    result = json.dumps({"error": "calendar_api_disabled",
+                                         "hint": "Google Calendar API is not enabled in the project."})
+                else:
+                    result = json.dumps({"error": str(exc)})
             tool_results.append({"type": "tool_result", "tool_use_id": tc.id, "content": result})
         history.append({"role": "user", "content": tool_results})
     else:
