@@ -18,6 +18,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.types import ErrorEvent
 
 from aria.config import settings
 from aria.db.repo import (
@@ -49,6 +50,16 @@ def _build_dispatcher() -> Dispatcher:
     dp.include_router(admin.router)
     dp.include_router(start.router)
     dp.include_router(chat.router)
+
+    @dp.errors()
+    async def on_error(event: ErrorEvent) -> None:
+        log.exception(
+            "Unhandled error for update %s: %s",
+            event.update.update_id if event.update else "?",
+            event.exception,
+            exc_info=event.exception,
+        )
+
     return dp
 
 
