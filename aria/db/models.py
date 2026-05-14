@@ -2,7 +2,6 @@
 
 SCHEMA = """
 -- ── Tenants ───────────────────────────────────────────────────────────────────
--- One row per salon / bot. Bot token + config stored here.
 CREATE TABLE IF NOT EXISTS aria_tenants (
     id                      SERIAL PRIMARY KEY,
     bot_token               TEXT UNIQUE NOT NULL,
@@ -23,7 +22,7 @@ CREATE TABLE IF NOT EXISTS aria_tenants (
     created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- ── Per-tenant tables (new deployments get these directly) ────────────────────
+-- ── Core tables (IF NOT EXISTS — safe for both fresh and existing DBs) ────────
 CREATE TABLE IF NOT EXISTS aria_clients (
     tenant_id   INT     NOT NULL DEFAULT 1,
     user_id     BIGINT  NOT NULL,
@@ -47,10 +46,6 @@ CREATE TABLE IF NOT EXISTS aria_bookings (
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS aria_bookings_tenant_idx
-    ON aria_bookings (tenant_id, scheduled_at)
-    WHERE status = 'confirmed';
-
 CREATE TABLE IF NOT EXISTS aria_waitlist (
     id          BIGSERIAL PRIMARY KEY,
     tenant_id   INT     NOT NULL DEFAULT 1,
@@ -69,33 +64,63 @@ CREATE TABLE IF NOT EXISTS aria_conversations (
     PRIMARY KEY (tenant_id, user_id)
 );
 
--- ── Safe migration for databases created before multi-tenant ──────────────────
-ALTER TABLE aria_clients     ADD COLUMN IF NOT EXISTS tenant_id INT NOT NULL DEFAULT 1;
-ALTER TABLE aria_bookings    ADD COLUMN IF NOT EXISTS tenant_id INT NOT NULL DEFAULT 1;
-ALTER TABLE aria_waitlist    ADD COLUMN IF NOT EXISTS tenant_id INT NOT NULL DEFAULT 1;
+-- ── Migration: add tenant_id to pre-existing tables ──────────────────────────
+-- Must run BEFORE any CREATE INDEX that references tenant_id.
+ALTER TABLE aria_clients      ADD COLUMN IF NOT EXISTS tenant_id INT NOT NULL DEFAULT 1;
+ALTER TABLE aria_bookings     ADD COLUMN IF NOT EXISTS tenant_id INT NOT NULL DEFAULT 1;
+ALTER TABLE aria_waitlist     ADD COLUMN IF NOT EXISTS tenant_id INT NOT NULL DEFAULT 1;
 ALTER TABLE aria_conversations ADD COLUMN IF NOT EXISTS tenant_id INT NOT NULL DEFAULT 1;
 
--- Re-key aria_clients: drop old PK(user_id), add PK(tenant_id, user_id)
-DO $$
-DECLARE r TEXT;
-BEGIN
-    SELECT constraint_name INTO r FROM information_schema.table_constraints
-    WHERE table_name='aria_clients' AND constraint_type='PRIMARY KEY';
-    IF r IS NOT NULL AND r != 'aria_clients_pkey_new' THEN
-        EXECUTE 'ALTER TABLE aria_clients DROP CONSTRAINT ' || r;
-        ALTER TABLE aria_clients ADD PRIMARY KEY (tenant_id, user_id);
-    END IF;
-EXCEPTION WHEN others THEN NULL; END $$;
+-- ── Indexes (after migration so tenant_id is guaranteed to exist) ─────────────
+CREATE INDEX IF NOT EXISTS aria_bookings_tenant_idx
+    ON aria_bookings (tenant_id, scheduled_at)
+    WHERE status = 'confirmed';
 
--- Re-key aria_conversations: drop old PK(user_id), add PK(tenant_id, user_id)
+CREATE INDEX IF NOT EXISTS aria_waitlist_service_idx
+    ON aria_waitlist (tenant_id, service)
+    WHERE notified = FALSE;
+
+-- ── Re-key aria_clients: old PK was user_id, new PK is (tenant_id, user_id) ──
 DO $$
 DECLARE r TEXT;
 BEGIN
     SELECT constraint_name INTO r FROM information_schema.table_constraints
-    WHERE table_name='aria_conversations' AND constraint_type='PRIMARY KEY';
-    IF r IS NOT NULL AND r != 'aria_conversations_pkey_new' THEN
-        EXECUTE 'ALTER TABLE aria_conversations DROP CONSTRAINT ' || r;
-        ALTER TABLE aria_conversations ADD PRIMARY KEY (tenant_id, user_id);
+    WHERE table_name = 'aria_clients' AND constraint_type = 'PRIMARY KEY';
+    -- Only migrate if the PK is the old single-column one
+    IF r IS NOT NULL AND r != 'aria_clients_pkey' THEN
+        NULL; -- already composite, nothing to do
+    ELSIF r = 'aria_clients_pkey' THEN
+        -- Check if it's actually on just user_id (old schema)
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.key_column_usage
+            WHERE table_name = 'aria_clients'
+              AND constraint_name = r
+              AND column_name = 'tenant_id'
+        ) THEN
+            EXECUTE 'ALTER TABLE aria_clients DROP CONSTRAINT ' || r;
+            ALTER TABLE aria_clients ADD PRIMARY KEY (tenant_id, user_id);
+        END IF;
     END IF;
-EXCEPTION WHEN others THEN NULL; END $$;
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+-- ── Re-key aria_conversations: old PK was user_id ────────────────────────────
+DO $$
+DECLARE r TEXT;
+BEGIN
+    SELECT constraint_name INTO r FROM information_schema.table_constraints
+    WHERE table_name = 'aria_conversations' AND constraint_type = 'PRIMARY KEY';
+    IF r IS NOT NULL THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.key_column_usage
+            WHERE table_name = 'aria_conversations'
+              AND constraint_name = r
+              AND column_name = 'tenant_id'
+        ) THEN
+            EXECUTE 'ALTER TABLE aria_conversations DROP CONSTRAINT ' || r;
+            ALTER TABLE aria_conversations ADD PRIMARY KEY (tenant_id, user_id);
+        END IF;
+    END IF;
+EXCEPTION WHEN others THEN NULL;
+END $$;
 """
