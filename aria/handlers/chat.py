@@ -26,8 +26,8 @@ async def handle_message(message: Message, bot: Bot) -> None:
 
     try:
         reply = await chat(user_id=user_id, user_text=message.text, bot=bot)
-    except Exception:
-        log.exception("AI service error for user %d", user_id)
+    except Exception as exc:
+        log.exception("AI service error for user %d: %s", user_id, exc)
         reply = (
             "Something went wrong on my end. "
             "Please try again in a moment."

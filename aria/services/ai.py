@@ -357,11 +357,12 @@ async def chat(user_id: int, user_text: str, bot: Any) -> str:
                 {
                     "type": "text",
                     "text": system_prompt,
-                    "cache_control": {"type": "ephemeral"},  # cache the large prompt
+                    "cache_control": {"type": "ephemeral"},
                 }
             ],
             tools=TOOLS,
             messages=history,
+            extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"},
         )
 
         # Collect assistant content block(s)
