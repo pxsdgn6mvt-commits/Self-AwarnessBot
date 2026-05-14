@@ -13,11 +13,24 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message
 
+import json as _json
+
 import aria.db.repo as repo
 from aria.filters import SetupRequired
 from aria.middleware import TenantMiddleware
 from aria.services.booking import invalidate_adapter
 from aria.tenant import TenantConfig
+
+
+def _platform_gcal_email() -> str | None:
+    from aria.config import settings
+    creds = settings.GOOGLE_CALENDAR_CREDENTIALS
+    if not creds:
+        return None
+    try:
+        return _json.loads(creds).get("client_email")
+    except Exception:
+        return None
 
 log = logging.getLogger(__name__)
 router = Router()
@@ -86,11 +99,30 @@ async def setup_services(message: Message, state: FSMContext, tenant: TenantConf
 async def setup_hours(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
     await state.update_data(hours=message.text.strip())
     await state.set_state(Setup.google_cal)
-    await message.answer(
-        "Почти готово! Хочешь подключить Google Calendar?\n\n"
-        "Если да — пришли ID своего календаря (например: abc@group.calendar.google.com)\n"
-        "Если нет — напиши <b>пропустить</b>"
-    )
+
+    svc_email = _platform_gcal_email()
+    if svc_email:
+        await message.answer(
+            "Почти готово! Подключим Google Calendar?\n\n"
+            "Бот будет видеть и создавать записи прямо в твоём календаре.\n\n"
+            "<b>3 шага:</b>\n\n"
+            "1️⃣ Открой <b>calendar.google.com</b> → ⚙️ Настройки\n"
+            "   → выбери нужный календарь слева\n\n"
+            "2️⃣ Раздел <b>«Доступ другим людям»</b> → «Добавить людей»\n"
+            f"   Введи этот email:\n<code>{svc_email}</code>\n"
+            "   Права: <b>«Вносить изменения в мероприятия»</b> → Отправить\n\n"
+            "3️⃣ На той же странице найди <b>«Идентификатор календаря»</b>\n"
+            "   (выглядит как <code>xxx@group.calendar.google.com</code>\n"
+            "   или просто твой Gmail-адрес)\n"
+            "   Скопируй и пришли его сюда.\n\n"
+            "Или напиши <b>пропустить</b> — расписание будет только в боте."
+        )
+    else:
+        await message.answer(
+            "Почти готово!\n\n"
+            "Google Calendar сейчас не подключён к платформе.\n"
+            "Напиши <b>пропустить</b> — расписание будет храниться в боте."
+        )
 
 
 @router.message(Setup.google_cal)

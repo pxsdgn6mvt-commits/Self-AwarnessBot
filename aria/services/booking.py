@@ -138,15 +138,15 @@ class LocalAdapter(BookingAdapter):
 # ── Google Calendar adapter ───────────────────────────────────────────────────
 
 class GoogleAdapter(BookingAdapter):
-    def __init__(self, tenant: "TenantConfig") -> None:
+    def __init__(self, tenant: "TenantConfig", creds_json: str) -> None:
         import json as _json
         from google.oauth2 import service_account
         from googleapiclient.discovery import build
 
         self._t = tenant
-        creds_json = _json.loads(tenant.google_cal_credentials)  # type: ignore[arg-type]
+        creds_data = _json.loads(creds_json)
         creds = service_account.Credentials.from_service_account_info(
-            creds_json, scopes=["https://www.googleapis.com/auth/calendar"]
+            creds_data, scopes=["https://www.googleapis.com/auth/calendar"]
         )
         self._svc = build("calendar", "v3", credentials=creds)
         self._cal = tenant.google_cal_id
@@ -253,16 +253,25 @@ class GoogleAdapter(BookingAdapter):
 
 def get_adapter(tenant: "TenantConfig") -> BookingAdapter:
     if tenant.id not in _adapters:
-        if tenant.google_cal_credentials and tenant.google_cal_id:
+        cal_id = tenant.google_cal_id
+        # Per-tenant credentials take priority; fall back to platform service account
+        creds_json = tenant.google_cal_credentials
+        if not creds_json:
+            from aria.config import settings
+            creds_json = settings.GOOGLE_CALENDAR_CREDENTIALS
+
+        if creds_json and cal_id:
             try:
-                _adapters[tenant.id] = GoogleAdapter(tenant)
-                log.info("Tenant %d: using Google Calendar adapter", tenant.id)
+                _adapters[tenant.id] = GoogleAdapter(tenant, creds_json)
+                log.info("Tenant %d: Google Calendar adapter (cal=%s)", tenant.id, cal_id)
             except Exception as exc:
-                log.warning("Tenant %d: Google Calendar failed (%s), using local", tenant.id, exc)
+                log.warning("Tenant %d: Google Calendar init failed (%s), using local", tenant.id, exc)
                 _adapters[tenant.id] = LocalAdapter(tenant)
         else:
+            if cal_id:
+                log.warning("Tenant %d: google_cal_id set but no service account configured", tenant.id)
             _adapters[tenant.id] = LocalAdapter(tenant)
-            log.info("Tenant %d: using local Postgres adapter", tenant.id)
+            log.info("Tenant %d: local Postgres adapter", tenant.id)
     return _adapters[tenant.id]
 
 
