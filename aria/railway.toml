@@ -1,6 +1,6 @@
 [build]
-builder = "dockerfile"
-dockerfilePath = "aria/Dockerfile"
+builder = "nixpacks"
+buildCommand = "pip install -r aria/requirements.txt"
 
 [deploy]
 startCommand = "python -m aria.main"
