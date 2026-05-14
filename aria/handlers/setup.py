@@ -21,6 +21,7 @@ import aria.db.repo as repo
 from aria.filters import SetupRequired
 from aria.middleware import TenantMiddleware
 from aria.services.booking import invalidate_adapter
+from aria.services.commands import set_commands
 from aria.tenant import TenantConfig
 
 log = logging.getLogger(__name__)
@@ -205,12 +206,14 @@ async def setup_google_cal(message: Message, state: FSMContext, tenant: TenantCo
     invalidate_adapter(tenant.id)
     TenantMiddleware.invalidate(tenant.bot_token)
     await state.clear()
+    await set_commands(message.bot, message.from_user.id)
 
     await message.answer(
         f"✅ Готово! Бот настроен для <b>{data['salon_name']}</b>.\n\n"
         f"Теперь просто пиши мне как обычно:\n"
         f"• «что у меня сегодня?»\n"
         f"• «запиши Катю на {data['services'].split(',')[0].strip()} 20 мая в 14:00»\n"
-        f"• «что на этой неделе?»"
+        f"• «что на этой неделе?»\n\n"
+        "Подсказка: нажми 🎛 рядом с полем ввода — там все доступные команды."
     )
     log.info("Tenant %d setup complete: %s tz=%s", tenant.id, data["salon_name"], data.get("timezone", "UTC"))

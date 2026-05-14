@@ -22,11 +22,12 @@ from aiogram.types import ErrorEvent
 
 from aria.config import settings
 from aria.db.repo import (
-    init_db, close_pool, create_tenant, get_tenant_by_token, list_active_tenants,
+    init_db, close_pool, create_tenant, get_tenant, get_tenant_by_token, list_active_tenants,
 )
 from aria.handlers import admin, chat, start
 from aria.handlers.setup import router as setup_router
 from aria.middleware import TenantMiddleware
+from aria.services.commands import set_commands
 from aria.services.scheduler import get_scheduler
 
 logging.basicConfig(
@@ -71,6 +72,11 @@ async def _poll_bot(bot: Bot, dp: Dispatcher, tenant_id: int) -> None:
     try:
         me = await bot.get_me()
         log.info("Bot @%s polling started (tenant #%d)", me.username, tenant_id)
+        row = await get_tenant(tenant_id)
+        if row and row["setup_complete"]:
+            await set_commands(bot, row["owner_tg_id"])
+        else:
+            await set_commands(bot)
         while True:
             try:
                 updates = await bot.get_updates(
