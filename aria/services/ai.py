@@ -32,6 +32,11 @@ def _get_client(api_key: str) -> anthropic.AsyncAnthropic:
 # ── System prompt ─────────────────────────────────────────────────────────────
 
 def _build_system_prompt(tenant: "TenantConfig") -> str:
+    if tenant.google_cal_credentials and tenant.google_cal_id:
+        calendar_line = f"Calendar: Google Calendar (ID: {tenant.google_cal_id}) — synced"
+    else:
+        calendar_line = "Calendar: local storage only (Google Calendar NOT connected)"
+
     return f"""You are Aria, the personal AI receptionist for {tenant.owner_name} at {tenant.salon_name}.
 
 Your job is to help {tenant.owner_name} manage her appointment schedule. She is the salon owner — treat her as your boss.
@@ -51,11 +56,13 @@ STYLE:
 - For schedules: bullet list with time and client name.
 - Confirm every action: "Готово — Катя записана на 16 мая в 14:00".
 - If something is unclear, ask one short question.
+- NEVER say a booking was saved to Google Calendar unless the tool result contains "google_calendar": true.
 
 SALON INFO:
 Salon: {tenant.salon_name}
 Services: {tenant.services}
 Working hours: {tenant.hours}
+{calendar_line}
 Today (UTC): {{TODAY}}"""
 
 
@@ -183,10 +190,11 @@ async def _exec_tool(name: str, args: dict, tenant: "TenantConfig", owner_id: in
         dt = parse_datetime(args["date"], args["time"])
         if dt is None:
             return json.dumps({"error": "invalid date/time"})
-        bid, _ = await adapter.create_event(owner_id, args["client_name"], args["service"], dt)
+        bid, cal_id = await adapter.create_event(owner_id, args["client_name"], args["service"], dt)
         return json.dumps({"booking_id": bid, "client": args["client_name"],
                            "service": args["service"], "date": args["date"],
-                           "time": args["time"], "confirmed": True})
+                           "time": args["time"], "confirmed": True,
+                           "google_calendar": cal_id is not None})
 
     if name == "reschedule_booking":
         new_dt = parse_datetime(args["new_date"], args["new_time"])
