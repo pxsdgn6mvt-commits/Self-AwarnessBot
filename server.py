@@ -37,6 +37,16 @@ def thank_you():
     return _read_html("thank-you.html")
 
 
+@app.route("/how-it-works")
+def how_it_works():
+    return _read_html("how-it-works.html")
+
+
+@app.route("/faq")
+def faq():
+    return _read_html("faq.html")
+
+
 @app.route("/healthz")
 def health():
     return "ok", 200
