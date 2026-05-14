@@ -94,6 +94,8 @@ class LocalAdapter(BookingAdapter):
         self._t = tenant
 
     async def get_events(self, date_from: datetime, date_to: datetime) -> list[dict]:
+        from zoneinfo import ZoneInfo
+        tz = ZoneInfo(self._t.timezone or "UTC")
         rows = await repo.get_bookings_in_range(self._t.id, date_from, date_to)
         return [
             {
@@ -101,17 +103,20 @@ class LocalAdapter(BookingAdapter):
                 "title": f"{r['service']} — {r['client_name']}",
                 "client": r["client_name"],
                 "service": r["service"],
-                "date": r["scheduled_at"].strftime("%Y-%m-%d"),
-                "time": r["scheduled_at"].strftime("%H:%M"),
+                "date": r["scheduled_at"].astimezone(tz).strftime("%Y-%m-%d"),
+                "time": r["scheduled_at"].astimezone(tz).strftime("%H:%M"),
                 "status": r["status"],
             }
             for r in rows
         ]
 
     async def is_available(self, dt: datetime, service: str) -> bool:
-        if not _is_working_day(self._t, dt.date()):
+        from zoneinfo import ZoneInfo
+        tz = ZoneInfo(self._t.timezone or "UTC")
+        local_dt = dt.astimezone(tz)
+        if not _is_working_day(self._t, local_dt.date()):
             return False
-        if not (self._t.open_hour <= dt.hour < self._t.close_hour):
+        if not (self._t.open_hour <= local_dt.hour < self._t.close_hour):
             return False
         booked = await repo.get_slots_on_date(self._t.id, dt.strftime("%Y-%m-%d"))
         return dt not in booked
@@ -177,6 +182,8 @@ class GoogleAdapter(BookingAdapter):
         self._svc.events().patch(calendarId=self._cal, eventId=event_id, body=body).execute()
 
     async def get_events(self, date_from: datetime, date_to: datetime) -> list[dict]:
+        from zoneinfo import ZoneInfo
+        tz = ZoneInfo(self._t.timezone or "UTC")
         items = await asyncio.to_thread(self._list_events_sync, date_from.isoformat(), date_to.isoformat())
         events: list[dict] = []
         for item in items:
@@ -184,6 +191,7 @@ class GoogleAdapter(BookingAdapter):
             dt = _parse_gcal_dt(raw)
             if dt is None:
                 continue
+            local_dt = dt.astimezone(tz)
             summary = item.get("summary", "")
             service, client = (summary.split(" — ", 1) if " — " in summary else ("", summary))
             events.append({
@@ -191,8 +199,8 @@ class GoogleAdapter(BookingAdapter):
                 "title": summary,
                 "client": client.strip(),
                 "service": service.strip(),
-                "date": dt.strftime("%Y-%m-%d"),
-                "time": dt.strftime("%H:%M"),
+                "date": local_dt.strftime("%Y-%m-%d"),
+                "time": local_dt.strftime("%H:%M"),
                 "description": item.get("description", ""),
             })
         return events
@@ -247,9 +255,10 @@ class GoogleAdapter(BookingAdapter):
         if not calendar_event_id:
             return
         end_dt = new_dt + timedelta(minutes=self._t.slot_minutes)
+        tz_name = self._t.timezone or "UTC"
         await asyncio.to_thread(self._patch_sync, calendar_event_id, {
-            "start": {"dateTime": new_dt.isoformat(), "timeZone": "UTC"},
-            "end": {"dateTime": end_dt.isoformat(), "timeZone": "UTC"},
+            "start": {"dateTime": new_dt.isoformat(), "timeZone": tz_name},
+            "end": {"dateTime": end_dt.isoformat(), "timeZone": tz_name},
         })
 
 

@@ -170,20 +170,20 @@ async def _exec_tool(name: str, args: dict, tenant: "TenantConfig", owner_id: in
     tz_str = tenant.timezone or "UTC"
 
     if name == "get_schedule":
+        from zoneinfo import ZoneInfo
+        tz = ZoneInfo(tz_str)
         if args.get("date_from") and args.get("date_to"):
-            dt_from = datetime.strptime(_resolve_date(args["date_from"], tz_str), "%Y-%m-%d").replace(
-                hour=0, minute=0, tzinfo=timezone.utc
-            )
-            dt_to = datetime.strptime(_resolve_date(args["date_to"], tz_str), "%Y-%m-%d").replace(
-                hour=23, minute=59, tzinfo=timezone.utc
-            )
+            from_str = _resolve_date(args["date_from"], tz_str)
+            to_str   = _resolve_date(args["date_to"],   tz_str)
+            dt_from = datetime.strptime(from_str, "%Y-%m-%d").replace(hour=0, minute=0, tzinfo=tz).astimezone(timezone.utc)
+            dt_to   = datetime.strptime(to_str,   "%Y-%m-%d").replace(hour=23, minute=59, tzinfo=tz).astimezone(timezone.utc)
         else:
-            target = _resolve_date(args.get("date") or "today", tz_str)
-            dt_from = datetime.strptime(target, "%Y-%m-%d").replace(hour=0, minute=0, tzinfo=timezone.utc)
-            dt_to = dt_from.replace(hour=23, minute=59)
+            target  = _resolve_date(args.get("date") or "today", tz_str)
+            dt_from = datetime.strptime(target, "%Y-%m-%d").replace(hour=0,  minute=0,  tzinfo=tz).astimezone(timezone.utc)
+            dt_to   = datetime.strptime(target, "%Y-%m-%d").replace(hour=23, minute=59, tzinfo=tz).astimezone(timezone.utc)
         events = await adapter.get_events(dt_from, dt_to)
-        return json.dumps({"date_from": dt_from.strftime("%Y-%m-%d"),
-                           "date_to": dt_to.strftime("%Y-%m-%d"),
+        return json.dumps({"date_from": _resolve_date(args.get("date_from") or args.get("date") or "today", tz_str),
+                           "date_to":   _resolve_date(args.get("date_to")   or args.get("date") or "today", tz_str),
                            "count": len(events), "bookings": events})
 
     if name == "check_availability":
