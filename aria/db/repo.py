@@ -182,6 +182,52 @@ async def get_slots_on_date(date_str: str) -> list[datetime]:
         return [r["scheduled_at"] for r in rows]
 
 
+async def get_bookings_for_date(date_str: str) -> list[asyncpg.Record]:
+    """All bookings on a given date (YYYY-MM-DD) for owner view."""
+    async with _p().acquire() as conn:  # type: ignore[union-attr]
+        return await conn.fetch(
+            """
+            SELECT * FROM aria_bookings
+            WHERE scheduled_at::date = $1::date
+              AND status IN ('confirmed', 'pending')
+            ORDER BY scheduled_at ASC
+            """,
+            date_str,
+        )
+
+
+async def get_all_upcoming_bookings(limit: int = 30) -> list[asyncpg.Record]:
+    """All upcoming bookings for owner view."""
+    now = datetime.now(timezone.utc)
+    async with _p().acquire() as conn:  # type: ignore[union-attr]
+        return await conn.fetch(
+            """
+            SELECT * FROM aria_bookings
+            WHERE scheduled_at > $1
+              AND status IN ('confirmed', 'pending')
+            ORDER BY scheduled_at ASC
+            LIMIT $2
+            """,
+            now, limit,
+        )
+
+
+async def get_bookings_in_range(
+    date_from: datetime, date_to: datetime
+) -> list[asyncpg.Record]:
+    """Bookings within a datetime range (used when Google Calendar is not active)."""
+    async with _p().acquire() as conn:  # type: ignore[union-attr]
+        return await conn.fetch(
+            """
+            SELECT * FROM aria_bookings
+            WHERE scheduled_at >= $1 AND scheduled_at <= $2
+              AND status IN ('confirmed', 'pending')
+            ORDER BY scheduled_at ASC
+            """,
+            date_from, date_to,
+        )
+
+
 # ── Waitlist ──────────────────────────────────────────────────────────────────
 
 async def add_to_waitlist(user_id: int, client_name: str, service: str) -> int:
