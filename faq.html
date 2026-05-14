@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>FAQ — AIBeautyKit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --cream:#f5f0e8;--cream2:#ede8df;
+  --dark:#1a120a;--dark-s:#160b04;
+  --terra:#c4613a;--terra-d:#9e4a29;--terra-dd:#6b2410;
+  --gold-l:#d4a540;
+  --muted:#8b6e5a;--muted2:#b09880;
+  --border:rgba(26,18,10,.12);
+}
+html{scroll-behavior:smooth}
+body{background:var(--cream);color:var(--dark);line-height:1.65;font-family:'Inter',system-ui,sans-serif}
+h1,h2,h3,h4{font-family:'Lora',Georgia,serif}
+.container{max-width:1160px;margin:0 auto;padding:0 24px}
+.lbl{display:flex;align-items:center;gap:12px;font-size:.67rem;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--terra);margin-bottom:16px;font-family:'Inter',sans-serif}
+.lbl::before{content:'';display:block;width:28px;height:1.5px;background:var(--terra);flex-shrink:0}
+nav{position:sticky;top:0;z-index:200;background:rgba(245,240,232,.96);backdrop-filter:blur(14px);border-bottom:1px solid var(--border)}
+.nav-inner{max-width:1160px;margin:0 auto;padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:60px}
+.brand{font-family:'Lora',serif;font-size:1.4rem;font-weight:700;color:var(--dark);text-decoration:none}
+.brand em{color:var(--terra);font-style:normal}
+.nav-back{color:var(--muted);text-decoration:none;font-size:.83rem;font-weight:500;display:flex;align-items:center;gap:6px;transition:color .2s}
+.nav-back:hover{color:var(--dark)}
+.btn-nav{background:var(--terra);color:#fff;font-weight:600;font-size:.81rem;padding:9px 19px;border-radius:6px;text-decoration:none;transition:background .15s;font-family:'Inter',sans-serif;min-height:40px;display:inline-flex;align-items:center;border:none;cursor:pointer}
+.btn-nav:hover{background:var(--terra-d)}
+.page-hero{padding:72px 24px 80px;background:var(--cream)}
+.page-hero h1{font-size:clamp(2.2rem,5vw,3.8rem);font-weight:700;line-height:1.1;margin-bottom:12px;letter-spacing:-.02em}
+.page-hero h1 em{font-style:italic;color:var(--terra)}
+.page-hero p{color:var(--muted);font-size:.95rem;line-height:1.75;max-width:540px}
+.faq-section{background:var(--cream2);padding:80px 24px;border-top:1px solid var(--border)}
+.faq-cols{display:grid;grid-template-columns:1fr 2fr;gap:56px;align-items:start}
+.faq-sidebar h2{font-family:'Lora',serif;font-size:clamp(1.7rem,3.5vw,2.4rem);font-weight:700;margin-bottom:10px}
+.faq-sidebar h2 em{font-style:italic;color:var(--terra)}
+.faq-sidebar p{color:var(--muted);font-size:.88rem;line-height:1.72;margin-bottom:20px}
+.faq-sidebar a{color:var(--terra);text-decoration:none;font-size:.84rem;font-weight:600;display:flex;align-items:center;gap:6px;transition:color .2s}
+.faq-sidebar a:hover{color:var(--terra-d)}
+.faq-list{display:flex;flex-direction:column;gap:7px}
+.fi{border:1.5px solid var(--border);border-radius:11px;overflow:hidden;transition:border-color .2s;background:var(--cream)}
+.fi.open{border-color:var(--terra)}
+.fq{width:100%;background:none;border:none;color:var(--dark);text-align:left;padding:17px 22px;font-size:.92rem;font-weight:500;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:16px;font-family:'Inter',sans-serif;transition:background .15s;min-height:56px}
+.fq:hover{background:rgba(196,97,58,.04)}
+.fi-icon{color:var(--terra);font-size:1.3rem;flex-shrink:0;transition:transform .25s;line-height:1}
+.fi.open .fi-icon{transform:rotate(45deg)}
+.fa{max-height:0;overflow:hidden;transition:max-height .35s ease}
+.fa-inner{padding:0 22px 17px;color:var(--muted);font-size:.88rem;line-height:1.72}
+.cta-section{background:linear-gradient(155deg,var(--terra-dd) 0%,var(--terra) 100%);padding:80px 24px;text-align:center}
+.cta-section h2{font-family:'Lora',serif;font-size:clamp(1.8rem,4vw,2.8rem);font-weight:700;color:#fff;margin-bottom:12px}
+.cta-section h2 em{font-style:italic;color:rgba(255,255,255,.7)}
+.cta-section p{color:rgba(255,255,255,.7);font-size:.93rem;margin-bottom:28px;max-width:460px;margin-left:auto;margin-right:auto;line-height:1.72}
+.btn-gold{background:var(--gold-l);color:var(--dark);font-weight:700;font-size:.92rem;padding:15px 32px;border-radius:7px;text-decoration:none;display:inline-flex;align-items:center;gap:8px;font-family:'Inter',sans-serif;transition:background .15s}
+.btn-gold:hover{background:#e4b645}
+footer{background:var(--dark-s);border-top:1px solid rgba(255,255,255,.06);padding:40px 24px 24px;text-align:center}
+.f-copy{color:rgba(245,240,232,.28);font-size:.77rem}
+.f-back{color:rgba(245,240,232,.45);text-decoration:none;font-size:.83rem;font-weight:500;margin-bottom:14px;display:inline-block;transition:color .2s}
+.f-back:hover{color:#f5f0e8}
+@media(max-width:860px){.faq-cols{grid-template-columns:1fr;gap:36px}}
+@media(max-width:768px){
+  .page-hero{padding:52px 20px 60px}
+  .faq-section,.cta-section{padding:60px 20px}
+  footer{padding:32px 20px 20px}
+}
+@media(max-width:480px){
+  .page-hero{padding:40px 16px 48px}
+  .faq-section,.cta-section{padding:48px 16px}
+  .fq{padding:15px 18px;font-size:.87rem}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a class="brand" href="/">AI<em>Beauty</em>Kit</a>
+    <a class="nav-back" href="/">← Back to home</a>
+    <a class="btn-nav" href="/">Get Started →</a>
+  </div>
+</nav>
+
+<section class="page-hero">
+  <div class="container">
+    <div class="lbl">FAQ</div>
+    <h1>Common questions<br><em>answered.</em></h1>
+    <p>Everything you wanted to know before signing up. Can't find your answer? The chat widget on the homepage will help.</p>
+  </div>
+</section>
+
+<section class="faq-section">
+  <div class="container">
+    <div class="faq-cols">
+      <div class="faq-sidebar">
+        <h2>Still have<br><em>questions?</em></h2>
+        <p>Our AI assistant on the main page can answer anything in real time — or just hit Get Started and ask during setup.</p>
+        <a href="/">Go back to AIBeautyKit →</a>
+      </div>
+      <div class="faq-list">
+        <div class="fi"><button class="fq">Do I need any technical skills? <span class="fi-icon">+</span></button><div class="fa"><div class="fa-inner">Not at all. If you can use Instagram or WhatsApp, you can use AIBeautyKit. Setup takes under 10 minutes. We walk you through every step — no code, no technical knowledge required.</div></div></div>
+        <div class="fi"><button class="fq">How does the AI learn to write in my style? <span class="fi-icon">+</span></button><div class="fa"><div class="fa-inner">During setup you answer 5 simple questions about your services, tone and target clients. The AI adapts to your voice. You can rate the output, and it gets sharper over time.</div></div></div>
+        <div class="fi"><button class="fq">Which booking systems does it integrate with? <span class="fi-icon">+</span></button><div class="fa"><div class="fa-inner">AIBeautyKit connects with Fresha, Vagaro, Booksy, Timely, Acuity Scheduling and Google Calendar. New integrations are added monthly. There's also a built-in lightweight booking page included in every plan.</div></div></div>
+        <div class="fi"><button class="fq">Is my client data safe? <span class="fi-icon">+</span></button><div class="fa"><div class="fa-inner">Absolutely. All data is encrypted, stored on EU servers and fully GDPR-compliant. Your data belongs to you — we never sell or share it. You can export or delete everything at any time.</div></div></div>
+        <div class="fi"><button class="fq">What does the 30-day guarantee mean exactly? <span class="fi-icon">+</span></button><div class="fa"><div class="fa-inner">If within 30 days you feel AIBeautyKit hasn't saved you time, contact us and we'll refund every cent. No questions, no forms, no waiting — just a full refund.</div></div></div>
+        <div class="fi"><button class="fq">Does it work for nail, lash, hair and other specialisations? <span class="fi-icon">+</span></button><div class="fa"><div class="fa-inner">Yes. AIBeautyKit is trained for nail techs, lash artists, hairdressers, aestheticians, brow specialists and salon owners. The AI understands your specific services, terminology and client communication style.</div></div></div>
+        <div class="fi"><button class="fq">Can I cancel at any time? <span class="fi-icon">+</span></button><div class="fa"><div class="fa-inner">Yes. There are no contracts, no cancellation fees and no minimum terms. Cancel from your dashboard in under a minute. Your data remains accessible for 30 days after cancellation so you can export it.</div></div></div>
+        <div class="fi"><button class="fq">What languages does AIBeautyKit support? <span class="fi-icon">+</span></button><div class="fa"><div class="fa-inner">AIBeautyKit operates in 12 languages including English, Finnish, Swedish, German, French, Russian, Polish, Dutch, Spanish, Italian, Portuguese and Norwegian. The AI automatically detects and matches the language your client writes in.</div></div></div>
+        <div class="fi"><button class="fq">Will my clients know they're talking to an AI? <span class="fi-icon">+</span></button><div class="fa"><div class="fa-inner">Only if you want them to. The AI is trained to write in your voice and style. Most clients can't tell the difference. You decide how transparent to be — many pros add a small note in their booking confirmation, others prefer not to.</div></div></div>
+        <div class="fi"><button class="fq">How quickly does AIBeautyKit respond to client messages? <span class="fi-icon">+</span></button><div class="fa"><div class="fa-inner">Typically within seconds — 24 hours a day, 7 days a week, including nights and weekends. No client is left waiting while you're in an appointment or sleeping.</div></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="cta-section">
+  <div class="container">
+    <h2>Ready to try it<br><em>for free?</em></h2>
+    <p>Get a personalised audit in one minute — no credit card, no commitment.</p>
+    <a class="btn-gold" href="/">Get your free audit →</a>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <a class="f-back" href="/">← Back to AIBeautyKit</a><br>
+    <span class="f-copy">© 2025 AIBeautyKit · Helsinki, Finland</span>
+  </div>
+</footer>
+
+<script>
+document.querySelectorAll('.fq').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    const item=btn.closest('.fi'),a=item.querySelector('.fa'),open=item.classList.toggle('open');
+    a.style.maxHeight=open?a.scrollHeight+'px':'0';
+  });
+});
+</script>
+</body>
+</html>
