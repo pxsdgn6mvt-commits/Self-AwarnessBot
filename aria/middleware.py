@@ -29,6 +29,8 @@ class TenantMiddleware(BaseMiddleware):
         if bot is None:
             return await handler(event, data)
 
+        log.info("Update received for bot ...%s", bot.token[-8:])
+
         now = time.monotonic()
         cached = TenantMiddleware._cache.get(bot.token)
         if cached is None or (now - cached[1]) > _CACHE_TTL:
