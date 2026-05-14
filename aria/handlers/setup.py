@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 
 from aiogram import Router
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message
@@ -31,8 +31,19 @@ class Setup(StatesGroup):
     google_cal   = State()
 
 
+@router.message(Command("ping"))
+async def cmd_ping(message: Message, **kwargs) -> None:
+    tenant = kwargs.get("tenant")
+    if tenant:
+        info = f"Tenant #{tenant.id} ({tenant.salon_name}), setup_complete={tenant.setup_complete}"
+    else:
+        info = "tenant NOT found in data"
+    await message.answer(f"pong\n{info}")
+
+
 @router.message(CommandStart(), SetupRequired())
 async def setup_start(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
+    log.info("setup_start called for tenant #%d user %d", tenant.id, message.from_user.id)
     # First person to /start becomes the owner
     await repo.update_tenant(tenant.id, owner_tg_id=message.from_user.id)
 
