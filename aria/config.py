@@ -56,7 +56,10 @@ class Settings:
         self.OWNER_TELEGRAM_ID = _int("ARIA_OWNER_TELEGRAM_ID", 0)
         self.ANTHROPIC_API_KEY = _require("ANTHROPIC_API_KEY")
         self.CLAUDE_MODEL = _str("ARIA_CLAUDE_MODEL", "claude-haiku-4-5-20251001")
-        self.DATABASE_URL = _str("ARIA_DATABASE_URL", "postgresql://localhost/aria_salon")
+        self.DATABASE_URL = (
+            _str("ARIA_DATABASE_URL")
+            or _str("DATABASE_URL", "postgresql://localhost/aria_salon")
+        )
 
         self.SALON_NAME = _str("SALON_NAME", "Our Salon")
         self.OWNER_NAME = _str("SALON_OWNER_NAME", "the manager")
