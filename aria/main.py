@@ -66,14 +66,31 @@ def _build_dispatcher() -> Dispatcher:
 # ── Per-bot polling task ───────────────────────────────────────────────────────
 
 async def _poll_bot(bot: Bot, dp: Dispatcher, tenant_id: int) -> None:
+    allowed = dp.resolve_used_update_types()
+    offset = 0
     try:
         me = await bot.get_me()
         log.info("Bot @%s polling started (tenant #%d)", me.username, tenant_id)
-        await dp.start_polling(
-            bot,
-            drop_pending_updates=False,
-            allowed_updates=dp.resolve_used_update_types(),
-        )
+        while True:
+            try:
+                updates = await bot.get_updates(
+                    offset=offset,
+                    timeout=30,
+                    allowed_updates=allowed,
+                )
+                for update in updates:
+                    try:
+                        await dp.feed_update(bot, update)
+                    except Exception:
+                        log.exception("Error processing update %d (tenant #%d)", update.update_id, tenant_id)
+                    offset = update.update_id + 1
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.exception("get_updates error tenant #%d, retry in 5s", tenant_id)
+                await asyncio.sleep(5)
+    except asyncio.CancelledError:
+        pass
     except Exception:
         log.exception("Bot polling failed for tenant #%d", tenant_id)
     finally:
