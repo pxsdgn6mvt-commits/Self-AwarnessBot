@@ -1,0 +1,32 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: aria_salon
+      POSTGRES_USER: aria
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aria_secret}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aria -d aria_salon"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  aria:
+    build:
+      context: ..
+      dockerfile: aria/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      ARIA_DATABASE_URL: postgresql://aria:${POSTGRES_PASSWORD:-aria_secret}@postgres:5432/aria_salon
+
+volumes:
+  pgdata:
