@@ -80,20 +80,21 @@ nav.nav-scrolled{background:rgba(245,240,232,.97);border-color:var(--border);box
 @keyframes ticker{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
 
 /* ③ HERO — two-column layout */
-.hero{padding:72px 0 84px;background:var(--cream)}
-.hero-wrap{max-width:1160px;margin:0 auto;padding:0 24px;display:grid;grid-template-columns:1fr 400px;gap:64px;align-items:center}
+.hero{padding:72px 0 84px;position:relative;background:#0d0906;background-image:url('https://picsum.photos/seed/salonhero/1920/1080');background-size:cover;background-position:center;background-attachment:fixed;}
+.hero::before{content:'';position:absolute;inset:0;background:rgba(0,0,0,.5);z-index:0;}
+.hero-wrap{max-width:1160px;margin:0 auto;padding:0 24px;display:grid;grid-template-columns:1fr 400px;gap:64px;align-items:center;position:relative;z-index:1;}
 .hero-left{}
 
 /* ② hero h1 = 64px / 800 */
-.hero h1{font-size:clamp(2.2rem,5.5vw,64px);font-weight:800;line-height:1.06;color:var(--dark);margin-bottom:16px;letter-spacing:-.025em}
-.hero h1 em{font-style:italic;color:var(--color-brand)}
-.hero-desc{font-size:.95rem;color:var(--muted);line-height:1.72;margin-bottom:28px;max-width:560px}
+.hero h1{font-size:clamp(2.2rem,5.5vw,64px);font-weight:800;line-height:1.06;color:#fff;margin-bottom:16px;letter-spacing:-.025em}
+.hero h1 em{font-style:italic;color:rgba(245,195,130,.95)}
+.hero-desc{font-size:.95rem;color:rgba(255,255,255,.72);line-height:1.72;margin-bottom:28px;max-width:560px}
 .hero-ctas{display:flex;gap:13px;align-items:center;flex-wrap:wrap}
 .btn-primary{background:var(--color-brand);color:#fff;font-weight:600;font-size:.92rem;padding:15px 28px;border-radius:7px;border:none;cursor:pointer;transition:background .15s;display:inline-flex;align-items:center;gap:8px;font-family:'Inter',sans-serif;min-height:48px;text-decoration:none}
 .btn-primary:hover{background:var(--color-action)}
-.btn-txt{color:var(--dark);font-weight:600;font-size:.9rem;text-decoration:underline;text-underline-offset:3px;text-decoration-color:rgba(196,97,58,.5);cursor:pointer;background:none;border:none;font-family:'Inter',sans-serif;padding:0;transition:color .2s;white-space:nowrap}
-.btn-txt:hover{color:var(--terra)}
-.hero-note{color:var(--muted2);font-size:.75rem;margin-top:11px}
+.btn-txt{color:rgba(255,255,255,.82);font-weight:600;font-size:.9rem;text-decoration:underline;text-underline-offset:3px;text-decoration-color:rgba(255,255,255,.35);cursor:pointer;background:none;border:none;font-family:'Inter',sans-serif;padding:0;transition:color .2s;white-space:nowrap}
+.btn-txt:hover{color:#fff}
+.hero-note{color:rgba(255,255,255,.5);font-size:.75rem;margin-top:11px}
 
 /* ③ Hero chat preview (right column) */
 .hero-right{display:flex;align-items:center;justify-content:center}
@@ -180,6 +181,8 @@ nav.nav-scrolled{background:rgba(245,240,232,.97);border-color:var(--border);box
 
 /* Shared card internals */
 .tc-icon{font-size:1.7rem;margin-bottom:16px}
+.tc-avatar{width:64px;height:64px;border-radius:50%;object-fit:cover;margin-bottom:16px;border:2.5px solid rgba(255,255,255,.22);display:block;}
+.tc-hero .tc-avatar{width:82px;height:82px;border:3px solid rgba(255,255,255,.35);}
 .tc-role{font-size:.61rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--terra);margin-bottom:4px}
 .tc-list{list-style:none;display:flex;flex-direction:column;gap:5px}
 .tc-list li{padding-left:16px;position:relative;line-height:1.4}
@@ -193,7 +196,9 @@ nav.nav-scrolled{background:rgba(245,240,232,.97);border-color:var(--border);box
 /* ⑭ INTEGRATIONS */
 
 /* GUARANTEE */
-.guar-section{background:linear-gradient(155deg,var(--terra-dd) 0%,var(--terra) 100%);padding:88px 24px;text-align:center}
+.guar-section{position:relative;padding:88px 24px;text-align:center;background:#3d0000;background-image:url('https://picsum.photos/seed/guaranteebg/1920/1080');background-size:cover;background-position:center;background-attachment:fixed;}
+.guar-section::before{content:'';position:absolute;inset:0;background:rgba(139,0,0,.7);z-index:0;}
+.guar-section .container{position:relative;z-index:1;}
 .guar-section .sh{color:#fff;font-size:clamp(1.85rem,4.5vw,40px)}
 .guar-section .sh em{font-style:italic;color:rgba(255,255,255,.7)}
 .guar-icon{font-size:2.7rem;margin-bottom:18px;display:block}
@@ -387,6 +392,7 @@ footer{background:var(--dark-s);border-top:1px solid rgba(255,255,255,.06);paddi
 
 /* ── MOBILE 768px ── */
 @media(max-width:768px){
+  .hero,.guar-section{background-attachment:scroll;}
   .container{padding:0 20px}
   .hero{padding:44px 0 56px}
   .hero-wrap{padding:0 20px;grid-template-columns:1fr;gap:32px}
@@ -568,7 +574,7 @@ footer{background:var(--dark-s);border-top:1px solid rgba(255,255,255,.06);paddi
         <span class="tc-badge tc-badge-main">⭐ Most Used</span>
         <!-- Left: icon + identity + description -->
         <div>
-          <div class="tc-icon"><svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.88)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
+          <img class="tc-avatar" src="https://i.pravatar.cc/300?img=47" alt="Aria">
           <div class="tc-role">Receptionist</div>
           <div class="tc-name">Aria</div>
           <p class="tc-desc">Handles all bookings, sends reminders, reschedules appointments and wins back clients after cancellations — around the clock, in any time zone.</p>
@@ -593,7 +599,7 @@ footer{background:var(--dark-s);border-top:1px solid rgba(255,255,255,.06);paddi
       <div class="team-tier-2">
         <div class="tc tc-featured rv d1">
           <span class="tc-badge tc-badge-revenue">💰 Revenue booster</span>
-          <div class="tc-icon">💎</div>
+          <img class="tc-avatar" src="https://i.pravatar.cc/300?img=20" alt="Vivienne">
           <div class="tc-role">Sales Manager</div>
           <div class="tc-name">Vivienne</div>
           <p class="tc-desc">Spots upsell opportunities, sends personalised offers to the right clients at the right moment — and lifts your average ticket.</p>
@@ -601,7 +607,7 @@ footer{background:var(--dark-s);border-top:1px solid rgba(255,255,255,.06);paddi
         </div>
         <div class="tc tc-featured rv d2">
           <span class="tc-badge tc-badge-care">💬 Client care</span>
-          <div class="tc-icon">💬</div>
+          <img class="tc-avatar" src="https://i.pravatar.cc/300?img=25" alt="Luna">
           <div class="tc-role">Client Service</div>
           <div class="tc-name">Luna</div>
           <p class="tc-desc">Instantly replies in DMs, handles questions, collects reviews and makes every client feel like a VIP.</p>
@@ -612,21 +618,21 @@ footer{background:var(--dark-s);border-top:1px solid rgba(255,255,255,.06);paddi
       <!-- ③ TIER 3 — MAYA, CELESTE, SAGE -->
       <div class="team-tier-3">
         <div class="tc tc-support rv d1">
-          <div class="tc-icon">📣</div>
+          <img class="tc-avatar" src="https://i.pravatar.cc/300?img=5" alt="Maya">
           <div class="tc-role">Marketing</div>
           <div class="tc-name">Maya</div>
           <p class="tc-desc">Plans promotions, seasonal campaigns and referral programmes — always data-driven, never guesswork.</p>
           <ul class="tc-list"><li>Monthly promo calendar</li><li>Referral programme</li><li>Flash sales</li><li>Competitor monitoring</li></ul>
         </div>
         <div class="tc tc-support rv d2">
-          <div class="tc-icon">✍️</div>
+          <img class="tc-avatar" src="https://i.pravatar.cc/300?img=9" alt="Celeste">
           <div class="tc-role">Content Creator</div>
           <div class="tc-name">Celeste</div>
           <p class="tc-desc">Writes Instagram captions, story ideas, posts and ad copy — in your voice, fresh every time.</p>
           <ul class="tc-list"><li>Instagram & TikTok copy</li><li>Before/after templates</li><li>Seasonal campaigns</li><li>Email newsletters</li></ul>
         </div>
         <div class="tc tc-support rv d3">
-          <div class="tc-icon">📊</div>
+          <img class="tc-avatar" src="https://i.pravatar.cc/300?img=44" alt="Sage">
           <div class="tc-role">Analytics</div>
           <div class="tc-name">Sage</div>
           <p class="tc-desc">Tracks revenue, client retention, top services and peak hours — then tells you exactly what to do next.</p>
