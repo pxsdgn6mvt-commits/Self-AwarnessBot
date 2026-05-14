@@ -1,4 +1,4 @@
-"""Data access layer for the Aria salon bot (asyncpg)."""
+"""Data access layer for Aria — asyncpg, multi-tenant."""
 
 from __future__ import annotations
 
@@ -43,220 +43,246 @@ def _p() -> asyncpg.Pool:
     return _pool
 
 
+# ── Tenants ───────────────────────────────────────────────────────────────────
+
+async def get_tenant_by_token(bot_token: str) -> Optional[asyncpg.Record]:
+    async with _p().acquire() as conn:
+        return await conn.fetchrow(
+            "SELECT * FROM aria_tenants WHERE bot_token=$1", bot_token
+        )
+
+
+async def get_tenant(tenant_id: int) -> Optional[asyncpg.Record]:
+    async with _p().acquire() as conn:
+        return await conn.fetchrow(
+            "SELECT * FROM aria_tenants WHERE id=$1", tenant_id
+        )
+
+
+async def list_active_tenants() -> list[asyncpg.Record]:
+    async with _p().acquire() as conn:
+        return await conn.fetch(
+            "SELECT * FROM aria_tenants WHERE active=TRUE ORDER BY id"
+        )
+
+
+async def create_tenant(
+    bot_token: str,
+    owner_tg_id: Optional[int] = None,
+    salon_name: str = "My Salon",
+    owner_name: str = "Owner",
+    services: str = "haircut, manicure",
+    hours: str = "Mon-Sat 10:00-20:00",
+    open_hour: int = 10,
+    close_hour: int = 20,
+    slot_minutes: int = 60,
+    working_days: str = "1,2,3,4,5,6",
+    google_cal_credentials: Optional[str] = None,
+    google_cal_id: Optional[str] = None,
+    anthropic_api_key: Optional[str] = None,
+    setup_complete: bool = False,
+) -> int:
+    async with _p().acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO aria_tenants (
+                bot_token, owner_tg_id, salon_name, owner_name, services, hours,
+                open_hour, close_hour, slot_minutes, working_days,
+                google_cal_credentials, google_cal_id, anthropic_api_key, setup_complete
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+            ON CONFLICT (bot_token) DO UPDATE SET
+                owner_tg_id = COALESCE(EXCLUDED.owner_tg_id, aria_tenants.owner_tg_id),
+                salon_name  = EXCLUDED.salon_name,
+                owner_name  = EXCLUDED.owner_name,
+                services    = EXCLUDED.services,
+                hours       = EXCLUDED.hours,
+                setup_complete = EXCLUDED.setup_complete
+            RETURNING id
+            """,
+            bot_token, owner_tg_id, salon_name, owner_name, services, hours,
+            open_hour, close_hour, slot_minutes, working_days,
+            google_cal_credentials, google_cal_id, anthropic_api_key, setup_complete,
+        )
+        return row["id"]
+
+
+async def update_tenant(tenant_id: int, **fields: Any) -> None:
+    if not fields:
+        return
+    cols = ", ".join(f"{k}=${i+2}" for i, k in enumerate(fields))
+    vals = list(fields.values())
+    async with _p().acquire() as conn:
+        await conn.execute(
+            f"UPDATE aria_tenants SET {cols} WHERE id=$1",
+            tenant_id, *vals,
+        )
+
+
+async def set_tenant_active(tenant_id: int, active: bool) -> None:
+    async with _p().acquire() as conn:
+        await conn.execute(
+            "UPDATE aria_tenants SET active=$1 WHERE id=$2", active, tenant_id
+        )
+
+
 # ── Clients ───────────────────────────────────────────────────────────────────
 
-async def upsert_client(user_id: int, lang: str = "en") -> None:
+async def upsert_client(tenant_id: int, user_id: int, lang: str = "en") -> None:
     async with _p().acquire() as conn:
         await conn.execute(
             """
-            INSERT INTO aria_clients(user_id, lang)
-            VALUES ($1, $2)
-            ON CONFLICT (user_id) DO NOTHING
+            INSERT INTO aria_clients(tenant_id, user_id, lang)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (tenant_id, user_id) DO NOTHING
             """,
-            user_id, lang,
-        )
-
-
-async def set_client_lang(user_id: int, lang: str) -> None:
-    async with _p().acquire() as conn:  # type: ignore[union-attr]
-        await conn.execute(
-            "UPDATE aria_clients SET lang=$1 WHERE user_id=$2",
-            lang, user_id,
-        )
-
-
-async def get_client(user_id: int) -> Optional[asyncpg.Record]:
-    async with _p().acquire() as conn:  # type: ignore[union-attr]
-        return await conn.fetchrow(
-            "SELECT * FROM aria_clients WHERE user_id=$1", user_id
+            tenant_id, user_id, lang,
         )
 
 
 # ── Bookings ──────────────────────────────────────────────────────────────────
 
 async def create_booking(
+    tenant_id: int,
     user_id: int,
     client_name: str,
     service: str,
     scheduled_at: datetime,
     calendar_event_id: Optional[str] = None,
 ) -> int:
-    async with _p().acquire() as conn:  # type: ignore[union-attr]
+    async with _p().acquire() as conn:
         row = await conn.fetchrow(
             """
             INSERT INTO aria_bookings
-                (user_id, client_name, service, scheduled_at, calendar_event_id)
-            VALUES ($1, $2, $3, $4, $5)
+                (tenant_id, user_id, client_name, service, scheduled_at, calendar_event_id)
+            VALUES ($1,$2,$3,$4,$5,$6)
             RETURNING id
             """,
-            user_id, client_name, service, scheduled_at, calendar_event_id,
+            tenant_id, user_id, client_name, service, scheduled_at, calendar_event_id,
         )
         return row["id"]
 
 
 async def get_booking(booking_id: int) -> Optional[asyncpg.Record]:
-    async with _p().acquire() as conn:  # type: ignore[union-attr]
+    async with _p().acquire() as conn:
         return await conn.fetchrow(
             "SELECT * FROM aria_bookings WHERE id=$1", booking_id
         )
 
 
-async def get_upcoming_booking(user_id: int) -> Optional[asyncpg.Record]:
+async def get_upcoming_booking(tenant_id: int, user_id: int) -> Optional[asyncpg.Record]:
     now = datetime.now(timezone.utc)
-    async with _p().acquire() as conn:  # type: ignore[union-attr]
+    async with _p().acquire() as conn:
         return await conn.fetchrow(
             """
             SELECT * FROM aria_bookings
-            WHERE user_id=$1 AND status='confirmed' AND scheduled_at > $2
-            ORDER BY scheduled_at ASC
-            LIMIT 1
+            WHERE tenant_id=$1 AND user_id=$2 AND status='confirmed' AND scheduled_at > $3
+            ORDER BY scheduled_at ASC LIMIT 1
             """,
-            user_id, now,
+            tenant_id, user_id, now,
         )
 
 
 async def update_booking_time(booking_id: int, new_time: datetime) -> None:
-    async with _p().acquire() as conn:  # type: ignore[union-attr]
+    async with _p().acquire() as conn:
         await conn.execute(
-            """
-            UPDATE aria_bookings
-            SET scheduled_at=$1, reminder_sent=FALSE
-            WHERE id=$2
-            """,
+            "UPDATE aria_bookings SET scheduled_at=$1, reminder_sent=FALSE WHERE id=$2",
             new_time, booking_id,
         )
 
 
 async def update_booking_status(booking_id: int, status: str) -> None:
-    async with _p().acquire() as conn:  # type: ignore[union-attr]
+    async with _p().acquire() as conn:
         await conn.execute(
-            "UPDATE aria_bookings SET status=$1 WHERE id=$2",
-            status, booking_id,
+            "UPDATE aria_bookings SET status=$1 WHERE id=$2", status, booking_id
         )
 
 
 async def mark_reminder_sent(booking_id: int) -> None:
-    async with _p().acquire() as conn:  # type: ignore[union-attr]
+    async with _p().acquire() as conn:
         await conn.execute(
             "UPDATE aria_bookings SET reminder_sent=TRUE WHERE id=$1", booking_id
         )
 
 
 async def mark_noshow_check_sent(booking_id: int) -> None:
-    async with _p().acquire() as conn:  # type: ignore[union-attr]
+    async with _p().acquire() as conn:
         await conn.execute(
             "UPDATE aria_bookings SET noshow_check_sent=TRUE WHERE id=$1", booking_id
         )
 
 
-async def mark_upsell_offered(booking_id: int) -> None:
-    async with _p().acquire() as conn:  # type: ignore[union-attr]
-        await conn.execute(
-            "UPDATE aria_bookings SET upsell_offered=TRUE WHERE id=$1", booking_id
-        )
-
-
-async def get_confirmed_bookings_at(dt: datetime) -> list[asyncpg.Record]:
-    """Bookings confirmed for a specific datetime (used by scheduler)."""
-    async with _p().acquire() as conn:  # type: ignore[union-attr]
+async def get_bookings_for_date(tenant_id: int, date_str: str) -> list[asyncpg.Record]:
+    async with _p().acquire() as conn:
         return await conn.fetch(
             """
             SELECT * FROM aria_bookings
-            WHERE scheduled_at=$1 AND status='confirmed'
-            """,
-            dt,
-        )
-
-
-async def get_slots_on_date(date_str: str) -> list[datetime]:
-    """Returns all booked datetimes on a given date (YYYY-MM-DD)."""
-    async with _p().acquire() as conn:  # type: ignore[union-attr]
-        rows = await conn.fetch(
-            """
-            SELECT scheduled_at FROM aria_bookings
-            WHERE scheduled_at::date = $1::date
-              AND status = 'confirmed'
-            """,
-            date_str,
-        )
-        return [r["scheduled_at"] for r in rows]
-
-
-async def get_bookings_for_date(date_str: str) -> list[asyncpg.Record]:
-    """All bookings on a given date (YYYY-MM-DD) for owner view."""
-    async with _p().acquire() as conn:  # type: ignore[union-attr]
-        return await conn.fetch(
-            """
-            SELECT * FROM aria_bookings
-            WHERE scheduled_at::date = $1::date
-              AND status IN ('confirmed', 'pending')
+            WHERE tenant_id=$1 AND scheduled_at::date=$2::date
+              AND status IN ('confirmed','pending')
             ORDER BY scheduled_at ASC
             """,
-            date_str,
-        )
-
-
-async def get_all_upcoming_bookings(limit: int = 30) -> list[asyncpg.Record]:
-    """All upcoming bookings for owner view."""
-    now = datetime.now(timezone.utc)
-    async with _p().acquire() as conn:  # type: ignore[union-attr]
-        return await conn.fetch(
-            """
-            SELECT * FROM aria_bookings
-            WHERE scheduled_at > $1
-              AND status IN ('confirmed', 'pending')
-            ORDER BY scheduled_at ASC
-            LIMIT $2
-            """,
-            now, limit,
+            tenant_id, date_str,
         )
 
 
 async def get_bookings_in_range(
-    date_from: datetime, date_to: datetime
+    tenant_id: int, date_from: datetime, date_to: datetime
 ) -> list[asyncpg.Record]:
-    """Bookings within a datetime range (used when Google Calendar is not active)."""
-    async with _p().acquire() as conn:  # type: ignore[union-attr]
+    async with _p().acquire() as conn:
         return await conn.fetch(
             """
             SELECT * FROM aria_bookings
-            WHERE scheduled_at >= $1 AND scheduled_at <= $2
-              AND status IN ('confirmed', 'pending')
+            WHERE tenant_id=$1 AND scheduled_at >= $2 AND scheduled_at <= $3
+              AND status IN ('confirmed','pending')
             ORDER BY scheduled_at ASC
             """,
-            date_from, date_to,
+            tenant_id, date_from, date_to,
         )
+
+
+async def get_all_upcoming_bookings(tenant_id: int, limit: int = 30) -> list[asyncpg.Record]:
+    now = datetime.now(timezone.utc)
+    async with _p().acquire() as conn:
+        return await conn.fetch(
+            """
+            SELECT * FROM aria_bookings
+            WHERE tenant_id=$1 AND scheduled_at > $2
+              AND status IN ('confirmed','pending')
+            ORDER BY scheduled_at ASC LIMIT $3
+            """,
+            tenant_id, now, limit,
+        )
+
+
+async def get_slots_on_date(tenant_id: int, date_str: str) -> list[datetime]:
+    async with _p().acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT scheduled_at FROM aria_bookings
+            WHERE tenant_id=$1 AND scheduled_at::date=$2::date AND status='confirmed'
+            """,
+            tenant_id, date_str,
+        )
+        return [r["scheduled_at"] for r in rows]
 
 
 # ── Waitlist ──────────────────────────────────────────────────────────────────
 
-async def add_to_waitlist(user_id: int, client_name: str, service: str) -> int:
-    async with _p().acquire() as conn:  # type: ignore[union-attr]
+async def add_to_waitlist(
+    tenant_id: int, user_id: int, client_name: str, service: str
+) -> int:
+    async with _p().acquire() as conn:
         row = await conn.fetchrow(
             """
-            INSERT INTO aria_waitlist(user_id, client_name, service)
-            VALUES ($1, $2, $3)
-            RETURNING id
+            INSERT INTO aria_waitlist(tenant_id, user_id, client_name, service)
+            VALUES ($1,$2,$3,$4) RETURNING id
             """,
-            user_id, client_name, service,
+            tenant_id, user_id, client_name, service,
         )
         return row["id"]
 
 
-async def get_waitlist_for_service(service: str) -> list[asyncpg.Record]:
-    async with _p().acquire() as conn:  # type: ignore[union-attr]
-        return await conn.fetch(
-            """
-            SELECT * FROM aria_waitlist
-            WHERE LOWER(service)=LOWER($1) AND notified=FALSE
-            ORDER BY added_at ASC
-            """,
-            service,
-        )
-
-
 async def mark_waitlist_notified(waitlist_id: int) -> None:
-    async with _p().acquire() as conn:  # type: ignore[union-attr]
+    async with _p().acquire() as conn:
         await conn.execute(
             "UPDATE aria_waitlist SET notified=TRUE WHERE id=$1", waitlist_id
         )
@@ -264,35 +290,34 @@ async def mark_waitlist_notified(waitlist_id: int) -> None:
 
 # ── Conversations ─────────────────────────────────────────────────────────────
 
-async def load_history(user_id: int) -> list[dict]:
-    async with _p().acquire() as conn:  # type: ignore[union-attr]
+async def load_history(tenant_id: int, user_id: int) -> list[dict]:
+    async with _p().acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT history FROM aria_conversations WHERE user_id=$1", user_id
+            "SELECT history FROM aria_conversations WHERE tenant_id=$1 AND user_id=$2",
+            tenant_id, user_id,
         )
         if row is None:
             return []
         return json.loads(row["history"])
 
 
-async def save_history(user_id: int, history: list[dict]) -> None:
-    async with _p().acquire() as conn:  # type: ignore[union-attr]
+async def save_history(tenant_id: int, user_id: int, history: list[dict]) -> None:
+    async with _p().acquire() as conn:
         await conn.execute(
             """
-            INSERT INTO aria_conversations(user_id, history, updated_at)
-            VALUES ($1, $2, NOW())
-            ON CONFLICT (user_id)
-            DO UPDATE SET history=$2, updated_at=NOW()
+            INSERT INTO aria_conversations(tenant_id, user_id, history, updated_at)
+            VALUES ($1,$2,$3,NOW())
+            ON CONFLICT (tenant_id, user_id)
+            DO UPDATE SET history=$3, updated_at=NOW()
             """,
-            user_id, json.dumps(history, ensure_ascii=False, default=str),
+            tenant_id, user_id,
+            json.dumps(history, ensure_ascii=False, default=str),
         )
 
 
-async def clear_history(user_id: int) -> None:
-    async with _p().acquire() as conn:  # type: ignore[union-attr]
+async def clear_history(tenant_id: int, user_id: int) -> None:
+    async with _p().acquire() as conn:
         await conn.execute(
-            "DELETE FROM aria_conversations WHERE user_id=$1", user_id
+            "DELETE FROM aria_conversations WHERE tenant_id=$1 AND user_id=$2",
+            tenant_id, user_id,
         )
-
-
-def get_pool_instance() -> Optional[asyncpg.Pool]:
-    return _pool
