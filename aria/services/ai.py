@@ -65,7 +65,8 @@ Salon: {tenant.salon_name}
 Services: {tenant.services}
 Working hours: {tenant.hours}
 {calendar_line}
-Today (UTC): {{TODAY}}"""
+Timezone: {tenant.timezone}
+Today: {{TODAY}}"""
 
 
 # ── Tools ─────────────────────────────────────────────────────────────────────
@@ -149,13 +150,15 @@ TOOLS: list[dict] = [
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _resolve_date(value: str) -> str:
-    from datetime import date, timedelta
+def _resolve_date(value: str, tz_str: str = "UTC") -> str:
+    from zoneinfo import ZoneInfo
     v = value.lower()
-    if v == "today":
-        return date.today().isoformat()
-    if v == "tomorrow":
-        return (date.today() + timedelta(days=1)).isoformat()
+    if v in ("today", "tomorrow"):
+        from datetime import datetime as _dt
+        now_local = _dt.now(ZoneInfo(tz_str))
+        if v == "tomorrow":
+            now_local = now_local + timedelta(days=1)
+        return now_local.date().isoformat()
     return value
 
 
@@ -164,16 +167,18 @@ def _resolve_date(value: str) -> str:
 async def _exec_tool(name: str, args: dict, tenant: "TenantConfig", owner_id: int) -> str:
     adapter = get_adapter(tenant)
 
+    tz_str = tenant.timezone or "UTC"
+
     if name == "get_schedule":
         if args.get("date_from") and args.get("date_to"):
-            dt_from = datetime.strptime(_resolve_date(args["date_from"]), "%Y-%m-%d").replace(
+            dt_from = datetime.strptime(_resolve_date(args["date_from"], tz_str), "%Y-%m-%d").replace(
                 hour=0, minute=0, tzinfo=timezone.utc
             )
-            dt_to = datetime.strptime(_resolve_date(args["date_to"]), "%Y-%m-%d").replace(
+            dt_to = datetime.strptime(_resolve_date(args["date_to"], tz_str), "%Y-%m-%d").replace(
                 hour=23, minute=59, tzinfo=timezone.utc
             )
         else:
-            target = _resolve_date(args.get("date") or "today")
+            target = _resolve_date(args.get("date") or "today", tz_str)
             dt_from = datetime.strptime(target, "%Y-%m-%d").replace(hour=0, minute=0, tzinfo=timezone.utc)
             dt_to = dt_from.replace(hour=23, minute=59)
         events = await adapter.get_events(dt_from, dt_to)
@@ -182,14 +187,14 @@ async def _exec_tool(name: str, args: dict, tenant: "TenantConfig", owner_id: in
                            "count": len(events), "bookings": events})
 
     if name == "check_availability":
-        dt = parse_datetime(args["date"], args["time"])
+        dt = parse_datetime(args["date"], args["time"], tz_str)
         if dt is None:
             return json.dumps({"error": "invalid date/time"})
         return json.dumps({"available": await adapter.is_available(dt, args["service"]),
                            "date": args["date"], "time": args["time"]})
 
     if name == "add_booking":
-        dt = parse_datetime(args["date"], args["time"])
+        dt = parse_datetime(args["date"], args["time"], tz_str)
         if dt is None:
             return json.dumps({"error": "invalid date/time"})
         bid, cal_id = await adapter.create_event(owner_id, args["client_name"], args["service"], dt)
@@ -199,7 +204,7 @@ async def _exec_tool(name: str, args: dict, tenant: "TenantConfig", owner_id: in
                            "google_calendar": cal_id is not None})
 
     if name == "reschedule_booking":
-        new_dt = parse_datetime(args["new_date"], args["new_time"])
+        new_dt = parse_datetime(args["new_date"], args["new_time"], tz_str)
         if new_dt is None:
             return json.dumps({"error": "invalid date/time"})
         booking = await repo.get_booking(args["booking_id"])
@@ -237,8 +242,10 @@ async def chat(user_id: int, user_text: str, bot: Any, tenant: "TenantConfig") -
     if len(history) > MAX_HISTORY:
         history = history[-MAX_HISTORY:]
 
+    from zoneinfo import ZoneInfo
+    tenant_tz = ZoneInfo(tenant.timezone or "UTC")
     system_prompt = _build_system_prompt(tenant).replace(
-        "{TODAY}", datetime.now(timezone.utc).strftime("%Y-%m-%d %A")
+        "{TODAY}", datetime.now(tenant_tz).strftime("%Y-%m-%d %A")
     )
 
     for _ in range(MAX_TOOL_ROUNDS):

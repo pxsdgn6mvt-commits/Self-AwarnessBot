@@ -19,6 +19,7 @@ class TenantConfig:
     close_hour: int
     slot_minutes: int
     working_days: str
+    timezone: str
     google_cal_credentials: Optional[str]
     google_cal_id: Optional[str]
     anthropic_api_key: Optional[str]
@@ -39,6 +40,7 @@ class TenantConfig:
             close_hour=r["close_hour"],
             slot_minutes=r["slot_minutes"],
             working_days=r["working_days"],
+            timezone=r.get("timezone", "UTC"),
             google_cal_credentials=r["google_cal_credentials"],
             google_cal_id=r["google_cal_id"],
             anthropic_api_key=r["anthropic_api_key"],

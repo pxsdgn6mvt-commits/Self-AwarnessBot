@@ -25,12 +25,15 @@ log = logging.getLogger(__name__)
 _adapters: dict[int, "BookingAdapter"] = {}
 
 
-def parse_datetime(date_str: str, time_str: str) -> Optional[datetime]:
+def parse_datetime(date_str: str, time_str: str, tz_str: str = "UTC") -> Optional[datetime]:
     try:
+        from zoneinfo import ZoneInfo
         d = date.fromisoformat(date_str)
         h, m = map(int, time_str.split(":"))
-        return datetime(d.year, d.month, d.day, h, m, tzinfo=timezone.utc)
-    except (ValueError, TypeError):
+        tz = ZoneInfo(tz_str)
+        local_dt = datetime(d.year, d.month, d.day, h, m, tzinfo=tz)
+        return local_dt.astimezone(timezone.utc)
+    except (ValueError, TypeError, Exception):
         return None
 
 
@@ -227,11 +230,12 @@ class GoogleAdapter(BookingAdapter):
 
     async def create_event(self, user_id: int, client_name: str, service: str, dt: datetime) -> tuple[int, Optional[str]]:
         end_dt = dt + timedelta(minutes=self._t.slot_minutes)
+        tz_name = self._t.timezone or "UTC"
         body = {
             "summary": f"{service} — {client_name}",
             "description": f"Telegram user_id: {user_id}",
-            "start": {"dateTime": dt.isoformat(), "timeZone": "UTC"},
-            "end": {"dateTime": end_dt.isoformat(), "timeZone": "UTC"},
+            "start": {"dateTime": dt.isoformat(), "timeZone": tz_name},
+            "end": {"dateTime": end_dt.isoformat(), "timeZone": tz_name},
         }
         created = await asyncio.to_thread(self._insert_sync, body)
         cal_id = created.get("id")

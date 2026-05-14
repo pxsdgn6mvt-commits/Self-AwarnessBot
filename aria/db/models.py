@@ -64,7 +64,9 @@ CREATE TABLE IF NOT EXISTS aria_conversations (
     PRIMARY KEY (tenant_id, user_id)
 );
 
--- ── Migration: add tenant_id to pre-existing tables ──────────────────────────
+-- ── Migrations ────────────────────────────────────────────────────────────────
+ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS timezone TEXT NOT NULL DEFAULT 'UTC';
+
 -- Must run BEFORE any CREATE INDEX that references tenant_id.
 ALTER TABLE aria_clients      ADD COLUMN IF NOT EXISTS tenant_id INT NOT NULL DEFAULT 1;
 ALTER TABLE aria_bookings     ADD COLUMN IF NOT EXISTS tenant_id INT NOT NULL DEFAULT 1;
