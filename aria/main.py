@@ -1,11 +1,11 @@
 """
 Aria — multi-tenant salon bot platform.
 
-One Railway deployment runs all salon bots concurrently.
-New bots are detected automatically (checked every 60s).
-
-Usage:
-    python -m aria.main
+Architecture:
+  - ONE Dispatcher with all routers included ONCE
+  - Each tenant bot runs its own polling task feeding into the shared dispatcher
+  - Middleware resolves TenantConfig from bot.token on every update
+  - New tenants detected every 10 seconds, no restart needed
 """
 
 from __future__ import annotations
@@ -20,12 +20,13 @@ from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
 
 from aria.config import settings
-from aria.db.repo import init_db, close_pool, create_tenant, get_tenant_by_token, list_active_tenants
+from aria.db.repo import (
+    init_db, close_pool, create_tenant, get_tenant_by_token, list_active_tenants,
+)
 from aria.handlers import admin, chat, start
 from aria.handlers.setup import router as setup_router
 from aria.middleware import TenantMiddleware
 from aria.services.scheduler import get_scheduler
-from aria.tenant import TenantConfig
 
 logging.basicConfig(
     level=logging.INFO,
@@ -34,11 +35,43 @@ logging.basicConfig(
 )
 log = logging.getLogger("aria")
 
-_running: dict[int, asyncio.Task] = {}
+_bots: dict[int, Bot] = {}    # tenant_id -> Bot
+_tasks: dict[int, asyncio.Task] = {}  # tenant_id -> polling Task
 
+
+# ── Dispatcher (created once, shared across all bots) ─────────────────────────
+
+def _build_dispatcher() -> Dispatcher:
+    dp = Dispatcher(storage=MemoryStorage())
+    dp.update.middleware(TenantMiddleware())
+    # Routers included ONCE — this is the only Dispatcher in the process
+    dp.include_router(setup_router)
+    dp.include_router(admin.router)
+    dp.include_router(start.router)
+    dp.include_router(chat.router)
+    return dp
+
+
+# ── Per-bot polling task ───────────────────────────────────────────────────────
+
+async def _poll_bot(bot: Bot, dp: Dispatcher, tenant_id: int) -> None:
+    try:
+        me = await bot.get_me()
+        log.info("Bot @%s polling started (tenant #%d)", me.username, tenant_id)
+        await dp.start_polling(
+            bot,
+            drop_pending_updates=False,
+            allowed_updates=dp.resolve_used_update_types(),
+        )
+    except Exception:
+        log.exception("Bot polling failed for tenant #%d", tenant_id)
+    finally:
+        await bot.session.close()
+
+
+# ── Initial tenant from env vars ──────────────────────────────────────────────
 
 async def _ensure_initial_tenant() -> None:
-    """Create the initial tenant from env vars if it doesn't exist yet."""
     existing = await get_tenant_by_token(settings.BOT_TOKEN)
     if existing is None:
         tid = await create_tenant(
@@ -59,37 +92,9 @@ async def _ensure_initial_tenant() -> None:
         log.info("Created initial tenant #%d (%s)", tid, settings.SALON_NAME)
 
 
-def _make_dispatcher(tenant: TenantConfig) -> Dispatcher:
-    dp = Dispatcher(storage=MemoryStorage())
-    dp.update.middleware(TenantMiddleware(tenant.id))
-    # Order: setup wizard first (intercepts /start when not configured)
-    # then admin commands, then normal start/help, then catch-all chat
-    dp.include_router(setup_router)
-    dp.include_router(admin.router)
-    dp.include_router(start.router)
-    dp.include_router(chat.router)
-    return dp
+# ── Tenant watcher ────────────────────────────────────────────────────────────
 
-
-async def _run_tenant(tenant: TenantConfig) -> None:
-    bot = Bot(
-        token=tenant.bot_token,
-        default=DefaultBotProperties(parse_mode=ParseMode.HTML),
-    )
-    dp = _make_dispatcher(tenant)
-    me = await bot.get_me()
-    log.info("Bot @%s started (tenant #%d: %s)", me.username, tenant.id, tenant.salon_name)
-    try:
-        await dp.start_polling(bot, drop_pending_updates=False,
-                               allowed_updates=dp.resolve_used_update_types())
-    except Exception:
-        log.exception("Bot for tenant #%d crashed", tenant.id)
-    finally:
-        await bot.session.close()
-
-
-async def _watch_tenants() -> None:
-    """Poll for new or deactivated tenants every 10 seconds."""
+async def _watch_tenants(dp: Dispatcher) -> None:
     while True:
         await asyncio.sleep(10)
         try:
@@ -98,41 +103,51 @@ async def _watch_tenants() -> None:
 
             for row in rows:
                 tid = row["id"]
-                if tid not in _running or _running[tid].done():
-                    tenant = TenantConfig.from_record(dict(row))
-                    _running[tid] = asyncio.create_task(_run_tenant(tenant))
-                    log.info("Started bot for new tenant #%d", tid)
+                task = _tasks.get(tid)
+                if task is None or task.done():
+                    bot = Bot(
+                        token=row["bot_token"],
+                        default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+                    )
+                    _bots[tid] = bot
+                    _tasks[tid] = asyncio.create_task(_poll_bot(bot, dp, tid))
+                    log.info("Started bot for tenant #%d (%s)", tid, row["salon_name"])
 
-            for tid in list(_running.keys()):
+            for tid in list(_bots.keys()):
                 if tid not in active_ids:
-                    _running[tid].cancel()
-                    del _running[tid]
-                    log.info("Stopped bot for deactivated tenant #%d", tid)
+                    _tasks[tid].cancel()
+                    try:
+                        await _bots[tid].session.close()
+                    except Exception:
+                        pass
+                    del _bots[tid]
+                    del _tasks[tid]
+                    log.info("Stopped bot for tenant #%d", tid)
         except Exception:
             log.exception("Tenant watcher error")
 
 
+# ── Entry point ───────────────────────────────────────────────────────────────
+
 async def main() -> None:
     await init_db(settings.DATABASE_URL)
     await _ensure_initial_tenant()
-
     get_scheduler().start()
+
+    dp = _build_dispatcher()
 
     rows = await list_active_tenants()
     for row in rows:
-        tenant = TenantConfig.from_record(dict(row))
-        task = asyncio.create_task(_run_tenant(tenant))
-        _running[tenant.id] = task
+        bot = Bot(
+            token=row["bot_token"],
+            default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+        )
+        tid = row["id"]
+        _bots[tid] = bot
+        _tasks[tid] = asyncio.create_task(_poll_bot(bot, dp, tid))
 
-    log.info("Aria platform started with %d bot(s)", len(_running))
-
-    # Watch forever for new tenants
-    await _watch_tenants()
-
-
-async def _shutdown() -> None:
-    get_scheduler().shutdown(wait=False)
-    await close_pool()
+    log.info("Aria platform running with %d bot(s)", len(_bots))
+    await _watch_tenants(dp)
 
 
 if __name__ == "__main__":

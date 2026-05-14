@@ -1,4 +1,4 @@
-"""TenantMiddleware — injects a fresh TenantConfig into every handler."""
+"""TenantMiddleware — resolves TenantConfig from the bot token on each update."""
 
 from __future__ import annotations
 
@@ -6,18 +6,16 @@ import time
 from typing import Any, Awaitable, Callable, Optional
 
 from aiogram import BaseMiddleware
-from aiogram.types import TelegramObject
+from aiogram.types import Bot, TelegramObject
 
 from aria.tenant import TenantConfig
 
-_CACHE_TTL = 30  # seconds before re-fetching tenant from DB
+_CACHE_TTL = 30  # seconds
 
 
 class TenantMiddleware(BaseMiddleware):
-    def __init__(self, tenant_id: int) -> None:
-        self._tenant_id = tenant_id
-        self._cached: Optional[TenantConfig] = None
-        self._cached_at: float = 0.0
+    # Shared across all middleware instances (one per process)
+    _cache: dict[str, tuple[TenantConfig, float]] = {}
 
     async def __call__(
         self,
@@ -25,14 +23,25 @@ class TenantMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
-        now = time.monotonic()
-        if self._cached is None or (now - self._cached_at) > _CACHE_TTL:
-            import aria.db.repo as repo
-            row = await repo.get_tenant(self._tenant_id)
-            if row:
-                self._cached = TenantConfig.from_record(dict(row))
-                self._cached_at = now
+        bot: Optional[Bot] = data.get("bot")
+        if bot is None:
+            return await handler(event, data)
 
-        if self._cached is not None:
-            data["tenant"] = self._cached
+        now = time.monotonic()
+        cached = TenantMiddleware._cache.get(bot.token)
+        if cached is None or (now - cached[1]) > _CACHE_TTL:
+            import aria.db.repo as repo
+            row = await repo.get_tenant_by_token(bot.token)
+            if row:
+                config = TenantConfig.from_record(dict(row))
+                TenantMiddleware._cache[bot.token] = (config, now)
+                cached = TenantMiddleware._cache[bot.token]
+
+        if cached:
+            data["tenant"] = cached[0]
         return await handler(event, data)
+
+    @classmethod
+    def invalidate(cls, bot_token: str) -> None:
+        """Force-refresh on next request (call after tenant config changes)."""
+        cls._cache.pop(bot_token, None)
