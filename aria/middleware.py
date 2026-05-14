@@ -5,8 +5,8 @@ from __future__ import annotations
 import time
 from typing import Any, Awaitable, Callable, Optional
 
-from aiogram import BaseMiddleware
-from aiogram.types import Bot, TelegramObject
+from aiogram import BaseMiddleware, Bot
+from aiogram.types import TelegramObject
 
 from aria.tenant import TenantConfig
 
