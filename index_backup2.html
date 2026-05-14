@@ -120,75 +120,24 @@ nav.nav-scrolled{background:rgba(245,240,232,.97);border-color:var(--border);box
 .countries-list{display:flex;flex-wrap:wrap;gap:9px 28px}
 .country-item{display:flex;align-items:center;gap:7px;font-size:.87rem;color:var(--dark);font-weight:500}
 
-/* ④ TEAM — tier hierarchy */
+/* ④ TEAM cards — border, box-shadow, hover transform */
 .team-section{background:var(--dark-s);padding:88px 24px}
 .team-section .sh{font-size:clamp(2.2rem,5.5vw,40px)}
 .team-section .sub{color:rgba(245,240,232,.45);margin-bottom:50px}
-
-/* Tier containers */
-.team-tiers{display:flex;flex-direction:column;gap:14px}
-.team-tier-2{display:grid;grid-template-columns:2fr 1fr;gap:14px}
-.team-tier-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
-
-/* Base card */
-.tc{border-radius:18px;position:relative;transition:transform .3s,box-shadow .3s}
-
-/* TIER 1 — Aria (Hero) */
-.tc-hero{
-  background:linear-gradient(135deg,#1e0901 0%,#5c1d0b 38%,#9e4a29 72%,#c4613a 100%);
-  border:1px solid rgba(255,255,255,.1);
-  box-shadow:0 24px 72px rgba(196,97,58,.28),0 4px 16px rgba(0,0,0,.25);
-  display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:start;
-  padding:44px 48px;overflow:hidden;
-}
-.tc-hero::before{content:'';position:absolute;top:-80px;right:-80px;width:320px;height:320px;border-radius:50%;background:rgba(255,255,255,.03);pointer-events:none}
-.tc-hero:hover{transform:translateY(-5px);box-shadow:0 36px 96px rgba(196,97,58,.38)}
-.tc-hero .tc-role{color:rgba(255,255,255,.5);font-size:.63rem;letter-spacing:.22em;font-weight:700;text-transform:uppercase;margin-bottom:6px}
-.tc-hero .tc-name{font-family:'Lora',serif;font-size:clamp(2rem,4vw,3rem);font-weight:800;color:#fff;line-height:1;margin-bottom:14px}
-.tc-hero .tc-desc{color:rgba(255,255,255,.72);font-size:.93rem;line-height:1.72}
-.tc-hero .tc-list li{color:rgba(255,255,255,.65);font-size:.86rem;line-height:1.65}
-.tc-hero .tc-list li::before{color:rgba(255,255,255,.85)}
-.tc-hero-right{display:flex;flex-direction:column;gap:22px}
-.tc-hero-stats{display:flex;gap:10px}
-.tc-hs{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.13);border-radius:12px;padding:14px 10px;text-align:center;flex:1;min-width:0}
-.tc-hs strong{display:block;font-family:'Lora',serif;font-size:1.6rem;font-weight:700;color:#fff;line-height:1;margin-bottom:5px}
-.tc-hs span{font-size:.64rem;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.08em;display:block}
-
-/* TIER 2 — Vivienne & Luna (Featured) */
-.tc-featured{
-  background:rgba(255,255,255,.06);
-  border:1px solid rgba(196,97,58,.3);
-  box-shadow:0 6px 28px rgba(0,0,0,.22);
-  padding:28px 24px;
-}
-.tc-featured:hover{transform:translateY(-4px);border-color:rgba(196,97,58,.55);background:rgba(196,97,58,.09);box-shadow:0 16px 44px rgba(196,97,58,.2)}
-.tc-featured .tc-name{font-family:'Lora',serif;font-size:1.5rem;font-weight:700;color:#f5f0e8;margin-bottom:9px}
-.tc-featured .tc-desc{color:rgba(245,240,232,.72);font-size:.87rem;line-height:1.68;margin-bottom:14px}
-.tc-featured .tc-list li{color:rgba(245,240,232,.55);font-size:.8rem;line-height:1.52}
-
-/* TIER 3 — Support (Maya, Celeste, Sage) */
-.tc-support{
-  background:rgba(255,255,255,.025);
-  border:1px solid rgba(255,255,255,.07);
-  box-shadow:0 2px 10px rgba(0,0,0,.14);
-  padding:26px 22px;
-}
-.tc-support:hover{transform:translateY(-3px);border-color:rgba(196,97,58,.25);background:rgba(196,97,58,.05);box-shadow:0 8px 24px rgba(0,0,0,.2)}
-.tc-support .tc-name{font-family:'Lora',serif;font-size:1.15rem;font-weight:600;color:rgba(245,240,232,.85);margin-bottom:7px}
-.tc-support .tc-desc{color:rgba(245,240,232,.38);font-size:.8rem;line-height:1.6;margin-bottom:12px}
-.tc-support .tc-list li{color:rgba(245,240,232,.3);font-size:.73rem;line-height:1.45}
-
-/* Shared card internals */
-.tc-icon{font-size:1.7rem;margin-bottom:16px}
+.team-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.tc{border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);border-radius:16px;padding:28px 24px;
+    box-shadow:0 2px 14px rgba(0,0,0,.18);position:relative;
+    transition:border-color .25s,background .25s,transform .3s,box-shadow .3s}
+.tc:hover{border-color:rgba(196,97,58,.45);background:rgba(196,97,58,.07);
+          transform:translateY(-5px);box-shadow:0 10px 32px rgba(196,97,58,.22)}
+.tc-icon{font-size:1.65rem;margin-bottom:16px}
 .tc-role{font-size:.61rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--terra);margin-bottom:4px}
+.tc-name{font-family:'Lora',serif;font-size:1.3rem;font-weight:600;color:#f5f0e8;margin-bottom:8px}
+.tc-desc{color:rgba(245,240,232,.45);font-size:.81rem;line-height:1.6;margin-bottom:13px}
 .tc-list{list-style:none;display:flex;flex-direction:column;gap:5px}
-.tc-list li{padding-left:16px;position:relative;line-height:1.4}
+.tc-list li{font-size:.76rem;color:rgba(245,240,232,.35);padding-left:14px;position:relative;line-height:1.4}
 .tc-list li::before{content:'✓';position:absolute;left:0;color:#C1633A;font-weight:700}
-
-/* Tier responsive */
-@media(max-width:960px){.tc-hero{grid-template-columns:1fr;gap:28px;padding:36px 32px}}
-@media(max-width:860px){.team-tier-2{grid-template-columns:1fr}.team-tier-3{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:560px){.team-tier-3{grid-template-columns:1fr}.tc-hero{padding:24px 20px}}
+@media(max-width:900px){.team-grid{grid-template-columns:repeat(2,1fr)}}
 
 /* ⑭ INTEGRATIONS */
 .int-section{background:var(--cream);border-bottom:1px solid var(--border);padding:32px 24px}
@@ -378,6 +327,9 @@ footer{background:var(--dark-s);border-top:1px solid rgba(255,255,255,.06);paddi
   footer{padding:36px 20px 24px}
 }
 /* ── SMALL MOBILE 560px ── */
+@media(max-width:560px){
+  .team-grid{grid-template-columns:1fr!important}
+}
 /* ── SMALL MOBILE 480px ── */
 @media(max-width:480px){
   .container{padding:0 16px}
@@ -403,11 +355,17 @@ footer{background:var(--dark-s);border-top:1px solid rgba(255,255,255,.06);paddi
 .btn-starter{border:2px solid #C1633A;color:#C1633A;background:transparent}
 .btn-starter:hover{background:rgba(193,99,58,.08);border-color:#9e4a29;color:#9e4a29}
 
-/* tc badges */
+/* tc badges + aria styling (Пункты 7,8) */
 .tc-badge{position:absolute;top:16px;right:16px;font-size:.68rem;font-weight:700;padding:4px 11px;border-radius:99px;letter-spacing:.06em;font-family:'Inter',sans-serif;white-space:nowrap}
 .tc-badge-main{background:#C1633A;color:#fff}
 .tc-badge-revenue{background:rgba(193,99,58,.15);color:#C1633A}
-.tc-badge-care{background:rgba(193,99,58,.15);color:#C1633A}
+.tc-aria{border-left:3px solid #C1633A}
+.tc-aria .tc-name{font-size:32px}
+.tc-vivienne .tc-name{font-size:28px}
+
+/* tc-mid: middle-tier desc/list brightness (Пункты 9,10) */
+.tc-mid .tc-desc{color:rgba(255,255,255,.8)}
+.tc-mid .tc-list li{color:rgba(255,255,255,.6);font-size:14px;line-height:1.7}
 
 /* hamburger (Пункт 13) */
 .nav-burger{display:none;background:none;border:none;cursor:pointer;padding:8px;color:var(--dark);font-size:1.5rem;line-height:1;min-height:40px;min-width:40px;align-items:center;justify-content:center}
@@ -521,79 +479,46 @@ footer{background:var(--dark-s);border-top:1px solid rgba(255,255,255,.06);paddi
       <h2 class="sh sh-light">6 specialists.<br><em>One subscription.</em></h2>
       <p class="sub">Each AI is trained specifically for the beauty industry. Together they do everything a full office would — no salaries, no sick days, no days off.</p>
     </div>
-    <div class="team-tiers">
-
-      <!-- ① TIER 1 — ARIA (full-width hero) -->
-      <div class="tc tc-hero rv">
-        <span class="tc-badge tc-badge-main">⭐ Most Used</span>
-        <!-- Left: icon + identity + description -->
-        <div>
-          <div class="tc-icon"><svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.88)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
-          <div class="tc-role">Receptionist</div>
-          <div class="tc-name">Aria</div>
-          <p class="tc-desc">Handles all bookings, sends reminders, reschedules appointments and wins back clients after cancellations — around the clock, in any time zone.</p>
-        </div>
-        <!-- Right: mini stats + feature list -->
-        <div class="tc-hero-right">
-          <div class="tc-hero-stats">
-            <div class="tc-hs"><strong>24/7</strong><span>Always&nbsp;on</span></div>
-            <div class="tc-hs"><strong>#1</strong><span>Most&nbsp;used</span></div>
-            <div class="tc-hs"><strong>0s</strong><span>Response</span></div>
-          </div>
-          <ul class="tc-list">
-            <li>Smart booking & rescheduling</li>
-            <li>Automated client reminders</li>
-            <li>Waitlist management</li>
-            <li>Cancellation & no-show recovery</li>
-          </ul>
-        </div>
+    <div class="team-grid">
+      <div class="tc tc-aria rv d1">
+        <span class="tc-badge tc-badge-main">⭐ Most used</span>
+        <div class="tc-icon"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#C1633A" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
+        <div class="tc-role">Receptionist</div>
+        <div class="tc-name">Aria</div>
+        <p class="tc-desc">Handles all bookings, sends reminders, reschedules appointments and wins back clients after cancellations — around the clock, in any time zone.</p>
+        <ul class="tc-list"><li>Smart booking & rescheduling</li><li>Automated client reminders</li><li>Waitlist management</li><li>Cancellation & no-show recovery</li></ul>
       </div>
-
-      <!-- ② TIER 2 — VIVIENNE (wide 2/3) + LUNA (1/3) -->
-      <div class="team-tier-2">
-        <div class="tc tc-featured rv d1">
-          <span class="tc-badge tc-badge-revenue">💰 Revenue booster</span>
-          <div class="tc-icon">💎</div>
-          <div class="tc-role">Sales Manager</div>
-          <div class="tc-name">Vivienne</div>
-          <p class="tc-desc">Spots upsell opportunities, sends personalised offers to the right clients at the right moment — and lifts your average ticket.</p>
-          <ul class="tc-list"><li>Smart upsells</li><li>VIP scenarios for regulars</li><li>Service packages & bundles</li><li>Rebooking reminders</li></ul>
-        </div>
-        <div class="tc tc-featured rv d2">
-          <span class="tc-badge tc-badge-care">💬 Client care</span>
-          <div class="tc-icon">💬</div>
-          <div class="tc-role">Client Service</div>
-          <div class="tc-name">Luna</div>
-          <p class="tc-desc">Instantly replies in DMs, handles questions, collects reviews and makes every client feel like a VIP.</p>
-          <ul class="tc-list"><li>Instant DM responses</li><li>Automated review requests</li><li>Loyalty programmes</li><li>Unhappy client recovery</li></ul>
-        </div>
+      <div class="tc tc-mid rv d2">
+        <div class="tc-icon">✍️</div><div class="tc-role">Content Creator</div>
+        <div class="tc-name">Celeste</div>
+        <p class="tc-desc">Writes Instagram captions, story ideas, posts and ad copy — in your voice, fresh every time.</p>
+        <ul class="tc-list"><li>Instagram & TikTok copy</li><li>Before/after templates</li><li>Seasonal campaigns</li><li>Email newsletters</li></ul>
       </div>
-
-      <!-- ③ TIER 3 — MAYA, CELESTE, SAGE -->
-      <div class="team-tier-3">
-        <div class="tc tc-support rv d1">
-          <div class="tc-icon">📣</div>
-          <div class="tc-role">Marketing</div>
-          <div class="tc-name">Maya</div>
-          <p class="tc-desc">Plans promotions, seasonal campaigns and referral programmes — always data-driven, never guesswork.</p>
-          <ul class="tc-list"><li>Monthly promo calendar</li><li>Referral programme</li><li>Flash sales</li><li>Competitor monitoring</li></ul>
-        </div>
-        <div class="tc tc-support rv d2">
-          <div class="tc-icon">✍️</div>
-          <div class="tc-role">Content Creator</div>
-          <div class="tc-name">Celeste</div>
-          <p class="tc-desc">Writes Instagram captions, story ideas, posts and ad copy — in your voice, fresh every time.</p>
-          <ul class="tc-list"><li>Instagram & TikTok copy</li><li>Before/after templates</li><li>Seasonal campaigns</li><li>Email newsletters</li></ul>
-        </div>
-        <div class="tc tc-support rv d3">
-          <div class="tc-icon">📊</div>
-          <div class="tc-role">Analytics</div>
-          <div class="tc-name">Sage</div>
-          <p class="tc-desc">Tracks revenue, client retention, top services and peak hours — then tells you exactly what to do next.</p>
-          <ul class="tc-list"><li>Revenue & booking reports</li><li>Client retention analysis</li><li>Best posting times</li><li>Monthly growth summaries</li></ul>
-        </div>
+      <div class="tc tc-mid rv d3">
+        <div class="tc-icon">💬</div><div class="tc-role">Client Service</div>
+        <div class="tc-name">Luna</div>
+        <p class="tc-desc">Instantly replies in DMs, handles questions, collects reviews and makes every client feel like a VIP.</p>
+        <ul class="tc-list"><li>Instant DM responses</li><li>Automated review requests</li><li>Loyalty programmes</li><li>Unhappy client recovery</li></ul>
       </div>
-
+      <div class="tc tc-mid rv d1">
+        <div class="tc-icon">📣</div><div class="tc-role">Marketing</div>
+        <div class="tc-name">Maya</div>
+        <p class="tc-desc">Plans promotions, seasonal campaigns and referral programmes — always data-driven, never guesswork.</p>
+        <ul class="tc-list"><li>Monthly promo calendar</li><li>Referral programme</li><li>Flash sales</li><li>Competitor monitoring</li></ul>
+      </div>
+      <div class="tc tc-mid rv d2">
+        <div class="tc-icon">📊</div><div class="tc-role">Analytics</div>
+        <div class="tc-name">Sage</div>
+        <p class="tc-desc">Tracks revenue, client retention, top services and peak hours — then tells you exactly what to do next.</p>
+        <ul class="tc-list"><li>Revenue & booking reports</li><li>Client retention analysis</li><li>Best posting times</li><li>Monthly growth summaries</li></ul>
+      </div>
+      <div class="tc tc-vivienne rv d3">
+        <span class="tc-badge tc-badge-revenue">💰 Revenue booster</span>
+        <div class="tc-icon">💎</div><div class="tc-role">Sales Manager</div>
+        <div class="tc-name">Vivienne</div>
+        <p class="tc-desc">Spots upsell opportunities, sends personalised offers to the right clients at the right moment — and lifts your average ticket.</p>
+        <ul class="tc-list"><li>Smart upsells</li><li>VIP scenarios for regulars</li><li>Service packages & bundles</li><li>Rebooking reminders</li></ul>
+      </div>
     </div>
   </div>
 </section>
