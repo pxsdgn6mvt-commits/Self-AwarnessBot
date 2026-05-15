@@ -16,7 +16,7 @@ router = Router()
 
 @router.message()
 async def handle_message(message: Message, bot: Bot, tenant: TenantConfig) -> None:
-    if not message.text or not tenant.setup_complete:
+    if not message.text or not tenant or not tenant.setup_complete:
         return
 
     await bot.send_chat_action(chat_id=message.chat.id, action="typing")

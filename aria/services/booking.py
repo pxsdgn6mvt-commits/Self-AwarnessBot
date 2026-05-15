@@ -47,13 +47,13 @@ def _parse_gcal_dt(value: str) -> Optional[datetime]:
 
 
 def _slot_times(tenant: "TenantConfig", target_date: date) -> list[datetime]:
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo(tenant.timezone or "UTC")
     slots: list[datetime] = []
     h, m = tenant.open_hour, 0
-    while True:
-        dt = datetime(target_date.year, target_date.month, target_date.day, h, m, tzinfo=timezone.utc)
-        if dt.hour >= tenant.close_hour:
-            break
-        slots.append(dt)
+    while h < tenant.close_hour:
+        local_dt = datetime(target_date.year, target_date.month, target_date.day, h, m, tzinfo=tz)
+        slots.append(local_dt.astimezone(timezone.utc))
         total = h * 60 + m + tenant.slot_minutes
         h, m = divmod(total, 60)
     return slots

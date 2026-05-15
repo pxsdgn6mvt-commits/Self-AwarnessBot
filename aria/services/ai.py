@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-MAX_HISTORY = 40
+MAX_HISTORY    = 40
 MAX_TOOL_ROUNDS = 5
 
 _clients: dict[str, anthropic.AsyncAnthropic] = {}
@@ -164,12 +164,42 @@ def _resolve_date(value: str, tz_str: str = "UTC") -> str:
     return value
 
 
+def _trim_history(history: list[dict], max_len: int) -> list[dict]:
+    """Trim history to max_len, always starting at a clean user-text message.
+
+    Never cuts between a tool_use assistant turn and its tool_result user turn,
+    which would cause an Anthropic API validation error.
+    """
+    if len(history) <= max_len:
+        return history
+    trimmed = history[-max_len:]
+    # Walk forward until we find a user message that is plain text (not tool_result)
+    for i, msg in enumerate(trimmed):
+        if msg.get("role") != "user":
+            continue
+        content = msg.get("content", "")
+        if isinstance(content, str):
+            return trimmed[i:]
+        if isinstance(content, list) and all(
+            b.get("type") != "tool_result" for b in content
+        ):
+            return trimmed[i:]
+    # Fallback: keep only the very last user message
+    for i in range(len(history) - 1, -1, -1):
+        if history[i].get("role") == "user":
+            content = history[i].get("content", "")
+            if isinstance(content, str):
+                return [history[i]]
+    return []
+
+
 # ── Tool executor ─────────────────────────────────────────────────────────────
 
-async def _exec_tool(name: str, args: dict, tenant: "TenantConfig", owner_id: int) -> str:
+async def _exec_tool(
+    name: str, args: dict, tenant: "TenantConfig", owner_id: int, bot: Any
+) -> str:
     adapter = get_adapter(tenant)
-
-    tz_str = tenant.timezone or "UTC"
+    tz_str  = tenant.timezone or "UTC"
 
     if name == "get_schedule":
         from zoneinfo import ZoneInfo
@@ -177,33 +207,45 @@ async def _exec_tool(name: str, args: dict, tenant: "TenantConfig", owner_id: in
         if args.get("date_from") and args.get("date_to"):
             from_str = _resolve_date(args["date_from"], tz_str)
             to_str   = _resolve_date(args["date_to"],   tz_str)
-            dt_from = datetime.strptime(from_str, "%Y-%m-%d").replace(hour=0, minute=0, tzinfo=tz).astimezone(timezone.utc)
-            dt_to   = datetime.strptime(to_str,   "%Y-%m-%d").replace(hour=23, minute=59, tzinfo=tz).astimezone(timezone.utc)
+            dt_from  = datetime.strptime(from_str, "%Y-%m-%d").replace(hour=0,  minute=0,  tzinfo=tz).astimezone(timezone.utc)
+            dt_to    = datetime.strptime(to_str,   "%Y-%m-%d").replace(hour=23, minute=59, tzinfo=tz).astimezone(timezone.utc)
         else:
             target  = _resolve_date(args.get("date") or "today", tz_str)
             dt_from = datetime.strptime(target, "%Y-%m-%d").replace(hour=0,  minute=0,  tzinfo=tz).astimezone(timezone.utc)
             dt_to   = datetime.strptime(target, "%Y-%m-%d").replace(hour=23, minute=59, tzinfo=tz).astimezone(timezone.utc)
         events = await adapter.get_events(dt_from, dt_to)
-        return json.dumps({"date_from": _resolve_date(args.get("date_from") or args.get("date") or "today", tz_str),
-                           "date_to":   _resolve_date(args.get("date_to")   or args.get("date") or "today", tz_str),
-                           "count": len(events), "bookings": events})
+        return json.dumps({
+            "date_from": _resolve_date(args.get("date_from") or args.get("date") or "today", tz_str),
+            "date_to":   _resolve_date(args.get("date_to")   or args.get("date") or "today", tz_str),
+            "count": len(events), "bookings": events,
+        })
 
     if name == "check_availability":
         dt = parse_datetime(args["date"], args["time"], tz_str)
         if dt is None:
             return json.dumps({"error": "invalid date/time"})
-        return json.dumps({"available": await adapter.is_available(dt, args["service"]),
-                           "date": args["date"], "time": args["time"]})
+        return json.dumps({
+            "available": await adapter.is_available(dt, args["service"]),
+            "date": args["date"], "time": args["time"],
+        })
 
     if name == "add_booking":
         dt = parse_datetime(args["date"], args["time"], tz_str)
         if dt is None:
             return json.dumps({"error": "invalid date/time"})
-        bid, cal_id = await adapter.create_event(owner_id, args["client_name"], args["service"], dt)
-        return json.dumps({"booking_id": bid, "client": args["client_name"],
-                           "service": args["service"], "date": args["date"],
-                           "time": args["time"], "confirmed": True,
-                           "google_calendar": cal_id is not None})
+        bid, cal_id = await adapter.create_event(
+            owner_id, args["client_name"], args["service"], dt
+        )
+        # Schedule reminder (day before at 09:00 local) and no-show check (2h after)
+        from aria.services.scheduler import schedule_reminder_job, schedule_noshow_job
+        schedule_reminder_job(bid, dt, owner_id, bot, tenant)
+        schedule_noshow_job(bid, dt, owner_id, bot, tenant)
+        return json.dumps({
+            "booking_id": bid, "client": args["client_name"],
+            "service": args["service"], "date": args["date"],
+            "time": args["time"], "confirmed": True,
+            "google_calendar": cal_id is not None,
+        })
 
     if name == "reschedule_booking":
         new_dt = parse_datetime(args["new_date"], args["new_time"], tz_str)
@@ -213,8 +255,14 @@ async def _exec_tool(name: str, args: dict, tenant: "TenantConfig", owner_id: in
         if not booking:
             return json.dumps({"error": "booking not found"})
         await adapter.update_event(args["booking_id"], booking.get("calendar_event_id"), new_dt)
-        return json.dumps({"rescheduled": True, "booking_id": args["booking_id"],
-                           "new_date": args["new_date"], "new_time": args["new_time"]})
+        # Reschedule reminder and no-show jobs with new time
+        from aria.services.scheduler import schedule_reminder_job, schedule_noshow_job
+        schedule_reminder_job(args["booking_id"], new_dt, owner_id, bot, tenant)
+        schedule_noshow_job(args["booking_id"], new_dt, owner_id, bot, tenant)
+        return json.dumps({
+            "rescheduled": True, "booking_id": args["booking_id"],
+            "new_date": args["new_date"], "new_time": args["new_time"],
+        })
 
     if name == "cancel_booking":
         booking = await repo.get_booking(args["booking_id"])
@@ -222,6 +270,9 @@ async def _exec_tool(name: str, args: dict, tenant: "TenantConfig", owner_id: in
             return json.dumps({"error": "booking not found"})
         await repo.update_booking_status(args["booking_id"], "cancelled")
         await adapter.delete_event(args["booking_id"], booking.get("calendar_event_id"))
+        # Remove scheduled reminder/noshow jobs
+        from aria.services.scheduler import cancel_booking_jobs
+        cancel_booking_jobs(args["booking_id"])
         return json.dumps({"cancelled": True, "booking_id": args["booking_id"]})
 
     if name == "get_upcoming":
@@ -242,8 +293,7 @@ async def chat(user_id: int, user_text: str, bot: Any, tenant: "TenantConfig") -
 
     history = await repo.load_history(tenant.id, user_id)
     history.append({"role": "user", "content": user_text})
-    if len(history) > MAX_HISTORY:
-        history = history[-MAX_HISTORY:]
+    history = _trim_history(history, MAX_HISTORY)
 
     from zoneinfo import ZoneInfo
     tenant_tz = ZoneInfo(tenant.timezone or "UTC")
@@ -283,21 +333,22 @@ async def chat(user_id: int, user_text: str, bot: Any, tenant: "TenantConfig") -
         tool_results: list[dict] = []
         for tc in tool_calls:
             try:
-                result = await _exec_tool(tc.name, tc.input, tenant, owner_id=user_id)
+                result = await _exec_tool(tc.name, tc.input, tenant,
+                                          owner_id=user_id, bot=bot)
             except Exception as exc:
                 log.exception("Tool %s failed", tc.name)
                 if "404" in str(exc) or "Not Found" in str(exc):
                     result = json.dumps({"error": "calendar_not_found",
-                                         "hint": "Service account has no access to this calendar. Share the calendar with the service account email (Editor role)."})
+                                         "hint": "Share the calendar with the service account email (Editor role)."})
                 elif "403" in str(exc) or "disabled" in str(exc):
                     result = json.dumps({"error": "calendar_api_disabled",
-                                         "hint": "Google Calendar API is not enabled in the project."})
+                                         "hint": "Enable Google Calendar API in Google Cloud Console."})
                 else:
                     result = json.dumps({"error": str(exc)})
             tool_results.append({"type": "tool_result", "tool_use_id": tc.id, "content": result})
         history.append({"role": "user", "content": tool_results})
     else:
-        text_reply = "Дай мне секунду, что-то пошло не так."
+        text_reply = "Что-то пошло не так, попробуй ещё раз."
 
     await repo.save_history(tenant.id, user_id, history)
     return text_reply
