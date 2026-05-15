@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from aiogram import Bot, Router
+from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from aria.services.ai import chat
@@ -15,8 +16,19 @@ router = Router()
 
 
 @router.message()
-async def handle_message(message: Message, bot: Bot, tenant: TenantConfig) -> None:
+async def handle_message(message: Message, bot: Bot, tenant: TenantConfig, state: FSMContext) -> None:
     if not message.text or not tenant or not tenant.setup_complete:
+        return
+
+    # If the user is mid-wizard (email setup, booking, settings…) let the FSM
+    # handlers process the message. Never hand it to AI.
+    try:
+        current_state = await state.get_state()
+    except Exception:
+        current_state = None
+
+    if current_state is not None:
+        log.debug("Skipping AI handler — active FSM state: %s", current_state)
         return
 
     await bot.send_chat_action(chat_id=message.chat.id, action="typing")
