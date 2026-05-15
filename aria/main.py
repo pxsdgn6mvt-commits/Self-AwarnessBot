@@ -126,7 +126,7 @@ def _make_web_app(dp: Dispatcher) -> web.Application:
     return app
 
 
-async def _register_webhook(bot: Bot, dp: Dispatcher, tenant_id: int) -> None:
+async def _register_webhook(bot: Bot, dp: Dispatcher, tenant_id: int) -> bool:
     url = f"{settings.WEBHOOK_BASE_URL}/webhook/{tenant_id}"
     allowed = list(dp.resolve_used_update_types())
     kwargs: dict = dict(
@@ -136,8 +136,13 @@ async def _register_webhook(bot: Bot, dp: Dispatcher, tenant_id: int) -> None:
     )
     if settings.WEBHOOK_SECRET:
         kwargs["secret_token"] = settings.WEBHOOK_SECRET
-    await bot.set_webhook(**kwargs)
-    log.info("Webhook registered: %s", url)
+    try:
+        await bot.set_webhook(**kwargs)
+        log.info("Webhook registered: %s", url)
+        return True
+    except Exception as exc:
+        log.error("Failed to register webhook for tenant #%d at %s: %s", tenant_id, url, exc)
+        return False
 
 
 async def _watch_tenants_webhook(dp: Dispatcher) -> None:
@@ -156,8 +161,11 @@ async def _watch_tenants_webhook(dp: Dispatcher) -> None:
                     )
                     _bots[tid] = bot
                     await _configure_bot(bot, dp, tid)
-                    await _register_webhook(bot, dp, tid)
-                    log.info("Added tenant #%d (%s) via webhook", tid, row["salon_name"])
+                    ok = await _register_webhook(bot, dp, tid)
+                    if ok:
+                        log.info("Added tenant #%d (%s) via webhook", tid, row["salon_name"])
+                    else:
+                        log.warning("Tenant #%d (%s) added but webhook registration failed — retrying in 10s", tid, row["salon_name"])
 
             for tid in list(_bots.keys()):
                 if tid not in active_ids:
@@ -173,8 +181,16 @@ async def _watch_tenants_webhook(dp: Dispatcher) -> None:
 
 
 async def _run_webhook(dp: Dispatcher) -> None:
+    # Start HTTP server FIRST so Railway health check passes immediately
     app = _make_web_app(dp)
+    port = int(os.getenv("PORT", 8080))
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, host="0.0.0.0", port=port)
+    await site.start()
+    log.info("Aria webhook HTTP server listening on port %d", port)
 
+    # Register webhooks for all active bots
     rows = await list_active_tenants()
     for row in rows:
         bot = Bot(
@@ -186,13 +202,7 @@ async def _run_webhook(dp: Dispatcher) -> None:
         await _configure_bot(bot, dp, tid)
         await _register_webhook(bot, dp, tid)
 
-    port = int(os.getenv("PORT", 8080))
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, host="0.0.0.0", port=port)
-    await site.start()
-    log.info("Aria webhook server on port %d — %d bot(s)", port, len(_bots))
-
+    log.info("Aria webhook mode ready — %d bot(s) on %s", len(_bots), settings.WEBHOOK_BASE_URL)
     await _watch_tenants_webhook(dp)
 
 
