@@ -59,6 +59,11 @@ class Settings:
         self.SALON_WORKING_DAYS = _str("SALON_WORKING_DAYS", "1,2,3,4,5,6")
         self.GOOGLE_CALENDAR_CREDENTIALS = os.getenv("GOOGLE_CALENDAR_CREDENTIALS")
         self.GOOGLE_CALENDAR_ID = os.getenv("GOOGLE_CALENDAR_ID")
+        # Webhook mode: set WEBHOOK_BASE_URL to your Railway public domain
+        # e.g. https://aria-bot.up.railway.app  (no trailing slash)
+        # If not set → falls back to long-polling (local dev)
+        self.WEBHOOK_BASE_URL = _str("WEBHOOK_BASE_URL", "").rstrip("/")
+        self.WEBHOOK_SECRET = _str("WEBHOOK_SECRET", "")
 
 
 settings = Settings()
