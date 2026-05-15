@@ -221,6 +221,7 @@ async def _exec_tool(name: str, args: dict, tenant: "TenantConfig", owner_id: in
         if not booking:
             return json.dumps({"error": "booking not found"})
         await repo.update_booking_status(args["booking_id"], "cancelled")
+        await adapter.delete_event(args["booking_id"], booking.get("calendar_event_id"))
         return json.dumps({"cancelled": True, "booking_id": args["booking_id"]})
 
     if name == "get_upcoming":

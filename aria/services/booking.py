@@ -86,6 +86,11 @@ class BookingAdapter(ABC):
         self, booking_id: int, calendar_event_id: Optional[str], new_dt: datetime
     ) -> None: ...
 
+    @abstractmethod
+    async def delete_event(
+        self, booking_id: int, calendar_event_id: Optional[str]
+    ) -> None: ...
+
 
 # ── Local adapter ─────────────────────────────────────────────────────────────
 
@@ -142,6 +147,9 @@ class LocalAdapter(BookingAdapter):
     async def update_event(self, booking_id: int, calendar_event_id: Optional[str], new_dt: datetime) -> None:
         await repo.update_booking_time(booking_id, new_dt)
 
+    async def delete_event(self, booking_id: int, calendar_event_id: Optional[str]) -> None:
+        pass  # local adapter: status is updated in DB by caller, nothing else to do
+
 
 # ── Google Calendar adapter ───────────────────────────────────────────────────
 
@@ -180,6 +188,9 @@ class GoogleAdapter(BookingAdapter):
 
     def _patch_sync(self, event_id: str, body: dict) -> None:
         self._svc.events().patch(calendarId=self._cal, eventId=event_id, body=body).execute()
+
+    def _delete_sync(self, event_id: str) -> None:
+        self._svc.events().delete(calendarId=self._cal, eventId=event_id).execute()
 
     async def get_events(self, date_from: datetime, date_to: datetime) -> list[dict]:
         from zoneinfo import ZoneInfo
@@ -260,6 +271,17 @@ class GoogleAdapter(BookingAdapter):
             "start": {"dateTime": new_dt.isoformat(), "timeZone": tz_name},
             "end": {"dateTime": end_dt.isoformat(), "timeZone": tz_name},
         })
+
+    async def delete_event(self, booking_id: int, calendar_event_id: Optional[str]) -> None:
+        if not calendar_event_id:
+            return
+        try:
+            await asyncio.to_thread(self._delete_sync, calendar_event_id)
+        except Exception as exc:
+            if "410" in str(exc) or "404" in str(exc):
+                pass  # already deleted in GCal — that's fine
+            else:
+                raise
 
 
 # ── Factory ───────────────────────────────────────────────────────────────────
