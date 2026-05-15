@@ -75,6 +75,13 @@ ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS email_last_uid     TEXT;
 ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS email_filter_type  TEXT NOT NULL DEFAULT 'all';
 ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS email_filter_value TEXT;
 
+-- ── Persistent FSM state (survives restarts) ──────────────────────────────────
+CREATE TABLE IF NOT EXISTS aria_fsm_states (
+    key   TEXT PRIMARY KEY,
+    state TEXT,
+    data  JSONB NOT NULL DEFAULT '{}'
+);
+
 -- Must run BEFORE any CREATE INDEX that references tenant_id.
 ALTER TABLE aria_clients      ADD COLUMN IF NOT EXISTS tenant_id INT NOT NULL DEFAULT 1;
 ALTER TABLE aria_bookings     ADD COLUMN IF NOT EXISTS tenant_id INT NOT NULL DEFAULT 1;

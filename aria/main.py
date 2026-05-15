@@ -17,7 +17,7 @@ import sys
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.fsm.storage.memory import MemoryStorage
+from aria.db.fsm_storage import PostgresFSMStorage
 from aiogram.types import ErrorEvent
 
 from aria.config import settings
@@ -44,7 +44,7 @@ _tasks: dict[int, asyncio.Task] = {}  # tenant_id -> polling Task
 # ── Dispatcher (created once, shared across all bots) ─────────────────────────
 
 def _build_dispatcher() -> Dispatcher:
-    dp = Dispatcher(storage=MemoryStorage())
+    dp = Dispatcher(storage=PostgresFSMStorage())
     dp.update.middleware(TenantMiddleware())
     # Routers included ONCE — this is the only Dispatcher in the process
     dp.include_router(setup_router)
