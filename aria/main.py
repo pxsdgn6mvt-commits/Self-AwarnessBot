@@ -24,7 +24,7 @@ from aria.config import settings
 from aria.db.repo import (
     init_db, close_pool, create_tenant, get_tenant, get_tenant_by_token, list_active_tenants,
 )
-from aria.handlers import admin, chat, quick, start
+from aria.handlers import admin, chat, email_setup, quick, start
 from aria.handlers.setup import router as setup_router
 from aria.middleware import TenantMiddleware
 from aria.services.commands import set_commands
@@ -51,6 +51,7 @@ def _build_dispatcher() -> Dispatcher:
     dp.include_router(admin.router)
     dp.include_router(start.router)
     dp.include_router(quick.router)
+    dp.include_router(email_setup.router)
     dp.include_router(chat.router)
 
     @dp.errors()
@@ -78,6 +79,9 @@ async def _poll_bot(bot: Bot, dp: Dispatcher, tenant_id: int) -> None:
             await set_commands(bot, row["owner_tg_id"])
         else:
             await set_commands(bot)
+        if row and row.get("email_user") and row.get("email_host"):
+            from aria.services.email_monitor import start_email_job
+            start_email_job(tenant_id, bot)
         while True:
             try:
                 updates = await bot.get_updates(

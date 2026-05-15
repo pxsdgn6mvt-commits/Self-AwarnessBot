@@ -66,6 +66,12 @@ CREATE TABLE IF NOT EXISTS aria_conversations (
 
 -- ── Migrations ────────────────────────────────────────────────────────────────
 ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS timezone TEXT NOT NULL DEFAULT 'UTC';
+ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS email_host     TEXT;
+ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS email_port     INT  NOT NULL DEFAULT 993;
+ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS email_user     TEXT;
+ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS email_password TEXT;
+ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS email_folder   TEXT NOT NULL DEFAULT 'INBOX';
+ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS email_last_uid TEXT;
 
 -- Must run BEFORE any CREATE INDEX that references tenant_id.
 ALTER TABLE aria_clients      ADD COLUMN IF NOT EXISTS tenant_id INT NOT NULL DEFAULT 1;

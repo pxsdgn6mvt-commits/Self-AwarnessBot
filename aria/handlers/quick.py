@@ -45,6 +45,7 @@ MAIN_KB = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="📅 Сегодня"), KeyboardButton(text="📅 Завтра")],
         [KeyboardButton(text="➕ Новая запись"), KeyboardButton(text="📋 Ближайшие")],
+        [KeyboardButton(text="📧 Почта")],
     ],
     resize_keyboard=True,
     is_persistent=True,
