@@ -212,12 +212,14 @@ async def setup_google_cal(message: Message, state: FSMContext, tenant: TenantCo
     await state.clear()
     await set_commands(message.bot, message.from_user.id)
 
+    from aria.handlers.quick import MAIN_KB
     await message.answer(
         f"✅ Готово! Бот настроен для <b>{data['salon_name']}</b>.\n\n"
-        f"Теперь просто пиши мне как обычно:\n"
+        f"Используй кнопки внизу или просто пиши:\n"
         f"• «что у меня сегодня?»\n"
         f"• «запиши Катю на {data['services'].split(',')[0].strip()} 20 мая в 14:00»\n"
         f"• «что на этой неделе?»\n\n"
-        "Подсказка: нажми 🎛 рядом с полем ввода — там все доступные команды."
+        "Нажми 🎛 рядом с полем ввода — там все команды.",
+        reply_markup=MAIN_KB,
     )
     log.info("Tenant %d setup complete: %s tz=%s", tenant.id, data["salon_name"], data.get("timezone", "UTC"))

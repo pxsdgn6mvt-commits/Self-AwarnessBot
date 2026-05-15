@@ -15,6 +15,7 @@ from aiogram.types import (
 
 import aria.db.repo as repo
 from aria.filters import SetupDone
+from aria.handlers.quick import MAIN_KB
 from aria.middleware import TenantMiddleware
 from aria.services.booking import invalidate_adapter
 from aria.tenant import TenantConfig
@@ -57,11 +58,12 @@ async def cmd_start(message: Message, state: FSMContext, tenant: TenantConfig) -
 
     await message.answer(
         f"Привет, {tenant.owner_name}! Я Aria — твой ресепшн для <b>{tenant.salon_name}</b>.\n\n"
-        "Просто пиши как обычно:\n"
+        "Используй кнопки внизу или просто пиши:\n"
         "• «что у меня сегодня?»\n"
         "• «запиши Катю на ресницы 20 мая в 14:00»\n"
         "• «что на этой неделе?»\n\n"
-        "/help — список примеров"
+        "/help — список примеров",
+        reply_markup=MAIN_KB,
     )
 
 
