@@ -101,6 +101,26 @@ def _init_uid(
             pass
 
 
+# ── Filter ────────────────────────────────────────────────────────────────────
+
+def passes_filter(
+    filter_type: str, filter_value: str | None,
+    sender: str, subject: str, body: str,
+) -> bool:
+    if not filter_type or filter_type == "all" or not filter_value:
+        return True
+    terms = [t.strip().lower() for t in filter_value.split(",") if t.strip()]
+    if not terms:
+        return True
+    if filter_type == "keywords":
+        haystack = (subject + " " + body).lower()
+        return any(t in haystack for t in terms)
+    if filter_type == "senders":
+        sender_lower = sender.lower()
+        return any(t in sender_lower for t in terms)
+    return True
+
+
 # ── Public API ────────────────────────────────────────────────────────────────
 
 async def check_email(tenant_id: int, bot: Any) -> int:
@@ -111,13 +131,15 @@ async def check_email(tenant_id: int, bot: Any) -> int:
     if not row:
         return 0
 
-    host      = row.get("email_host")
-    port      = int(row.get("email_port") or 993)
-    user      = row.get("email_user")
-    password  = row.get("email_password")
-    folder    = row.get("email_folder") or "INBOX"
-    owner_id  = row.get("owner_tg_id")
-    last_uid  = row.get("email_last_uid")
+    host         = row.get("email_host")
+    port         = int(row.get("email_port") or 993)
+    user         = row.get("email_user")
+    password     = row.get("email_password")
+    folder       = row.get("email_folder") or "INBOX"
+    owner_id     = row.get("owner_tg_id")
+    last_uid     = row.get("email_last_uid")
+    filter_type  = row.get("email_filter_type") or "all"
+    filter_value = row.get("email_filter_value")
 
     if not (host and user and password and owner_id):
         return 0
@@ -143,8 +165,12 @@ async def check_email(tenant_id: int, bot: Any) -> int:
     if not messages:
         return 0
 
-    new_uid = None
+    forwarded = 0
+    highest_uid = None
     for uid_str, sender, subject, body in messages:
+        highest_uid = uid_str  # always advance UID pointer, even for filtered messages
+        if not passes_filter(filter_type, filter_value, sender, subject, body):
+            continue
         text = (
             f"📧 <b>Новое письмо</b>\n\n"
             f"<b>От:</b> {_html.escape(sender[:120])}\n"
@@ -153,15 +179,15 @@ async def check_email(tenant_id: int, bot: Any) -> int:
         )
         try:
             await bot.send_message(chat_id=owner_id, text=text)
+            forwarded += 1
         except Exception as exc:
             log.warning("Failed to deliver email to %d: %s", owner_id, exc)
-        new_uid = uid_str
 
-    if new_uid:
-        await repo.update_tenant(tenant_id, email_last_uid=new_uid)
+    if highest_uid:
+        await repo.update_tenant(tenant_id, email_last_uid=highest_uid)
 
-    log.info("Forwarded %d email(s) for tenant %d", len(messages), tenant_id)
-    return len(messages)
+    log.info("Polled %d email(s), forwarded %d for tenant %d", len(messages), forwarded, tenant_id)
+    return forwarded
 
 
 async def _poll_job(tenant_id: int, bot: Any) -> None:

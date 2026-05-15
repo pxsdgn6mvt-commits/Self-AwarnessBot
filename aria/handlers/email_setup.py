@@ -33,16 +33,48 @@ class EmailSetup(StatesGroup):
     password = State()
 
 
+class EmailFilter(StatesGroup):
+    value = State()   # only entered when filter_type requires a text value
+
+
+# ── Filter helpers ────────────────────────────────────────────────────────────
+
+_FILTER_LABELS = {
+    "all":      "📬 Все письма",
+    "keywords": "🔍 По ключевым словам",
+    "senders":  "👤 По отправителям",
+}
+
+
+def _filter_label(filter_type: str, filter_value: str | None) -> str:
+    base = _FILTER_LABELS.get(filter_type, "📬 Все письма")
+    if filter_type != "all" and filter_value:
+        short = filter_value[:30] + ("…" if len(filter_value) > 30 else "")
+        return f"{base}: {short}"
+    return base
+
+
+def _filter_select_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📬 Все новые письма",           callback_data="email_filter:all")],
+        [InlineKeyboardButton(text="🔍 По ключевым словам в теме",  callback_data="email_filter:keywords")],
+        [InlineKeyboardButton(text="👤 От конкретных отправителей", callback_data="email_filter:senders")],
+        [InlineKeyboardButton(text="❌ Отмена",                     callback_data="email_filter:cancel")],
+    ])
+
+
 # ── Status display ────────────────────────────────────────────────────────────
 
-def _email_menu_kb(connected: bool) -> InlineKeyboardMarkup:
+def _email_menu_kb(connected: bool, filter_type: str = "all", filter_value: str | None = None) -> InlineKeyboardMarkup:
     if connected:
+        flabel = _filter_label(filter_type, filter_value)
         return InlineKeyboardMarkup(inline_keyboard=[
             [
                 InlineKeyboardButton(text="🔄 Проверить сейчас", callback_data="email:check"),
                 InlineKeyboardButton(text="✏️ Изменить",          callback_data="email:setup"),
             ],
-            [InlineKeyboardButton(text="🔴 Отключить", callback_data="email:disconnect")],
+            [InlineKeyboardButton(text=f"⚙️ Фильтр: {flabel}", callback_data="email:filter")],
+            [InlineKeyboardButton(text="🔴 Отключить",           callback_data="email:disconnect")],
         ])
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📧 Подключить почту", callback_data="email:setup")]
@@ -51,24 +83,29 @@ def _email_menu_kb(connected: bool) -> InlineKeyboardMarkup:
 
 async def _show_email_status(target: Message, tenant: TenantConfig) -> None:
     row = await repo.get_tenant(tenant.id)
-    user = (row.get("email_user") or "") if row else ""
-    srv  = (row.get("email_host") or "") if row else ""
-    if user and srv:
+    user         = (row.get("email_user")         or "") if row else ""
+    srv          = (row.get("email_host")          or "") if row else ""
+    filter_type  = (row.get("email_filter_type")   or "all") if row else "all"
+    filter_value = (row.get("email_filter_value")  or None) if row else None
+
+    connected = bool(user and srv)
+    if connected:
+        flabel = _filter_label(filter_type, filter_value)
         text = (
             "📧 <b>Email-уведомления</b>\n\n"
             f"✅ Подключено\n"
             f"Адрес: <code>{html.escape(user)}</code>\n"
-            f"Сервер: <code>{html.escape(srv)}</code>\n\n"
+            f"Сервер: <code>{html.escape(srv)}</code>\n"
+            f"Фильтр: {flabel}\n\n"
             "Новые письма приходят сюда каждые 5 минут."
         )
     else:
         text = (
             "📧 <b>Email-уведомления</b>\n\n"
             "❌ Не подключено\n\n"
-            "Подключи почту — и все новые письма будут приходить "
-            "прямо в этот чат."
+            "Подключи почту — и нужные письма будут приходить прямо в этот чат."
         )
-    await target.answer(text, reply_markup=_email_menu_kb(bool(user and srv)))
+    await target.answer(text, reply_markup=_email_menu_kb(connected, filter_type, filter_value))
 
 
 # ── Entry points ──────────────────────────────────────────────────────────────
@@ -99,7 +136,7 @@ async def cb_check(callback: CallbackQuery, tenant: TenantConfig) -> None:
     if count:
         await callback.message.answer(f"✅ Переслано новых писем: {count}")
     else:
-        await callback.message.answer("📭 Новых писем нет.")
+        await callback.message.answer("📭 Новых писем нет (с учётом фильтра).")
 
 
 @router.callback_query(F.data == "email:disconnect", SetupDone())
@@ -111,6 +148,7 @@ async def cb_disconnect(callback: CallbackQuery, tenant: TenantConfig) -> None:
         tenant.id,
         email_host=None, email_user=None,
         email_password=None, email_last_uid=None,
+        email_filter_type="all", email_filter_value=None,
     )
     TenantMiddleware.invalidate(tenant.bot_token)
     stop_email_job(tenant.id)
@@ -133,7 +171,98 @@ async def cb_setup(callback: CallbackQuery, state: FSMContext, tenant: TenantCon
     )
 
 
-# ── FSM steps ─────────────────────────────────────────────────────────────────
+# ── Filter callbacks ──────────────────────────────────────────────────────────
+
+@router.callback_query(F.data == "email:filter", SetupDone())
+async def cb_filter_menu(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    if not tenant.is_owner(callback.from_user.id):
+        await callback.answer()
+        return
+    await callback.answer()
+    await callback.message.answer(
+        "⚙️ <b>Фильтр писем</b>\n\n"
+        "Какие письма пересылать в бот?\n\n"
+        "• <b>Все новые</b> — любое новое письмо\n"
+        "• <b>По ключевым словам</b> — только если тема или текст содержат нужные слова\n"
+        "• <b>По отправителям</b> — только от конкретных адресов или доменов",
+        reply_markup=_filter_select_kb(),
+    )
+
+
+@router.callback_query(F.data == "email_filter:all", SetupDone())
+async def cb_filter_all(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    if not tenant.is_owner(callback.from_user.id):
+        await callback.answer()
+        return
+    await repo.update_tenant(tenant.id, email_filter_type="all", email_filter_value=None)
+    TenantMiddleware.invalidate(tenant.bot_token)
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await callback.message.answer("✅ Фильтр: все новые письма.")
+    await callback.answer()
+
+
+@router.callback_query(F.data == "email_filter:keywords", SetupDone())
+async def cb_filter_keywords(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
+    if not tenant.is_owner(callback.from_user.id):
+        await callback.answer()
+        return
+    await callback.answer()
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await state.set_state(EmailFilter.value)
+    await state.update_data(pending_filter_type="keywords")
+    row = await repo.get_tenant(tenant.id)
+    current = (row.get("email_filter_value") or "") if row else ""
+    hint = f"\n\nТекущие слова: <code>{html.escape(current)}</code>" if current else ""
+    await callback.message.answer(
+        f"Введи ключевые слова через запятую:{hint}\n\n"
+        "Письма с этими словами в теме или тексте будут приходить в бот.\n"
+        "Например: <code>запись, бронь, клиент, booking</code>"
+    )
+
+
+@router.callback_query(F.data == "email_filter:senders", SetupDone())
+async def cb_filter_senders(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
+    if not tenant.is_owner(callback.from_user.id):
+        await callback.answer()
+        return
+    await callback.answer()
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await state.set_state(EmailFilter.value)
+    await state.update_data(pending_filter_type="senders")
+    row = await repo.get_tenant(tenant.id)
+    current = (row.get("email_filter_value") or "") if row else ""
+    hint = f"\n\nТекущие адреса: <code>{html.escape(current)}</code>" if current else ""
+    await callback.message.answer(
+        f"Введи email-адреса или домены через запятую:{hint}\n\n"
+        "Письма только от этих отправителей будут приходить в бот.\n"
+        "Например: <code>client@gmail.com, @instagram.com, noreply@booking</code>"
+    )
+
+
+@router.callback_query(F.data == "email_filter:cancel")
+async def cb_filter_cancel(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await callback.answer("Отменено.")
+
+
+@router.message(EmailFilter.value)
+async def step_filter_value(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
+    data = await state.get_data()
+    filter_type = data.get("pending_filter_type", "keywords")
+    value = message.text.strip()
+    await repo.update_tenant(tenant.id, email_filter_type=filter_type, email_filter_value=value)
+    TenantMiddleware.invalidate(tenant.bot_token)
+    await state.clear()
+
+    label = _FILTER_LABELS.get(filter_type, filter_type)
+    await message.answer(
+        f"✅ Фильтр сохранён!\n\n"
+        f"{label}: <code>{html.escape(value)}</code>"
+    )
+
+
+# ── Setup FSM steps ───────────────────────────────────────────────────────────
 
 @router.message(EmailSetup.address)
 async def step_address(message: Message, state: FSMContext) -> None:
@@ -215,7 +344,6 @@ async def step_password(message: Message, state: FSMContext, tenant: TenantConfi
     address = data["address"]
     host    = data.get("host") or ""
 
-    # Delete the password message immediately for security
     try:
         await message.delete()
     except Exception:
@@ -228,7 +356,6 @@ async def step_password(message: Message, state: FSMContext, tenant: TenantConfi
 
     wait_msg = await message.answer("🔄 Проверяю подключение...")
 
-    # Test IMAP login in a thread
     try:
         def _test_login():
             imap = imaplib.IMAP4_SSL(host, 993)
@@ -252,7 +379,6 @@ async def step_password(message: Message, state: FSMContext, tenant: TenantConfi
         )
         return
 
-    # Save credentials
     await repo.update_tenant(
         tenant.id,
         email_host=host,
@@ -270,7 +396,7 @@ async def step_password(message: Message, state: FSMContext, tenant: TenantConfi
         f"✅ Почта подключена!\n\n"
         f"<code>{html.escape(address)}</code>\n\n"
         "Новые письма будут приходить сюда каждые 5 минут.\n"
-        "Первая проверка пройдёт через 5 минут — или нажми «Проверить сейчас».",
+        "Настрой фильтр кнопкой ниже — или оставь «Все письма» по умолчанию.",
         reply_markup=_email_menu_kb(True),
     )
     log.info("Tenant %d connected email %s @ %s", tenant.id, address, host)

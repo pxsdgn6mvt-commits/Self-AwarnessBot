@@ -70,8 +70,10 @@ ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS email_host     TEXT;
 ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS email_port     INT  NOT NULL DEFAULT 993;
 ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS email_user     TEXT;
 ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS email_password TEXT;
-ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS email_folder   TEXT NOT NULL DEFAULT 'INBOX';
-ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS email_last_uid TEXT;
+ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS email_folder       TEXT NOT NULL DEFAULT 'INBOX';
+ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS email_last_uid     TEXT;
+ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS email_filter_type  TEXT NOT NULL DEFAULT 'all';
+ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS email_filter_value TEXT;
 
 -- Must run BEFORE any CREATE INDEX that references tenant_id.
 ALTER TABLE aria_clients      ADD COLUMN IF NOT EXISTS tenant_id INT NOT NULL DEFAULT 1;
