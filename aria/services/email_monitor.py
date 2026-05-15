@@ -144,14 +144,11 @@ async def check_email(tenant_id: int, bot: Any) -> int:
     if not (host and user and password and owner_id):
         return 0
 
-    # First poll: record current state, send nothing
+    # First poll: record current state, send nothing (raises on connection error)
     if last_uid is None:
-        try:
-            uid = await asyncio.to_thread(_init_uid, host, port, user, password, folder)
-            if uid:
-                await repo.update_tenant(tenant_id, email_last_uid=uid)
-        except Exception as exc:
-            log.warning("Email init failed for tenant %d: %s", tenant_id, exc)
+        uid = await asyncio.to_thread(_init_uid, host, port, user, password, folder)
+        if uid:
+            await repo.update_tenant(tenant_id, email_last_uid=uid)
         return 0
 
     try:
@@ -193,8 +190,8 @@ async def check_email(tenant_id: int, bot: Any) -> int:
 async def _poll_job(tenant_id: int, bot: Any) -> None:
     try:
         await check_email(tenant_id, bot)
-    except Exception:
-        log.exception("Email poll job failed for tenant %d", tenant_id)
+    except Exception as exc:
+        log.warning("Email poll job error for tenant %d: %s", tenant_id, exc)
 
 
 def start_email_job(tenant_id: int, bot: Any) -> None:

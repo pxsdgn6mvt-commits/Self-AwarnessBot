@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import asyncio
 import html
-import imaplib
 import logging
 
 from aiogram import F, Router
@@ -165,7 +163,23 @@ async def cb_check(callback: CallbackQuery, tenant: TenantConfig) -> None:
         await callback.answer()
         return
     await callback.answer("Проверяю...")
-    count = await check_email(tenant.id, callback.bot)
+    try:
+        count = await check_email(tenant.id, callback.bot)
+    except Exception as exc:
+        err = str(exc)
+        tip = ""
+        row = await repo.get_tenant(tenant.id)
+        addr = (row.get("email_user") or "") if row else ""
+        domain = addr.split("@")[-1].lower() if addr else ""
+        if "gmail" in domain:
+            tip = "\n\n⚠️ Gmail требует App Password:\nmyaccount.google.com → Безопасность → Пароли приложений"
+        elif "yandex" in domain or "ya.ru" in domain:
+            tip = "\n\n⚠️ Яндекс: создай пароль приложения:\npassport.yandex.ru → Безопасность"
+        await callback.message.answer(
+            f"❌ Ошибка подключения:\n<code>{html.escape(err[:300])}</code>{tip}\n\n"
+            "Нажми «✏️ Изменить» чтобы ввести пароль заново."
+        )
+        return
     if count:
         await callback.message.answer(f"✅ Переслано новых писем: {count}")
     else:
@@ -433,31 +447,6 @@ async def step_password(message: Message, state: FSMContext, tenant: TenantConfi
         await message.answer("Ошибка: IMAP-сервер не задан. Попробуй /connect_email заново.")
         return
 
-    wait_msg = await message.answer("🔄 Проверяю подключение...")
-
-    try:
-        def _test_login():
-            imap = imaplib.IMAP4_SSL(host, 993)
-            imap.login(address, password)
-            imap.logout()
-
-        await asyncio.to_thread(_test_login)
-    except imaplib.IMAP4.error as exc:
-        await state.clear()
-        await wait_msg.edit_text(
-            f"❌ Ошибка входа: <code>{html.escape(str(exc))}</code>\n\n"
-            "Проверь email и пароль, убедись что IMAP включён в настройках почты.\n"
-            "Попробуй снова: /connect_email"
-        )
-        return
-    except Exception as exc:
-        await state.clear()
-        await wait_msg.edit_text(
-            f"❌ Не удалось подключиться: <code>{html.escape(str(exc)[:300])}</code>\n\n"
-            "Попробуй снова: /connect_email"
-        )
-        return
-
     await repo.update_tenant(
         tenant.id,
         email_host=host,
@@ -471,11 +460,25 @@ async def step_password(message: Message, state: FSMContext, tenant: TenantConfi
     start_email_job(tenant.id, message.bot)
     await state.clear()
 
-    await wait_msg.edit_text(
-        f"✅ Почта подключена!\n\n"
+    domain = address.split("@")[-1].lower()
+    extra = ""
+    if "gmail" in domain:
+        extra = (
+            "\n\n⚠️ <b>Gmail:</b> если письма не приходят — нужен App Password:\n"
+            "myaccount.google.com → Безопасность → Пароли приложений\n"
+            "Нажми «✏️ Изменить» и введи App Password вместо обычного."
+        )
+    elif "yandex" in domain or "ya.ru" in domain:
+        extra = (
+            "\n\n⚠️ <b>Яндекс:</b> если письма не приходят — включи IMAP и создай пароль приложения:\n"
+            "passport.yandex.ru → Безопасность → Пароли приложений"
+        )
+
+    await message.answer(
+        f"✅ Почта сохранена!\n\n"
         f"<code>{html.escape(address)}</code>\n\n"
-        "Новые письма будут приходить сюда каждые 5 минут.\n"
-        "Настрой фильтр кнопкой ниже — или оставь «Все письма» по умолчанию.",
+        f"Нажми <b>🔄 Проверить сейчас</b> — бот проверит подключение и покажет ошибку если что-то не так."
+        f"{extra}",
         reply_markup=_email_menu_kb(True),
     )
     log.info("Tenant %d connected email %s @ %s", tenant.id, address, host)
