@@ -37,6 +37,33 @@ class EmailFilter(StatesGroup):
     value = State()   # only entered when filter_type requires a text value
 
 
+# ── Booking service presets ───────────────────────────────────────────────────
+
+# (display name, sender domain/pattern used for matching)
+_BOOKING_SERVICES: list[tuple[str, str]] = [
+    ("Yclients",       "yclients.com"),
+    ("Dikidi",         "dikidi.net"),
+    ("Booksy",         "booksy.com"),
+    ("Fresha",         "fresha.com"),
+    ("SimplyBook.me",  "simplybook.me"),
+    ("Reservio",       "reservio.com"),
+    ("Treatwell",      "treatwell.com"),
+    ("Sber (СберБизнес)", "sber.ru"),
+]
+
+_DOMAIN_TO_SERVICE: dict[str, str] = {domain: name for name, domain in _BOOKING_SERVICES}
+
+
+def _service_select_kb() -> InlineKeyboardMarkup:
+    rows = [
+        [InlineKeyboardButton(text=name, callback_data=f"email_svc:{domain}")]
+        for name, domain in _BOOKING_SERVICES
+    ]
+    rows.append([InlineKeyboardButton(text="✏️ Другой сервис", callback_data="email_svc:custom")])
+    rows.append([InlineKeyboardButton(text="❌ Отмена",         callback_data="email_filter:cancel")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 # ── Filter helpers ────────────────────────────────────────────────────────────
 
 _FILTER_LABELS = {
@@ -47,11 +74,16 @@ _FILTER_LABELS = {
 
 
 def _filter_label(filter_type: str, filter_value: str | None) -> str:
+    if filter_type == "all" or not filter_value:
+        return "📬 Все письма"
+    # Check if the value is a known booking service domain
+    if filter_type == "senders":
+        service_name = _DOMAIN_TO_SERVICE.get(filter_value.strip())
+        if service_name:
+            return f"🗓 {service_name}"
     base = _FILTER_LABELS.get(filter_type, "📬 Все письма")
-    if filter_type != "all" and filter_value:
-        short = filter_value[:30] + ("…" if len(filter_value) > 30 else "")
-        return f"{base}: {short}"
-    return base
+    short = filter_value[:28] + ("…" if len(filter_value) > 28 else "")
+    return f"{base}: {short}"
 
 
 def _filter_select_kb() -> InlineKeyboardMarkup:
@@ -59,6 +91,7 @@ def _filter_select_kb() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="📬 Все новые письма",           callback_data="email_filter:all")],
         [InlineKeyboardButton(text="🔍 По ключевым словам в теме",  callback_data="email_filter:keywords")],
         [InlineKeyboardButton(text="👤 От конкретных отправителей", callback_data="email_filter:senders")],
+        [InlineKeyboardButton(text="🗓 Конкретный сервис бронирования", callback_data="email_filter:service")],
         [InlineKeyboardButton(text="❌ Отмена",                     callback_data="email_filter:cancel")],
     ])
 
@@ -184,7 +217,8 @@ async def cb_filter_menu(callback: CallbackQuery, tenant: TenantConfig) -> None:
         "Какие письма пересылать в бот?\n\n"
         "• <b>Все новые</b> — любое новое письмо\n"
         "• <b>По ключевым словам</b> — только если тема или текст содержат нужные слова\n"
-        "• <b>По отправителям</b> — только от конкретных адресов или доменов",
+        "• <b>По отправителям</b> — только от конкретных адресов или доменов\n"
+        "• <b>Сервис бронирования</b> — выбери платформу из списка, бот настроится автоматически",
         reply_markup=_filter_select_kb(),
     )
 
@@ -236,6 +270,50 @@ async def cb_filter_senders(callback: CallbackQuery, state: FSMContext, tenant: 
         f"Введи email-адреса или домены через запятую:{hint}\n\n"
         "Письма только от этих отправителей будут приходить в бот.\n"
         "Например: <code>client@gmail.com, @instagram.com, noreply@booking</code>"
+    )
+
+
+@router.callback_query(F.data == "email_filter:service", SetupDone())
+async def cb_filter_service(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    if not tenant.is_owner(callback.from_user.id):
+        await callback.answer()
+        return
+    await callback.answer()
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await callback.message.answer(
+        "🗓 <b>Сервис бронирования</b>\n\n"
+        "Выбери платформу — бот будет пересылать только уведомления от неё:",
+        reply_markup=_service_select_kb(),
+    )
+
+
+@router.callback_query(F.data.startswith("email_svc:"), SetupDone())
+async def cb_service_preset(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
+    if not tenant.is_owner(callback.from_user.id):
+        await callback.answer()
+        return
+
+    value = callback.data[len("email_svc:"):]
+    await callback.message.edit_reply_markup(reply_markup=None)
+
+    if value == "custom":
+        await callback.answer()
+        await state.set_state(EmailFilter.value)
+        await state.update_data(pending_filter_type="senders")
+        await callback.message.answer(
+            "Введи домен или адрес сервиса бронирования:\n"
+            "Например: <code>mybookingservice.com</code>"
+        )
+        return
+
+    service_name = _DOMAIN_TO_SERVICE.get(value, value)
+    await repo.update_tenant(tenant.id, email_filter_type="senders", email_filter_value=value)
+    TenantMiddleware.invalidate(tenant.bot_token)
+    await callback.answer(f"✓ {service_name}")
+    await callback.message.answer(
+        f"✅ Фильтр: уведомления от <b>{service_name}</b>\n\n"
+        f"Домен: <code>{html.escape(value)}</code>\n\n"
+        "Бот будет пересылать только письма от этого сервиса."
     )
 
 
