@@ -216,3 +216,92 @@ async def _apply_tz(message: Message, state: FSMContext, tenant: TenantConfig, t
     await state.clear()
     await message.answer(f"✅ Часовой пояс обновлён: <code>{tz}</code>")
     log.info("Tenant %d updated timezone to %s", tenant.id, tz)
+
+
+@router.message(Command("test_cal"), SetupDone())
+async def cmd_test_cal(message: Message, tenant: TenantConfig) -> None:
+    if not tenant.is_owner(message.from_user.id):
+        return
+
+    import json as _j
+    from aria.config import settings
+    from aria.services.booking import GoogleAdapter, _adapters, get_adapter
+
+    lines: list[str] = ["<b>🔍 Диагностика Google Calendar</b>\n"]
+
+    # 1. Calendar ID in DB
+    cal_id = tenant.google_cal_id
+    lines.append(f"google_cal_id: <code>{cal_id or '❌ НЕ ЗАДАН'}</code>")
+
+    # 2. Credentials
+    creds_json = tenant.google_cal_credentials or settings.GOOGLE_CALENDAR_CREDENTIALS
+    if creds_json:
+        try:
+            svc_email = _j.loads(creds_json).get("client_email", "?")
+            lines.append(f"Сервисный аккаунт: <code>{svc_email}</code>")
+        except Exception as exc:
+            lines.append(f"❌ Credentials невалидны: {exc}")
+            creds_json = None
+    else:
+        lines.append("❌ GOOGLE_CALENDAR_CREDENTIALS не задан в Railway Variables!")
+
+    if not cal_id:
+        lines.append("\n💡 Используй /set_cal и введи свой Gmail-адрес")
+        await message.answer("\n".join(lines))
+        return
+
+    if not creds_json:
+        await message.answer("\n".join(lines))
+        return
+
+    # 3. Which adapter is actually cached?
+    cached = _adapters.get(tenant.id)
+    if cached is None:
+        lines.append("\nАдаптер: ещё не создан (будет при первом запросе)")
+        get_adapter(tenant)
+        cached = _adapters.get(tenant.id)
+
+    adapter_name = "✅ GoogleAdapter" if isinstance(cached, GoogleAdapter) else "⚠️ LocalAdapter (GCal не используется)"
+    lines.append(f"Адаптер: {adapter_name}")
+
+    # 4. Live API test
+    if isinstance(cached, GoogleAdapter):
+        lines.append("\nПроверяю подключение к GCal API...")
+        await message.answer("\n".join(lines))
+        lines = []
+        try:
+            from datetime import datetime, timezone as _tz
+            now = datetime.now(_tz.utc)
+            items = await __import__("asyncio").to_thread(
+                cached._list_events_sync,
+                now.isoformat(),
+                now.isoformat(),
+            )
+            lines.append(f"✅ GCal API работает! Найдено событий сегодня: {len(items)}")
+        except Exception as exc:
+            err = str(exc)
+            if "404" in err or "Not Found" in err:
+                lines.append(
+                    "❌ Ошибка 404 — календарь не найден.\n\n"
+                    "Что делать:\n"
+                    "1. Открой calendar.google.com\n"
+                    "2. Настройки → нужный календарь → «Доступ другим людям»\n"
+                    f"3. Добавь <code>{svc_email}</code> с правом «Вносить изменения»\n"
+                    "4. Скопируй «Идентификатор календаря» и отправь боту /set_cal"
+                )
+            elif "403" in err or "disabled" in err:
+                lines.append(
+                    "❌ Ошибка 403 — нет доступа или API отключён.\n\n"
+                    "Проверь: console.cloud.google.com → APIs → Google Calendar API → Enable"
+                )
+            else:
+                lines.append(f"❌ Ошибка API:\n<code>{err[:300]}</code>")
+    else:
+        lines.append(
+            "\n⚠️ Используется локальная БД, не GCal.\n"
+            "Это значит или credentials невалидны, или cal_id неверный.\n"
+            "Попробуй /set_cal заново."
+        )
+
+    if lines:
+        await message.answer("\n".join(lines))

@@ -16,9 +16,10 @@ _DEFAULT = [
 ]
 
 _OWNER_EXTRA = [
-    BotCommand(command="status",  description="Статус бота и Google Calendar"),
-    BotCommand(command="set_cal", description="Изменить Google Calendar ID"),
-    BotCommand(command="set_tz",  description="Изменить часовой пояс"),
+    BotCommand(command="status",   description="Статус бота и Google Calendar"),
+    BotCommand(command="test_cal", description="Проверить подключение к GCal"),
+    BotCommand(command="set_cal",  description="Изменить Google Calendar ID"),
+    BotCommand(command="set_tz",   description="Изменить часовой пояс"),
 ]
 
 _OWNER = _DEFAULT + _OWNER_EXTRA
