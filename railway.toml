@@ -1,8 +1,7 @@
 [build]
-builder = "nixpacks"
-buildCommand = "pip install -r aria/requirements.txt"
+builder = "dockerfile"
+dockerfilePath = "aria/Dockerfile"
 
 [deploy]
-startCommand = "python -m aria.main"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
