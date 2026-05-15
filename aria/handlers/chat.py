@@ -28,7 +28,7 @@ async def handle_message(message: Message, bot: Bot, tenant: TenantConfig, state
         current_state = None
 
     if current_state is not None:
-        log.debug("Skipping AI handler — active FSM state: %s", current_state)
+        log.info("FSM state active (%s) but no handler matched — message: %r", current_state, message.text[:40] if message.text else "")
         return
 
     await bot.send_chat_action(chat_id=message.chat.id, action="typing")

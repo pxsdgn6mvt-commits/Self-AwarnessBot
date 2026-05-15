@@ -359,6 +359,7 @@ async def step_filter_value(message: Message, state: FSMContext, tenant: TenantC
 
 @router.message(EmailSetup.address)
 async def step_address(message: Message, state: FSMContext) -> None:
+    log.info("step_address called: %r", message.text[:40] if message.text else "")
     addr = message.text.strip()
     if "@" not in addr or "." not in addr.split("@")[-1]:
         await message.answer("Не похоже на email-адрес. Попробуй ещё раз:")

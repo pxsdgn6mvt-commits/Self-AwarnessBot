@@ -261,6 +261,7 @@ async def cb_qb_cancel(callback: CallbackQuery, state: FSMContext) -> None:
 # Step 1 — service chosen
 @router.callback_query(QuickBook.service, F.data.startswith("qb_svc:"))
 async def cb_service(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
+    log.info("cb_service called: %r state was: %s", callback.data, await state.get_state())
     service = callback.data[len("qb_svc:"):]
     await state.update_data(service=service)
     await state.set_state(QuickBook.date)
