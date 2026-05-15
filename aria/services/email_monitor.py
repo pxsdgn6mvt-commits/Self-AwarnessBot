@@ -9,9 +9,9 @@ import logging
 from email.header import decode_header as _decode_hdr
 from typing import Any
 
-import aria.db.repo as repo
-
 log = logging.getLogger(__name__)
+
+import aria.db.repo as repo
 
 
 # ── Header / body helpers ─────────────────────────────────────────────────────
@@ -46,6 +46,18 @@ def _get_body(msg: email.message.Message) -> str:
 
 # ── IMAP sync helpers (run in thread) ─────────────────────────────────────────
 
+def _imap_connect(host: str, port: int, user: str, password: str) -> imaplib.IMAP4_SSL:
+    """Open IMAP SSL connection with UTF-8-safe authentication."""
+    imap = imaplib.IMAP4_SSL(host, port)
+    try:
+        imap.login(user, password)
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        # imaplib.login() only supports ASCII; fall back to AUTHENTICATE PLAIN
+        auth_data = b"\0" + user.encode("utf-8") + b"\0" + password.encode("utf-8")
+        imap.authenticate("PLAIN", lambda _: auth_data)
+    return imap
+
+
 def _get_highest_uid(imap: imaplib.IMAP4_SSL, folder: str) -> str | None:
     imap.select(folder, readonly=True)
     status, data = imap.uid("SEARCH", None, "ALL")
@@ -57,9 +69,8 @@ def _fetch_since_uid(
     host: str, port: int, user: str, password: str, folder: str, last_uid: str
 ) -> list[tuple[str, str, str, str]]:
     """Return list of (uid, sender, subject, body) for emails with UID > last_uid."""
-    imap = imaplib.IMAP4_SSL(host, port)
+    imap = _imap_connect(host, port, user, password)
     try:
-        imap.login(user, password)
         imap.select(folder, readonly=True)
         next_uid = int(last_uid) + 1
         status, data = imap.uid("SEARCH", None, f"UID {next_uid}:*")
@@ -90,9 +101,8 @@ def _init_uid(
     host: str, port: int, user: str, password: str, folder: str
 ) -> str | None:
     """Login and return the current highest UID without fetching messages."""
-    imap = imaplib.IMAP4_SSL(host, port)
+    imap = _imap_connect(host, port, user, password)
     try:
-        imap.login(user, password)
         return _get_highest_uid(imap, folder)
     finally:
         try:
