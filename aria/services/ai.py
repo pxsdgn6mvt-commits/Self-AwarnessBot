@@ -32,7 +32,9 @@ def _get_client(api_key: str) -> anthropic.AsyncAnthropic:
 # ── System prompt ─────────────────────────────────────────────────────────────
 
 def _build_system_prompt(tenant: "TenantConfig") -> str:
-    if tenant.google_cal_credentials and tenant.google_cal_id:
+    from aria.config import settings
+    has_creds = bool(tenant.google_cal_credentials or settings.GOOGLE_CALENDAR_CREDENTIALS)
+    if has_creds and tenant.google_cal_id:
         calendar_line = f"Calendar: Google Calendar (ID: {tenant.google_cal_id}) — synced"
     else:
         calendar_line = "Calendar: local storage only (Google Calendar NOT connected)"

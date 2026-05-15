@@ -270,14 +270,16 @@ async def cmd_test_cal(message: Message, tenant: TenantConfig) -> None:
         await message.answer("\n".join(lines))
         lines = []
         try:
-            from datetime import datetime, timezone as _tz
-            now = datetime.now(_tz.utc)
-            items = await __import__("asyncio").to_thread(
+            import asyncio as _aio
+            from datetime import datetime, timezone as _tz, timedelta as _td
+            day_start = datetime.now(_tz.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+            day_end   = day_start + _td(days=30)
+            items = await _aio.to_thread(
                 cached._list_events_sync,
-                now.isoformat(),
-                now.isoformat(),
+                day_start.isoformat(),
+                day_end.isoformat(),
             )
-            lines.append(f"✅ GCal API работает! Найдено событий сегодня: {len(items)}")
+            lines.append(f"✅ GCal API работает! Ближайших событий: {len(items)}")
         except Exception as exc:
             err = str(exc)
             if "404" in err or "Not Found" in err:

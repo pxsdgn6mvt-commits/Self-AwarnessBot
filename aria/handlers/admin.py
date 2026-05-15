@@ -85,9 +85,45 @@ async def cmd_list_bots(message: Message, tenant: TenantConfig) -> None:
     lines = []
     for t in tenants:
         status = "✅" if t["setup_complete"] else "⏳ ожидает настройки"
-        lines.append(f"#{t['id']} <b>{t['salon_name']}</b> — {status}")
+        cal = "📅" if t["google_cal_id"] else "💾"
+        tz = t.get("timezone") or "UTC"
+        owner = t["owner_tg_id"] or "—"
+        lines.append(
+            f"#{t['id']} <b>{t['salon_name']}</b> {cal}\n"
+            f"  {status} | tz: {tz} | owner: {owner}"
+        )
 
-    await message.answer("Активные боты:\n\n" + "\n".join(lines))
+    await message.answer("Активные боты:\n\n" + "\n\n".join(lines))
+
+
+# ── /reset_bot ────────────────────────────────────────────────────────────────
+
+@router.message(Command("reset_bot"))
+async def cmd_reset_bot(message: Message, tenant: TenantConfig) -> None:
+    if not _is_admin(message.from_user.id):
+        return
+
+    parts = message.text.split()
+    if len(parts) != 2 or not parts[1].isdigit():
+        await message.answer("Использование: /reset_bot <id>\nСбрасывает setup — владелец пройдёт настройку заново.")
+        return
+
+    tid = int(parts[1])
+    t = await repo.get_tenant(tid)
+    if not t:
+        await message.answer(f"Бот #{tid} не найден.")
+        return
+
+    await repo.update_tenant(tid, setup_complete=False, owner_tg_id=None)
+    from aria.middleware import TenantMiddleware
+    from aria.services.booking import invalidate_adapter
+    TenantMiddleware.invalidate(t["bot_token"])
+    invalidate_adapter(tid)
+    await message.answer(
+        f"✅ Бот #{tid} ({t['salon_name']}) сброшен.\n"
+        "Владелец снова пройдёт настройку при /start."
+    )
+    log.info("Admin reset setup for tenant #%d", tid)
 
 
 # ── /del_bot ──────────────────────────────────────────────────────────────────
