@@ -149,9 +149,13 @@ async def cmd_del_bot(message: Message, tenant: TenantConfig) -> None:
     log.info("Admin deactivated tenant #%d", tid)
 
 
-# ── /cancel (admin state reset) ───────────────────────────────────────────────
+# ── /cancel (clears any FSM state for any user) ───────────────────────────────
 
 @router.message(Command("cancel"))
 async def cmd_cancel(message: Message, state: FSMContext) -> None:
+    current = await state.get_state()
     await state.clear()
-    await message.answer("Отменено.")
+    if current:
+        await message.answer("Отменено.")
+    else:
+        await message.answer("Нечего отменять.")

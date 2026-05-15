@@ -200,7 +200,8 @@ async def cb_setup(callback: CallbackQuery, state: FSMContext, tenant: TenantCon
     await state.set_state(EmailSetup.address)
     await callback.message.answer(
         "Введи адрес почты, которую хочешь подключить:\n"
-        "(например <code>mysalon@gmail.com</code>)"
+        "(например <code>mysalon@gmail.com</code>)\n\n"
+        "Отменить: /cancel"
     )
 
 

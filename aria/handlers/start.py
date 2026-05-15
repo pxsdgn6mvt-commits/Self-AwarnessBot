@@ -75,7 +75,12 @@ async def cmd_reset(message: Message, tenant: TenantConfig) -> None:
 
 @router.message(Command("help"))
 async def cmd_help(message: Message, tenant: TenantConfig) -> None:
-    owner_hint = "\n/status — статус бота и Google Calendar\n/set_cal — изменить ID календаря\n/set_tz — изменить часовой пояс" if tenant.is_owner(message.from_user.id) else ""
+    owner_hint = (
+        "\n/status — статус бота, GCal и почты"
+        "\n/connect_email — email-уведомления"
+        "\n/set_cal — изменить ID календаря"
+        "\n/set_tz — изменить часовой пояс"
+    ) if tenant.is_owner(message.from_user.id) else ""
     await message.answer(
         "Просто пиши мне:\n\n"
         "• «что у меня сегодня?» — расписание на сегодня\n"
@@ -96,7 +101,11 @@ async def cmd_status(message: Message, tenant: TenantConfig) -> None:
     if not tenant.is_owner(message.from_user.id):
         return
 
+    import html as _html
     from aria.config import settings
+    import aria.db.repo as repo
+
+    # ── Google Calendar ───────────────────────────────────────────────────
     creds = settings.GOOGLE_CALENDAR_CREDENTIALS
     svc_email = None
     if creds:
@@ -105,26 +114,48 @@ async def cmd_status(message: Message, tenant: TenantConfig) -> None:
         except Exception:
             pass
 
-    cal_id = tenant.google_cal_id or "—"
     tz_val = tenant.timezone or "UTC"
 
     if creds and tenant.google_cal_id:
         gcal_status = f"✅ Подключён\nID: <code>{tenant.google_cal_id}</code>"
     elif tenant.google_cal_id:
-        gcal_status = "⚠️ ID задан, но нет credentials сервисного аккаунта"
+        gcal_status = "⚠️ ID задан, нет credentials"
     else:
-        gcal_status = "❌ Не подключён (записи только в боте)"
+        gcal_status = "❌ Не подключён"
 
-    svc_line = f"\nEmail сервисного аккаунта:\n<code>{svc_email}</code>" if svc_email else ""
+    svc_line = f"\n<code>{svc_email}</code>" if svc_email else ""
+
+    # ── Email ─────────────────────────────────────────────────────────────
+    row = await repo.get_tenant(tenant.id)
+    email_user   = (row.get("email_user")        or "") if row else ""
+    email_host   = (row.get("email_host")        or "") if row else ""
+    filter_type  = (row.get("email_filter_type") or "all") if row else "all"
+    filter_value = (row.get("email_filter_value") or "") if row else ""
+
+    if email_user and email_host:
+        filter_desc = {
+            "all":      "все письма",
+            "keywords": f"по словам: {filter_value}",
+            "senders":  f"от: {filter_value}",
+        }.get(filter_type, filter_type)
+        email_status = (
+            f"✅ Подключена\n"
+            f"<code>{_html.escape(email_user)}</code>\n"
+            f"Фильтр: {_html.escape(filter_desc)}"
+        )
+    else:
+        email_status = "❌ Не подключена  /connect_email"
 
     await message.answer(
         f"<b>Статус бота</b>\n\n"
-        f"Салон: {tenant.salon_name}\n"
+        f"Салон: <b>{_html.escape(tenant.salon_name)}</b>\n"
         f"Часовой пояс: <code>{tz_val}</code>\n\n"
-        f"Google Calendar: {gcal_status}{svc_line}\n\n"
+        f"📅 <b>Google Calendar:</b>\n{gcal_status}{svc_line}\n\n"
+        f"📧 <b>Email-уведомления:</b>\n{email_status}\n\n"
         "Команды:\n"
         "/set_cal — изменить ID календаря\n"
-        "/set_tz — изменить часовой пояс"
+        "/set_tz — изменить часовой пояс\n"
+        "/connect_email — настроить email"
     )
 
 
