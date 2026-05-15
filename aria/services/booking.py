@@ -196,6 +196,14 @@ class GoogleAdapter(BookingAdapter):
         from zoneinfo import ZoneInfo
         tz = ZoneInfo(self._t.timezone or "UTC")
         items = await asyncio.to_thread(self._list_events_sync, date_from.isoformat(), date_to.isoformat())
+
+        # Cross-reference with local DB: GCal event_id → integer DB booking_id
+        db_rows = await repo.get_bookings_in_range(self._t.id, date_from, date_to)
+        cal_to_db: dict[str, int] = {
+            r["calendar_event_id"]: r["id"]
+            for r in db_rows if r.get("calendar_event_id")
+        }
+
         events: list[dict] = []
         for item in items:
             raw = item.get("start", {}).get("dateTime") or item.get("start", {}).get("date", "")
@@ -203,10 +211,12 @@ class GoogleAdapter(BookingAdapter):
             if dt is None:
                 continue
             local_dt = dt.astimezone(tz)
+            gcal_id = item.get("id", "")
             summary = item.get("summary", "")
             service, client = (summary.split(" — ", 1) if " — " in summary else ("", summary))
             events.append({
-                "id": item.get("id"),
+                # Prefer integer DB id for cancel buttons; keep gcal string as fallback
+                "id": cal_to_db.get(gcal_id, gcal_id),
                 "title": summary,
                 "client": client.strip(),
                 "service": service.strip(),

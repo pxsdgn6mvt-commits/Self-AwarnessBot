@@ -113,14 +113,15 @@ def _schedule_text_and_kb(
     lines = [f"📅 {date_label}\n"]
     cancel_btns: list[InlineKeyboardButton] = []
     for e in events:
-        bid = e.get("id", "?")
+        bid = e.get("id")
         lines.append(f"• {e['time']} — {e['client']}, {e['service']}")
-        cancel_btns.append(
-            InlineKeyboardButton(
-                text=f"❌ {e['client']} {e['time']}",
-                callback_data=f"del_booking:{bid}",
+        if isinstance(bid, int):
+            cancel_btns.append(
+                InlineKeyboardButton(
+                    text=f"❌ {e['client']} {e['time']}",
+                    callback_data=f"del_booking:{bid}",
+                )
             )
-        )
 
     rows: list[list[InlineKeyboardButton]] = [cancel_btns[i:i+2] for i in range(0, len(cancel_btns), 2)]
     rows.append([InlineKeyboardButton(text="➕ Добавить запись", callback_data="qb_start")])
@@ -174,13 +175,15 @@ async def quick_upcoming(message: Message, tenant: TenantConfig) -> None:
     lines = ["📋 <b>Ближайшие записи</b>\n"]
     cancel_btns: list[InlineKeyboardButton] = []
     for e in events[:15]:
+        bid = e.get("id")
         lines.append(f"• {e['date']} {e['time']} — {e['client']}, {e['service']}")
-        cancel_btns.append(
-            InlineKeyboardButton(
-                text=f"❌ {e['client']} {e['date']}",
-                callback_data=f"del_booking:{e['id']}",
+        if isinstance(bid, int):
+            cancel_btns.append(
+                InlineKeyboardButton(
+                    text=f"❌ {e['client']} {e['date']}",
+                    callback_data=f"del_booking:{bid}",
+                )
             )
-        )
 
     rows = [cancel_btns[i:i+2] for i in range(0, len(cancel_btns), 2)]
     rows.append([InlineKeyboardButton(text="➕ Добавить запись", callback_data="qb_start")])
@@ -196,7 +199,11 @@ async def cb_cancel_booking(callback: CallbackQuery, tenant: TenantConfig) -> No
         await callback.answer("Нет доступа.", show_alert=True)
         return
 
-    booking_id = int(callback.data.split(":")[1])
+    try:
+        booking_id = int(callback.data.split(":")[1])
+    except ValueError:
+        await callback.answer("Запись не найдена в системе.", show_alert=True)
+        return
     booking = await repo.get_booking(booking_id)
     if not booking or booking["status"] == "cancelled":
         await callback.answer("Запись уже отменена или не найдена.", show_alert=True)
