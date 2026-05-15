@@ -191,7 +191,11 @@ async def setup_google_cal(message: Message, state: FSMContext, tenant: TenantCo
     data = await state.get_data()
     text = message.text.strip()
 
-    google_cal_id = None if text.lower() in ("пропустить", "skip", "-", "нет", "no") else text
+    if text.lower() in ("пропустить", "skip", "-", "нет", "no"):
+        google_cal_id = None
+    else:
+        from aria.handlers.start import _extract_cal_id
+        google_cal_id = _extract_cal_id(text)
 
     await repo.update_tenant(
         tenant.id,

@@ -157,10 +157,28 @@ async def cmd_set_cal(message: Message, state: FSMContext, tenant: TenantConfig)
     )
 
 
+def _extract_cal_id(text: str) -> str:
+    """Extract calendar ID from a raw ID string or a Google Calendar iCal/HTML URL."""
+    import re
+    from urllib.parse import unquote
+    # iCal URL: .../calendar/ical/ENCODED_ID/...
+    m = re.search(r"/calendar/(?:ical|r)/([^/\s]+)/", text)
+    if m:
+        return unquote(m.group(1))
+    # HTML URL: calendar.google.com/calendar/u/0?cid=ENCODED_ID
+    m = re.search(r"[?&]cid=([^&\s]+)", text)
+    if m:
+        return unquote(m.group(1))
+    return text.strip()
+
+
 @router.message(OwnerSettings.waiting_cal_id)
 async def process_set_cal(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
     text = message.text.strip()
-    cal_id = None if text.lower() in ("убрать", "удалить", "нет", "no", "-") else text
+    if text.lower() in ("убрать", "удалить", "нет", "no", "-"):
+        cal_id = None
+    else:
+        cal_id = _extract_cal_id(text)
 
     await repo.update_tenant(tenant.id, google_cal_id=cal_id)
     invalidate_adapter(tenant.id)
@@ -171,7 +189,7 @@ async def process_set_cal(message: Message, state: FSMContext, tenant: TenantCon
         await message.answer(
             f"✅ Google Calendar обновлён: <code>{cal_id}</code>\n\n"
             "Попробуй добавить запись — если бот скажет «поделись календарём», "
-            "значит сервисный аккаунт ещё не имеет доступа."
+            "значит нужно ещё добавить доступ сервисному аккаунту."
         )
     else:
         await message.answer("✅ Google Calendar отключён. Записи хранятся только в боте.")
