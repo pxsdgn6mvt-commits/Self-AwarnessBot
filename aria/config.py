@@ -51,6 +51,10 @@ class Settings:
     # ── Upsell pairs  "service1:upsell1,service2:upsell2" ─────
     UPSELL_PAIRS: str
 
+    # ── Procedure limit & branding ────────────────────────────
+    MAX_SERVICES: int        # max shown in inline keyboard (env: SALON_MAX_SERVICES)
+    SALON_AVATAR_URL: str    # Telegram file_id or HTTPS URL (env: SALON_AVATAR_URL)
+
     def __init__(self) -> None:
         self.BOT_TOKEN = _require("ARIA_BOT_TOKEN")
         self.OWNER_TELEGRAM_ID = _int("ARIA_OWNER_TELEGRAM_ID", 0)
@@ -80,6 +84,14 @@ class Settings:
             "SALON_UPSELL_PAIRS",
             "haircut:coloring,manicure:pedicure,facial:massage"
         )
+
+        # Max procedures shown in the selection keyboard.
+        # Telegram allows up to 100 inline buttons, but UX degrades past this.
+        self.MAX_SERVICES: int = _int("SALON_MAX_SERVICES", 20)
+
+        # Optional avatar shown at /start and after booking confirmation.
+        # Accepts a Telegram file_id (fastest) or an HTTPS image URL.
+        self.SALON_AVATAR_URL: str = _str("SALON_AVATAR_URL", "")
 
     @property
     def working_days(self) -> list[int]:

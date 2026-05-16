@@ -328,13 +328,15 @@ def _get_client() -> anthropic.AsyncAnthropic:
     return _client
 
 
-async def chat(user_id: int, user_text: str, bot: Any) -> str:
+async def chat(user_id: int, user_text: str, bot: Any) -> tuple[str, bool]:
     """
-    Main entry point: send user_text through the agentic loop and return
-    Aria's final reply as a string.
+    Main entry point: run the agentic loop and return
+    (reply_text, booking_just_confirmed).
+    booking_just_confirmed is True when create_booking succeeded this turn.
     """
     client = _get_client()
     ctx = ToolContext(user_id=user_id, bot=bot, owner_id=settings.OWNER_TELEGRAM_ID)
+    had_booking_before = ctx.last_booking_id  # always None at start
 
     # Load history
     history = await repo.load_history(user_id)
@@ -408,5 +410,8 @@ async def chat(user_id: int, user_text: str, bot: Any) -> str:
         # Fallback if loop exhausted without a text reply
         text_reply = "Let me check on that and get back to you shortly."
 
+    booking_just_confirmed = (
+        ctx.last_booking_id is not None and had_booking_before is None
+    )
     await repo.save_history(user_id, history)
-    return text_reply
+    return text_reply, booking_just_confirmed

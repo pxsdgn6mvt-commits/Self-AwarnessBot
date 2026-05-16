@@ -10,6 +10,7 @@ from aiogram.types import (
     Message,
     ReplyKeyboardMarkup,
     KeyboardButton,
+    URLInputFile,
 )
 
 import aria.db.repo as repo
@@ -35,15 +36,35 @@ _WELCOME = (
 )
 
 
+async def _send_avatar(message: Message, caption: str) -> bool:
+    """
+    Send the salon avatar photo if SALON_AVATAR_URL is configured.
+    Returns True if photo was sent, False if no avatar is set.
+    """
+    url = settings.SALON_AVATAR_URL.strip()
+    if not url:
+        return False
+    try:
+        photo = URLInputFile(url) if url.startswith("http") else url
+        await message.answer_photo(photo=photo, caption=caption)
+        return True
+    except Exception:
+        log.warning("Could not send avatar photo from %s", url)
+        return False
+
+
 @router.message(CommandStart())
 async def cmd_start(message: Message) -> None:
     user_id = message.from_user.id
     await repo.upsert_client(user_id)
     await repo.clear_history(user_id)
-    await message.answer(
-        _WELCOME.format(salon=settings.SALON_NAME),
-        reply_markup=MAIN_KB,
-    )
+
+    welcome_text = _WELCOME.format(salon=settings.SALON_NAME)
+    sent_as_photo = await _send_avatar(message, caption=welcome_text)
+    if not sent_as_photo:
+        await message.answer(welcome_text, reply_markup=MAIN_KB)
+    else:
+        await message.answer("Чем могу помочь?", reply_markup=MAIN_KB)
 
 
 @router.message(Command("reset"))
