@@ -1,8 +1,9 @@
-"""Google Calendar integration — direct REST, no heavy SDK."""
+"""Google Calendar via Service Account — no OAuth browser flow, no redirect URIs."""
 
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import time
@@ -12,38 +13,20 @@ from typing import Optional
 
 import requests as _requests
 
-import aria.db.repo as repo
-
 log = logging.getLogger(__name__)
 
 _SCOPE = "https://www.googleapis.com/auth/calendar"
-
-
-def _client_id() -> str:
-    return os.getenv("GOOGLE_CLIENT_ID", "")
-
-
-def _client_secret() -> str:
-    return os.getenv("GOOGLE_CLIENT_SECRET", "")
-
-
-def _callback_uri() -> str:
-    base = os.getenv("ARIA_PUBLIC_URL", "").rstrip("/")
-    return f"{base}/gcal/callback"
+_token_cache: dict = {"token": None, "expires_at": 0.0}
 
 
 def is_configured() -> bool:
-    """True when the developer has set the required env vars."""
-    return bool(_client_id() and _client_secret() and os.getenv("ARIA_PUBLIC_URL"))
+    return bool(os.getenv("GOOGLE_CALENDAR_CREDENTIALS"))
 
 
 def add_to_calendar_url(
-    title: str,
-    start: datetime,
-    duration_minutes: int,
-    details: str = "",
+    title: str, start: datetime, duration_minutes: int, details: str = ""
 ) -> str:
-    """Fallback: pre-filled Google Calendar link, no auth required."""
+    """Fallback pre-filled URL when service account not configured."""
     end = start + timedelta(minutes=duration_minutes)
     fmt = "%Y%m%dT%H%M%S"
     params: dict = {
@@ -56,71 +39,80 @@ def add_to_calendar_url(
     return "https://calendar.google.com/calendar/render?" + urllib.parse.urlencode(params)
 
 
-def get_auth_url(tenant_id: int) -> str:
-    params = {
-        "client_id": _client_id(),
-        "redirect_uri": _callback_uri(),
-        "response_type": "code",
-        "scope": _SCOPE,
-        "access_type": "offline",
-        "prompt": "consent",
-        "state": str(tenant_id),
-    }
-    return "https://accounts.google.com/o/oauth2/auth?" + urllib.parse.urlencode(params)
+def _get_access_token() -> Optional[str]:
+    now = time.time()
+    if _token_cache["token"] and _token_cache["expires_at"] > now + 60:
+        return _token_cache["token"]
+
+    creds_json = os.getenv("GOOGLE_CALENDAR_CREDENTIALS", "")
+    if not creds_json:
+        return None
+    try:
+        from google.oauth2 import service_account
+        import google.auth.transport.requests as ga_req
+        creds = service_account.Credentials.from_service_account_info(
+            json.loads(creds_json), scopes=[_SCOPE]
+        )
+        creds.refresh(ga_req.Request())
+        _token_cache["token"] = creds.token
+        _token_cache["expires_at"] = now + 3500
+        return creds.token
+    except Exception as exc:
+        log.error("GCal service account auth failed: %s", exc)
+        return None
 
 
-def _refresh_sync(refresh_token: str) -> Optional[dict]:
+def _setup_calendar_sync(owner_email: str, salon_name: str) -> Optional[str]:
+    token = _get_access_token()
+    if not token:
+        return None
+
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
     resp = _requests.post(
-        "https://oauth2.googleapis.com/token",
-        data={
-            "client_id": _client_id(),
-            "client_secret": _client_secret(),
-            "refresh_token": refresh_token,
-            "grant_type": "refresh_token",
-        },
-        timeout=10,
+        "https://www.googleapis.com/calendar/v3/calendars",
+        headers=headers,
+        json={"summary": f"Aria — {salon_name}"},
+        timeout=15,
     )
-    if resp.ok:
-        return resp.json()
-    log.error("GCal token refresh failed: %s %s", resp.status_code, resp.text)
-    return None
-
-
-async def _valid_token(tenant_id: int) -> Optional[str]:
-    row = await repo.get_gcal_tokens(tenant_id)
-    if not row or not row["gcal_refresh_token"]:
+    if not resp.ok:
+        log.error("Failed to create GCal calendar: %s %s", resp.status_code, resp.text)
         return None
 
-    expiry = row["gcal_token_expiry"]
-    if expiry and expiry.timestamp() > time.time() + 60:
-        return row["gcal_access_token"]
+    calendar_id = resp.json()["id"]
 
-    result = await asyncio.get_event_loop().run_in_executor(
-        None, _refresh_sync, row["gcal_refresh_token"]
+    _requests.post(
+        f"https://www.googleapis.com/calendar/v3/calendars"
+        f"/{urllib.parse.quote(calendar_id, safe='')}/acl",
+        headers=headers,
+        json={"role": "writer", "scope": {"type": "user", "value": owner_email}},
+        timeout=15,
     )
-    if not result:
-        return None
+    return calendar_id
 
-    access_token = result["access_token"]
-    expires_in = result.get("expires_in", 3600)
-    expiry_dt = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
-    await repo.update_gcal_access_token(tenant_id, access_token, expiry_dt)
-    return access_token
+
+async def setup_calendar(owner_email: str, salon_name: str) -> Optional[str]:
+    """Create a dedicated calendar and share with owner. Returns calendar_id."""
+    return await asyncio.get_event_loop().run_in_executor(
+        None, _setup_calendar_sync, owner_email, salon_name
+    )
 
 
 async def is_connected(tenant_id: int) -> bool:
+    import aria.db.repo as repo
     row = await repo.get_gcal_tokens(tenant_id)
-    return bool(row and row["gcal_refresh_token"])
+    cal_id = row["gcal_calendar_id"] if row else None
+    return bool(cal_id and cal_id != "primary")
 
 
-def _create_sync(access_token: str, calendar_id: str, event: dict) -> Optional[dict]:
+def _create_sync(calendar_id: str, event: dict) -> Optional[dict]:
+    token = _get_access_token()
+    if not token:
+        return None
     cal = urllib.parse.quote(calendar_id, safe="")
     resp = _requests.post(
         f"https://www.googleapis.com/calendar/v3/calendars/{cal}/events",
-        headers={
-            "Authorization": f"Bearer {access_token}",
-            "Content-Type": "application/json",
-        },
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
         json=event,
         timeout=15,
     )
@@ -128,15 +120,6 @@ def _create_sync(access_token: str, calendar_id: str, event: dict) -> Optional[d
         return resp.json()
     log.error("GCal create event failed: %s %s", resp.status_code, resp.text)
     return None
-
-
-def _delete_sync(access_token: str, calendar_id: str, event_id: str) -> None:
-    cal = urllib.parse.quote(calendar_id, safe="")
-    _requests.delete(
-        f"https://www.googleapis.com/calendar/v3/calendars/{cal}/events/{event_id}",
-        headers={"Authorization": f"Bearer {access_token}"},
-        timeout=10,
-    )
 
 
 async def create_event(
@@ -147,13 +130,11 @@ async def create_event(
     duration_minutes: int = 60,
     tz: str = "Europe/Moscow",
 ) -> Optional[tuple[str, str]]:
-    """Create a GCal event. Returns (event_id, html_link) or None."""
-    token = await _valid_token(tenant_id)
-    if not token:
-        return None
-
+    import aria.db.repo as repo
     row = await repo.get_gcal_tokens(tenant_id)
     calendar_id = (row["gcal_calendar_id"] if row else None) or "primary"
+    if calendar_id == "primary":
+        return None
 
     if scheduled_at.tzinfo is None:
         try:
@@ -169,21 +150,9 @@ async def create_event(
         "start": {"dateTime": scheduled_at.isoformat(), "timeZone": tz},
         "end": {"dateTime": end_at.isoformat(), "timeZone": tz},
     }
-
     result = await asyncio.get_event_loop().run_in_executor(
-        None, _create_sync, token, calendar_id, event_body
+        None, _create_sync, calendar_id, event_body
     )
     if result:
         return result.get("id", ""), result.get("htmlLink", "")
     return None
-
-
-async def delete_event(tenant_id: int, event_id: str) -> None:
-    token = await _valid_token(tenant_id)
-    if not token:
-        return
-    row = await repo.get_gcal_tokens(tenant_id)
-    calendar_id = (row["gcal_calendar_id"] if row else None) or "primary"
-    await asyncio.get_event_loop().run_in_executor(
-        None, _delete_sync, token, calendar_id, event_id
-    )

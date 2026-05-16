@@ -6,6 +6,8 @@ import logging
 
 from aiogram import F, Router
 from aiogram.filters import CommandStart, Command
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
@@ -18,6 +20,10 @@ from aiogram.types import (
 
 import aria.db.repo as repo
 from aria.config import TenantConfig
+
+
+class GCalSG(StatesGroup):
+    waiting_email = State()
 
 log = logging.getLogger(__name__)
 router = Router()
@@ -248,24 +254,64 @@ async def menu_gcal(callback: CallbackQuery, tenant: TenantConfig) -> None:
 
 
 @router.callback_query(F.data == "gcal:connect")
-async def gcal_connect(callback: CallbackQuery, tenant: TenantConfig) -> None:
+async def gcal_connect(
+    callback: CallbackQuery, state: FSMContext, tenant: TenantConfig
+) -> None:
     from aria.handlers.admin import _is_owner
-    from aria.services.gcal import get_auth_url
     if not await _is_owner(callback.from_user.id, tenant):
         await callback.answer("Только для владельца.", show_alert=True)
         return
     await callback.answer()
-    url = get_auth_url(tenant.tenant_id)
+    await state.set_state(GCalSG.waiting_email)
     await callback.message.edit_text(
         "📅 <b>Подключение Google Calendar</b>\n\n"
-        "Нажмите кнопку ниже и войдите в свой Google аккаунт.\n"
-        "После этого все записи будут автоматически попадать в ваш календарь.",
+        "Введите ваш Gmail адрес — бот создаст отдельный календарь "
+        "<b>Aria — Ваш салон</b> и поделится им с вами.\n\n"
+        "Все записи будут появляться там автоматически.",
         parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🔗 Войти через Google", url=url)],
-            [InlineKeyboardButton(text="← Назад", callback_data="menu:gcal")],
-        ]),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="❌ Отмена", callback_data="gcal:cancel"),
+        ]]),
     )
+
+
+@router.callback_query(F.data == "gcal:cancel")
+async def gcal_cancel(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    await callback.answer()
+    await callback.message.edit_text(
+        "⚙️ <b>Меню</b>", parse_mode="HTML", reply_markup=_menu_kb()
+    )
+
+
+@router.message(GCalSG.waiting_email)
+async def got_gcal_email(
+    message: Message, state: FSMContext, tenant: TenantConfig
+) -> None:
+    from aria.services.gcal import setup_calendar
+    email = message.text.strip().lower() if message.text else ""
+    if "@" not in email or "." not in email.split("@")[-1]:
+        await message.answer("Введите корректный email адрес (например: name@gmail.com):")
+        return
+
+    await state.clear()
+    msg = await message.answer("⏳ Создаю календарь...")
+    calendar_id = await setup_calendar(email, tenant.salon_name)
+    if calendar_id:
+        await repo.save_gcal_calendar_id(tenant.tenant_id, calendar_id)
+        await msg.edit_text(
+            "✅ <b>Google Calendar подключён!</b>\n\n"
+            f"Создан календарь <b>Aria — {tenant.salon_name}</b>.\n\n"
+            f"На <code>{email}</code> придёт приглашение от Google — "
+            "примите его, и календарь появится в вашем Google Calendar.\n\n"
+            "Все новые записи будут добавляться туда автоматически.",
+            parse_mode="HTML",
+        )
+    else:
+        await msg.edit_text(
+            "❌ Не удалось создать календарь. Проверьте адрес и попробуйте снова.\n\n"
+            "📱 Меню → Google Calendar → Подключить"
+        )
 
 
 @router.callback_query(F.data == "gcal:disconnect")

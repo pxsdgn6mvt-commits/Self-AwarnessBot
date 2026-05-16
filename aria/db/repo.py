@@ -402,6 +402,14 @@ async def update_gcal_access_token(
         )
 
 
+async def save_gcal_calendar_id(tenant_id: int, calendar_id: str) -> None:
+    async with _p().acquire() as conn:
+        await conn.execute(
+            "UPDATE aria_tenant_settings SET gcal_calendar_id=$2 WHERE tenant_id=$1",
+            tenant_id, calendar_id,
+        )
+
+
 async def clear_gcal_tokens(tenant_id: int) -> None:
     async with _p().acquire() as conn:
         await conn.execute(
