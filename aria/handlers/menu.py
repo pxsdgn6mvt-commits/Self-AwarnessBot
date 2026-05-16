@@ -344,7 +344,7 @@ async def cb_cfg_test_cal(callback: CallbackQuery, tenant: TenantConfig) -> None
     except Exception:
         pass
     from aria.handlers.start import cmd_test_cal
-    await cmd_test_cal(callback.message, tenant)
+    await cmd_test_cal(callback.message, tenant, caller_id=callback.from_user.id)
 
 
 @router.callback_query(F.data == "cfg:reset_chat", SetupDone())
@@ -364,7 +364,7 @@ async def cb_cfg_status(callback: CallbackQuery, tenant: TenantConfig) -> None:
     except Exception:
         pass
     from aria.handlers.start import cmd_status
-    await cmd_status(callback.message, tenant)
+    await cmd_status(callback.message, tenant, caller_id=callback.from_user.id)
 
 
 # ── Admin callbacks ───────────────────────────────────────────────────────────

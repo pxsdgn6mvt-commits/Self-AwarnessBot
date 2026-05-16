@@ -282,8 +282,10 @@ async def _exec_tool(
         if not booking:
             return json.dumps({"error": "booking not found"})
         await repo.update_booking_status(args["booking_id"], "cancelled")
-        await adapter.delete_event(args["booking_id"], booking.get("calendar_event_id"))
-        # Remove scheduled reminder/noshow jobs
+        try:
+            await adapter.delete_event(args["booking_id"], booking.get("calendar_event_id"))
+        except Exception as exc:
+            log.warning("GCal delete skipped for booking %d: %s", args["booking_id"], exc)
         from aria.services.scheduler import cancel_booking_jobs
         cancel_booking_jobs(args["booking_id"])
         return json.dumps({"cancelled": True, "booking_id": args["booking_id"]})

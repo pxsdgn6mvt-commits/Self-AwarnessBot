@@ -110,8 +110,8 @@ async def cmd_help(message: Message, tenant: TenantConfig) -> None:
 # ── Owner-only commands ───────────────────────────────────────────────────────
 
 @router.message(Command("status"), SetupDone())
-async def cmd_status(message: Message, tenant: TenantConfig) -> None:
-    if not tenant.is_owner(message.from_user.id):
+async def cmd_status(message: Message, tenant: TenantConfig, caller_id: int | None = None) -> None:
+    if not tenant.is_owner(caller_id if caller_id is not None else message.from_user.id):
         return
 
     import html as _html
@@ -283,8 +283,8 @@ async def _apply_tz(message: Message, state: FSMContext, tenant: TenantConfig, t
 
 
 @router.message(Command("test_cal"), SetupDone())
-async def cmd_test_cal(message: Message, tenant: TenantConfig) -> None:
-    if not tenant.is_owner(message.from_user.id):
+async def cmd_test_cal(message: Message, tenant: TenantConfig, caller_id: int | None = None) -> None:
+    if not tenant.is_owner(caller_id if caller_id is not None else message.from_user.id):
         return
 
     import json as _j
