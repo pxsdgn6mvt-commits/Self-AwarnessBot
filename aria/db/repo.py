@@ -34,6 +34,19 @@ async def init_db(dsn: str) -> None:
     pool = await get_pool(dsn)
     async with pool.acquire() as conn:
         await conn.execute(SCHEMA)
+        # Migration: add PRIMARY KEY to tables created by older schema versions
+        for table in ("aria_clients", "aria_conversations"):
+            try:
+                await conn.execute(
+                    f"DELETE FROM {table} a USING {table} b"
+                    f" WHERE a.ctid < b.ctid AND a.user_id = b.user_id"
+                )
+                await conn.execute(
+                    f"ALTER TABLE {table} ADD PRIMARY KEY (user_id)"
+                )
+                log.info("Migration: added PRIMARY KEY to %s", table)
+            except Exception:
+                pass  # Already has PRIMARY KEY — nothing to do
     log.info("aria DB schema ready")
 
 
@@ -51,7 +64,7 @@ async def upsert_client(user_id: int, lang: str = "en") -> None:
             """
             INSERT INTO aria_clients(user_id, lang)
             VALUES ($1, $2)
-            ON CONFLICT (user_id) DO NOTHING
+            ON CONFLICT DO NOTHING
             """,
             user_id, lang,
         )
@@ -229,16 +242,20 @@ async def load_history(user_id: int) -> list[dict]:
 
 
 async def save_history(user_id: int, history: list[dict]) -> None:
+    data = json.dumps(history, ensure_ascii=False, default=str)
     async with _p().acquire() as conn:  # type: ignore[union-attr]
-        await conn.execute(
-            """
-            INSERT INTO aria_conversations(user_id, history, updated_at)
-            VALUES ($1, $2, NOW())
-            ON CONFLICT (user_id)
-            DO UPDATE SET history=$2, updated_at=NOW()
-            """,
-            user_id, json.dumps(history, ensure_ascii=False, default=str),
+        result = await conn.execute(
+            "UPDATE aria_conversations SET history=$2, updated_at=NOW() WHERE user_id=$1",
+            user_id, data,
         )
+        if result == "UPDATE 0":
+            try:
+                await conn.execute(
+                    "INSERT INTO aria_conversations(user_id, history) VALUES ($1, $2)",
+                    user_id, data,
+                )
+            except Exception:
+                pass
 
 
 async def clear_history(user_id: int) -> None:
