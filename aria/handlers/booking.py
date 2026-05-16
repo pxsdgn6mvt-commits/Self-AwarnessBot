@@ -299,7 +299,7 @@ async def confirm_booking(
             details=f"Клиент: {client_name}\nУслуга: {service}",
         )
         kb = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="📅 Добавить в Google Calendar", url=fallback_url),
+            InlineKeyboardButton(text="📅 Открыть Google Calendar", url=fallback_url),
         ]])
         gcal_note = ""
 
