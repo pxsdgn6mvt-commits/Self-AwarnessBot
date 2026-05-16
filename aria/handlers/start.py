@@ -16,7 +16,7 @@ from aiogram.types import (
 import aria.db.repo as repo
 from aria.config import settings as _settings
 from aria.filters import SetupDone
-from aria.handlers.menu import ADMIN_KB
+from aria.handlers.menu import ADMIN_KB, _is_admin_bot
 from aria.handlers.quick import MAIN_KB
 from aria.middleware import TenantMiddleware
 from aria.services.booking import invalidate_adapter
@@ -58,7 +58,7 @@ async def cmd_start(message: Message, state: FSMContext, tenant: TenantConfig) -
                               message.from_user.language_code or "ru")
     await repo.clear_history(tenant.id, message.from_user.id)
 
-    if tenant.is_owner(message.from_user.id) and message.from_user.id == _settings.ADMIN_TELEGRAM_ID:
+    if _is_admin_bot(tenant, message.from_user.id):
         await message.answer(
             "👑 <b>Aria — панель управления</b>\n\n"
             "Управляй ботами через кнопки ниже или команды:\n"
