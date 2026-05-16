@@ -60,20 +60,6 @@ async def _items_kb(category_id: int, tenant_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-@router.message(Command("admin"))
-async def cmd_admin(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
-    if not await _is_owner(message.from_user.id, tenant):
-        return
-    await state.clear()
-    await message.answer(
-        "👩‍💼 <b>Управление услугами</b>\n\n"
-        "Нажмите на категорию для управления услугами внутри.\n"
-        "🗑 — удалить категорию со всеми услугами.",
-        parse_mode="HTML",
-        reply_markup=await _categories_kb(tenant.tenant_id),
-    )
-
-
 @router.callback_query(F.data == "adm:services")
 async def show_services(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
     if not await _is_owner(callback.from_user.id, tenant):

@@ -68,6 +68,32 @@ async def init_db(dsn: str) -> None:
                 pass  # Constraint already exists
         except Exception:
             pass
+
+        # Migration: add email columns to aria_tenant_settings if missing.
+        # Use information_schema so we add only truly absent columns.
+        existing_cols = {
+            r["column_name"]
+            for r in await conn.fetch(
+                "SELECT column_name FROM information_schema.columns"
+                " WHERE table_name = 'aria_tenant_settings'"
+            )
+        }
+        for col, defn in [
+            ("email_address",         "TEXT"),
+            ("email_password",        "TEXT"),
+            ("email_imap_server",     "TEXT NOT NULL DEFAULT 'imap.gmail.com'"),
+            ("email_imap_port",       "INTEGER NOT NULL DEFAULT 993"),
+            ("email_allowed_senders", "TEXT NOT NULL DEFAULT ''"),
+            ("email_poll_seconds",    "INTEGER NOT NULL DEFAULT 60"),
+        ]:
+            if col not in existing_cols:
+                try:
+                    await conn.execute(
+                        f"ALTER TABLE aria_tenant_settings ADD COLUMN {col} {defn}"
+                    )
+                    log.info("Migration: added column %s to aria_tenant_settings", col)
+                except Exception as exc:
+                    log.warning("Migration: could not add column %s: %s", col, exc)
     log.info("aria DB schema ready")
 
 
@@ -324,6 +350,36 @@ async def get_email_settings(tenant_id: int) -> Optional[asyncpg.Record]:
         )
 
 
+async def _ensure_email_cols(conn: asyncpg.Connection) -> None:
+    existing = {
+        r["column_name"]
+        for r in await conn.fetch(
+            "SELECT column_name FROM information_schema.columns"
+            " WHERE table_name = 'aria_tenant_settings'"
+        )
+    }
+    for col, defn in [
+        ("email_address",         "TEXT"),
+        ("email_password",        "TEXT"),
+        ("email_imap_server",     "TEXT NOT NULL DEFAULT 'imap.gmail.com'"),
+        ("email_imap_port",       "INTEGER NOT NULL DEFAULT 993"),
+        ("email_allowed_senders", "TEXT NOT NULL DEFAULT ''"),
+        ("email_poll_seconds",    "INTEGER NOT NULL DEFAULT 60"),
+    ]:
+        if col not in existing:
+            await conn.execute(f"ALTER TABLE aria_tenant_settings ADD COLUMN {col} {defn}")
+            log.info("save_email_settings: added missing column %s", col)
+
+
+_UPDATE_EMAIL_SQL = """
+    UPDATE aria_tenant_settings SET
+        email_address=$2, email_password=$3,
+        email_imap_server=$4, email_imap_port=$5,
+        email_allowed_senders=$6, email_poll_seconds=$7
+    WHERE tenant_id=$1
+"""
+
+
 async def save_email_settings(
     tenant_id: int,
     *,
@@ -334,19 +390,18 @@ async def save_email_settings(
     email_allowed_senders: str = "",
     email_poll_seconds: int = 60,
 ) -> None:
+    args = (
+        tenant_id, email_address, email_password,
+        email_imap_server, email_imap_port,
+        email_allowed_senders, email_poll_seconds,
+    )
     async with _p().acquire() as conn:
-        await conn.execute(
-            """
-            UPDATE aria_tenant_settings SET
-                email_address=$2, email_password=$3,
-                email_imap_server=$4, email_imap_port=$5,
-                email_allowed_senders=$6, email_poll_seconds=$7
-            WHERE tenant_id=$1
-            """,
-            tenant_id, email_address, email_password,
-            email_imap_server, email_imap_port,
-            email_allowed_senders, email_poll_seconds,
-        )
+        try:
+            await conn.execute(_UPDATE_EMAIL_SQL, *args)
+        except asyncpg.exceptions.UndefinedColumnError:
+            log.warning("save_email_settings: email columns missing, migrating now")
+            await _ensure_email_cols(conn)
+            await conn.execute(_UPDATE_EMAIL_SQL, *args)
 
 
 async def clear_email_settings(tenant_id: int) -> None:

@@ -158,8 +158,11 @@ async def handle_menu_button(message: Message, tenant: TenantConfig) -> None:
 
 @router.callback_query(F.data == "menu:services")
 async def menu_services(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    from aria.handlers.admin import _categories_kb, _is_owner
+    if not await _is_owner(callback.from_user.id, tenant):
+        await callback.answer("Только для владельца.", show_alert=True)
+        return
     await callback.answer()
-    from aria.handlers.admin import _categories_kb, _main_admin_kb
     await callback.message.edit_text(
         "💅 <b>Мои услуги</b>\n\n"
         "Нажмите на категорию для управления.\n"
@@ -171,9 +174,10 @@ async def menu_services(callback: CallbackQuery, tenant: TenantConfig) -> None:
 
 @router.callback_query(F.data == "menu:email")
 async def menu_email(callback: CallbackQuery, tenant: TenantConfig) -> None:
-    await callback.answer()
-    # Reuse the email menu from admin
-    from aria.handlers.admin import show_email_menu
+    from aria.handlers.admin import show_email_menu, _is_owner
+    if not await _is_owner(callback.from_user.id, tenant):
+        await callback.answer("Только для владельца.", show_alert=True)
+        return
     await show_email_menu(callback, tenant)
 
 
