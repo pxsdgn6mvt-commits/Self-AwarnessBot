@@ -34,6 +34,55 @@ async def init_db(dsn: str) -> None:
     pool = await get_pool(dsn)
     async with pool.acquire() as conn:
         await conn.execute(SCHEMA)
+        # Migration: add PRIMARY KEY to tables created by older schema versions
+        for table in ("aria_clients", "aria_conversations"):
+            try:
+                await conn.execute(
+                    f"DELETE FROM {table} a USING {table} b"
+                    f" WHERE a.ctid < b.ctid AND a.user_id = b.user_id"
+                )
+                await conn.execute(
+                    f"ALTER TABLE {table} ADD PRIMARY KEY (user_id)"
+                )
+                log.info("Migration: added PRIMARY KEY to %s", table)
+            except Exception:
+                pass  # Already has PRIMARY KEY — nothing to do
+
+        # Migration: add tenant_id to service categories if missing
+        try:
+            await conn.execute(
+                "ALTER TABLE aria_service_categories"
+                " ADD COLUMN IF NOT EXISTS tenant_id INTEGER NOT NULL DEFAULT 1"
+            )
+            await conn.execute(
+                "ALTER TABLE aria_service_categories"
+                " DROP CONSTRAINT IF EXISTS aria_service_categories_name_key"
+            )
+            try:
+                await conn.execute(
+                    "ALTER TABLE aria_service_categories"
+                    " ADD CONSTRAINT aria_service_categories_tenant_name_key"
+                    " UNIQUE (tenant_id, name)"
+                )
+            except Exception:
+                pass  # Constraint already exists
+        except Exception:
+            pass  # Column already existed
+        # Migration: add email columns to aria_tenant_settings if missing
+        for col, defn in [
+            ("email_address",       "TEXT"),
+            ("email_password",      "TEXT"),
+            ("email_imap_server",   "TEXT NOT NULL DEFAULT 'imap.gmail.com'"),
+            ("email_imap_port",     "INTEGER NOT NULL DEFAULT 993"),
+            ("email_allowed_senders", "TEXT NOT NULL DEFAULT ''"),
+            ("email_poll_seconds",  "INTEGER NOT NULL DEFAULT 60"),
+        ]:
+            try:
+                await conn.execute(
+                    f"ALTER TABLE aria_tenant_settings ADD COLUMN IF NOT EXISTS {col} {defn}"
+                )
+            except Exception:
+                pass
     log.info("aria DB schema ready")
 
 
@@ -51,7 +100,7 @@ async def upsert_client(user_id: int, lang: str = "en") -> None:
             """
             INSERT INTO aria_clients(user_id, lang)
             VALUES ($1, $2)
-            ON CONFLICT (user_id) DO NOTHING
+            ON CONFLICT DO NOTHING
             """,
             user_id, lang,
         )
@@ -229,16 +278,20 @@ async def load_history(user_id: int) -> list[dict]:
 
 
 async def save_history(user_id: int, history: list[dict]) -> None:
+    data = json.dumps(history, ensure_ascii=False, default=str)
     async with _p().acquire() as conn:  # type: ignore[union-attr]
-        await conn.execute(
-            """
-            INSERT INTO aria_conversations(user_id, history, updated_at)
-            VALUES ($1, $2, NOW())
-            ON CONFLICT (user_id)
-            DO UPDATE SET history=$2, updated_at=NOW()
-            """,
-            user_id, json.dumps(history, ensure_ascii=False, default=str),
+        result = await conn.execute(
+            "UPDATE aria_conversations SET history=$2, updated_at=NOW() WHERE user_id=$1",
+            user_id, data,
         )
+        if result == "UPDATE 0":
+            try:
+                await conn.execute(
+                    "INSERT INTO aria_conversations(user_id, history) VALUES ($1, $2)",
+                    user_id, data,
+                )
+            except Exception:
+                pass
 
 
 async def clear_history(user_id: int) -> None:
@@ -252,12 +305,84 @@ def get_pool_instance() -> Optional[asyncpg.Pool]:
     return _pool
 
 
+# ── Tenant settings ───────────────────────────────────────────────────────────
+
+async def get_tenant_owner(tenant_id: int) -> Optional[int]:
+    """Return owner Telegram ID stored in DB, or None if not set yet."""
+    async with _p().acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT owner_telegram_id FROM aria_tenant_settings WHERE tenant_id=$1",
+            tenant_id,
+        )
+        return row["owner_telegram_id"] if row else None
+
+
+async def set_tenant_owner(tenant_id: int, owner_telegram_id: int) -> None:
+    """Persist owner Telegram ID for this tenant (called once on first /start)."""
+    async with _p().acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO aria_tenant_settings(tenant_id, owner_telegram_id)
+            VALUES ($1, $2)
+            ON CONFLICT (tenant_id) DO NOTHING
+            """,
+            tenant_id, owner_telegram_id,
+        )
+
+
+async def get_email_settings(tenant_id: int) -> Optional[asyncpg.Record]:
+    """Return the full settings row or None if not configured."""
+    async with _p().acquire() as conn:
+        return await conn.fetchrow(
+            "SELECT * FROM aria_tenant_settings WHERE tenant_id=$1",
+            tenant_id,
+        )
+
+
+async def save_email_settings(
+    tenant_id: int,
+    *,
+    email_address: str,
+    email_password: str,
+    email_imap_server: str = "imap.gmail.com",
+    email_imap_port: int = 993,
+    email_allowed_senders: str = "",
+    email_poll_seconds: int = 60,
+) -> None:
+    async with _p().acquire() as conn:
+        await conn.execute(
+            """
+            UPDATE aria_tenant_settings SET
+                email_address=$2, email_password=$3,
+                email_imap_server=$4, email_imap_port=$5,
+                email_allowed_senders=$6, email_poll_seconds=$7
+            WHERE tenant_id=$1
+            """,
+            tenant_id, email_address, email_password,
+            email_imap_server, email_imap_port,
+            email_allowed_senders, email_poll_seconds,
+        )
+
+
+async def clear_email_settings(tenant_id: int) -> None:
+    async with _p().acquire() as conn:
+        await conn.execute(
+            """
+            UPDATE aria_tenant_settings SET
+                email_address=NULL, email_password=NULL
+            WHERE tenant_id=$1
+            """,
+            tenant_id,
+        )
+
+
 # ── Service catalogue (owner-managed) ────────────────────────────────────────
 
-async def get_categories() -> list[asyncpg.Record]:
+async def get_categories(tenant_id: int) -> list[asyncpg.Record]:
     async with _p().acquire() as conn:
         return await conn.fetch(
-            "SELECT * FROM aria_service_categories ORDER BY position, id"
+            "SELECT * FROM aria_service_categories WHERE tenant_id=$1 ORDER BY position, id",
+            tenant_id,
         )
 
 
@@ -269,20 +394,23 @@ async def get_items(category_id: int) -> list[asyncpg.Record]:
         )
 
 
-async def add_category(name: str) -> int:
+async def add_category(tenant_id: int, name: str) -> int:
     async with _p().acquire() as conn:
         row = await conn.fetchrow(
             """
-            INSERT INTO aria_service_categories(name, position)
-            VALUES ($1, (SELECT COALESCE(MAX(position),0)+1 FROM aria_service_categories))
-            ON CONFLICT (name) DO NOTHING
+            INSERT INTO aria_service_categories(tenant_id, name, position)
+            VALUES ($1, $2,
+                (SELECT COALESCE(MAX(position),0)+1
+                 FROM aria_service_categories WHERE tenant_id=$1))
+            ON CONFLICT (tenant_id, name) DO NOTHING
             RETURNING id
             """,
-            name,
+            tenant_id, name,
         )
         if row is None:
             row = await conn.fetchrow(
-                "SELECT id FROM aria_service_categories WHERE name=$1", name
+                "SELECT id FROM aria_service_categories WHERE tenant_id=$1 AND name=$2",
+                tenant_id, name,
             )
         return row["id"]
 
@@ -314,9 +442,9 @@ async def delete_item(item_id: int) -> None:
         )
 
 
-async def get_services_tree() -> dict[str, list[str]]:
-    """Return {category: [items]} from DB. Empty dict if nothing configured."""
-    cats = await get_categories()
+async def get_services_tree(tenant_id: int) -> dict[str, list[str]]:
+    """Return {category: [items]} for this tenant from DB."""
+    cats = await get_categories(tenant_id)
     if not cats:
         return {}
     result: dict[str, list[str]] = {}
