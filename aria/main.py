@@ -1,8 +1,8 @@
 """
 Aria salon bot — multi-tenant entry point.
 
-Each bot token loaded from env vars gets its own aiogram Dispatcher.
-All bots share one Postgres pool and one APScheduler instance.
+All bots share one Dispatcher. A middleware injects the correct TenantConfig
+into each update based on the bot token, then all handlers receive it via DI.
 
 Env vars
 --------
@@ -23,11 +23,13 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
+from typing import Any, Callable, Awaitable
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.types import TelegramObject
 
 from aria.config import TenantConfig, load_tenants
 from aria.db.repo import init_db, close_pool
@@ -44,28 +46,22 @@ logging.basicConfig(
 log = logging.getLogger("aria")
 
 
-def _make_dispatcher(tenant: TenantConfig) -> Dispatcher:
-    dp = Dispatcher(storage=MemoryStorage())
-    # Inject tenant config — handlers receive it as `tenant: TenantConfig`
-    dp["tenant"] = tenant
-    dp.include_router(admin_router)
-    dp.include_router(start_router)
-    dp.include_router(chat_router)
-    return dp
+class TenantMiddleware:
+    """Injects the correct TenantConfig into each update based on bot token."""
 
+    def __init__(self, tenant_map: dict) -> None:
+        self.tenant_map = tenant_map
 
-async def _run_tenant(tenant: TenantConfig) -> None:
-    bot = Bot(
-        token=tenant.bot_token,
-        default=DefaultBotProperties(parse_mode=ParseMode.HTML),
-    )
-    dp = _make_dispatcher(tenant)
-    me = await bot.get_me()
-    log.info("Configuring bot @%s (tenant #%d)", me.username, tenant.tenant_id)
-    try:
-        await dp.start_polling(bot, drop_pending_updates=True)
-    finally:
-        await bot.session.close()
+    async def __call__(
+        self,
+        handler: Callable,
+        event: TelegramObject,
+        data: dict,
+    ) -> Any:
+        bot = data.get("bot")
+        if bot:
+            data["tenant"] = self.tenant_map.get(bot.token)
+        return await handler(event, data)
 
 
 async def main() -> None:
@@ -77,12 +73,31 @@ async def main() -> None:
         )
         sys.exit(1)
 
-    db_url = tenants[0].database_url
-    await init_db(db_url)
+    await init_db(tenants[0].database_url)
     get_scheduler().start()
     log.info("Aria polling mode — %d bot(s)", len(tenants))
 
-    await asyncio.gather(*[_run_tenant(t) for t in tenants])
+    tenant_map = {t.bot_token: t for t in tenants}
+
+    dp = Dispatcher(storage=MemoryStorage())
+    dp.update.outer_middleware(TenantMiddleware(tenant_map))
+    dp.include_router(admin_router)
+    dp.include_router(start_router)
+    dp.include_router(chat_router)
+
+    bots = [
+        Bot(
+            token=t.bot_token,
+            default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+        )
+        for t in tenants
+    ]
+
+    try:
+        await dp.start_polling(*bots, drop_pending_updates=True)
+    finally:
+        for bot in bots:
+            await bot.session.close()
 
     get_scheduler().shutdown(wait=False)
     await close_pool()
