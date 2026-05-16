@@ -103,7 +103,26 @@ def _admin_inline_kb() -> InlineKeyboardMarkup:
     ])
 
 
-# ── Week view helper ──────────────────────────────────────────────────────────
+def _menu_tz_kb() -> InlineKeyboardMarkup:
+    _TIMEZONES = [
+        ("🇷🇺 Москва, Минск (UTC+3)",     "Europe/Moscow"),
+        ("🇺🇦 Киев (UTC+2/+3)",            "Europe/Kiev"),
+        ("🇦🇿 Баку, Тбилиси (UTC+4)",      "Asia/Baku"),
+        ("🇰🇿 Алматы, Ташкент (UTC+5)",    "Asia/Almaty"),
+        ("🇬🇧 Лондон (UTC±0)",             "Europe/London"),
+        ("🇩🇪 Берлин, Варшава (UTC+1/+2)", "Europe/Berlin"),
+        ("🇦🇪 Дубай (UTC+4)",              "Asia/Dubai"),
+        ("🇺🇸 Нью-Йорк (UTC-5/-4)",       "America/New_York"),
+    ]
+    rows = [
+        [InlineKeyboardButton(text=label, callback_data=f"menu_tz:{tz}")]
+        for label, tz in _TIMEZONES
+    ]
+    rows.append([InlineKeyboardButton(text="◀️ Назад", callback_data="menu:settings")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+
 
 async def _show_week(message: Message, tenant: TenantConfig, offset_weeks: int = 0) -> None:
     from zoneinfo import ZoneInfo
@@ -239,18 +258,34 @@ async def cb_sched_upcoming(callback: CallbackQuery, tenant: TenantConfig) -> No
 # ── Settings callbacks ────────────────────────────────────────────────────────
 
 @router.callback_query(F.data == "cfg:tz", SetupDone())
-async def cb_cfg_tz(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
+async def cb_cfg_tz(callback: CallbackQuery, tenant: TenantConfig) -> None:
     if not tenant.is_owner(callback.from_user.id):
         await callback.answer("Нет доступа.", show_alert=True)
         return
-    from aria.handlers.start import OwnerSettings, _tz_kb
-    await state.set_state(OwnerSettings.waiting_tz)
-    await callback.message.answer(
-        f"Текущий часовой пояс: <code>{tenant.timezone or 'UTC'}</code>\n\n"
-        "Выбери новый или напиши IANA-имя вручную (например <code>Europe/Moscow</code>):",
-        reply_markup=_tz_kb("owner_tz:"),
+    await callback.message.edit_text(
+        f"🕐 <b>Часовой пояс</b>\n\nТекущий: <code>{tenant.timezone or 'UTC'}</code>\n\nВыбери новый:",
+        reply_markup=_menu_tz_kb(),
     )
     await callback.answer()
+
+
+@router.callback_query(F.data.startswith("menu_tz:"), SetupDone())
+async def cb_menu_tz_select(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    if not tenant.is_owner(callback.from_user.id):
+        await callback.answer("Нет доступа.", show_alert=True)
+        return
+    tz = callback.data[len("menu_tz:"):]
+    await repo.update_tenant(tenant.id, timezone=tz)
+    from aria.middleware import TenantMiddleware
+    TenantMiddleware.invalidate(tenant.bot_token)
+    back_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="◀️ Назад к настройкам", callback_data="menu:settings")]
+    ])
+    await callback.message.edit_text(
+        f"✅ Часовой пояс: <code>{tz}</code>",
+        reply_markup=back_kb,
+    )
+    await callback.answer(f"✓ {tz}")
 
 
 @router.callback_query(F.data == "cfg:cal", SetupDone())
@@ -267,17 +302,18 @@ async def cb_cfg_cal(callback: CallbackQuery, state: FSMContext, tenant: TenantC
         except Exception:
             pass
     svc_hint = (
-        f"\n\nУбедись, что ты поделился(ась) этим календарём с сервисным аккаунтом:\n"
-        f"<code>{svc_email}</code>\n(права: «Вносить изменения в мероприятия»)"
+        f"\n\nСервисный аккаунт:\n<code>{svc_email}</code>\n(добавь с правом «Вносить изменения»)"
         if svc_email else ""
     )
     await state.set_state(OwnerSettings.waiting_cal_id)
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     await callback.message.answer(
         "Введи ID Google Календаря.\n\n"
-        "Найти: calendar.google.com → ⚙️ → нужный календарь → "
-        "«Идентификатор календаря» (выглядит как <code>xxx@group.calendar.google.com</code> "
-        "или твой Gmail-адрес).\n\n"
-        "Напиши <b>убрать</b> чтобы отключить Google Calendar."
+        "Найти: calendar.google.com → ⚙️ → нужный календарь → «Идентификатор календаря».\n\n"
+        "Напиши <b>убрать</b> чтобы отключить."
         + svc_hint
     )
     await callback.answer()
@@ -288,6 +324,10 @@ async def cb_cfg_email(callback: CallbackQuery, tenant: TenantConfig) -> None:
     if not tenant.is_owner(callback.from_user.id):
         await callback.answer("Нет доступа.", show_alert=True)
         return
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     from aria.handlers.email_setup import _show_email_status
     await _show_email_status(callback.message, tenant)
     await callback.answer()
@@ -299,6 +339,10 @@ async def cb_cfg_test_cal(callback: CallbackQuery, tenant: TenantConfig) -> None
         await callback.answer("Нет доступа.", show_alert=True)
         return
     await callback.answer()
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     from aria.handlers.start import cmd_test_cal
     await cmd_test_cal(callback.message, tenant)
 
@@ -315,6 +359,10 @@ async def cb_cfg_status(callback: CallbackQuery, tenant: TenantConfig) -> None:
         await callback.answer("Нет доступа.", show_alert=True)
         return
     await callback.answer()
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
     from aria.handlers.start import cmd_status
     await cmd_status(callback.message, tenant)
 
