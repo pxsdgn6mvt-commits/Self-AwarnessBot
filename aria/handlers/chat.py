@@ -20,7 +20,12 @@ from aria.services.ai import chat
 log = logging.getLogger(__name__)
 router = Router()
 
-_BOOKING_TRIGGER = {"➕ Новая запись", "+ Новая запись", "новая запись"}
+_BOOKING_TRIGGER  = {"➕ Новая запись", "+ Новая запись", "новая запись"}
+_TODAY_TRIGGER    = {"📅 Сегодня"}
+_TOMORROW_TRIGGER = {"📅 Завтра"}
+_NEAREST_TRIGGER  = {"📋 Ближайшие"}
+_MAIL_TRIGGER     = {"📧 Почта"}
+_SKIP_TRIGGERS    = {"📱 Меню"}  # handled in start.py
 
 
 # ── Keyboards ─────────────────────────────────────────────────────────────────
@@ -95,6 +100,61 @@ async def _send_avatar_reply(message: Message, tenant: TenantConfig, text: str) 
         await message.answer_photo(photo=photo, caption=text)
     except Exception:
         await message.answer(text)
+
+
+# ── Quick-action button handlers ─────────────────────────────────────────────
+
+@router.message(F.text.in_(_TODAY_TRIGGER))
+async def handle_today(message: Message, bot: Bot, tenant: TenantConfig) -> None:
+    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+    reply, _ = await _ai(message.from_user.id, "что у меня сегодня?", bot, tenant)
+    await message.answer(reply)
+
+
+@router.message(F.text.in_(_TOMORROW_TRIGGER))
+async def handle_tomorrow(message: Message, bot: Bot, tenant: TenantConfig) -> None:
+    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+    reply, _ = await _ai(message.from_user.id, "что у меня завтра?", bot, tenant)
+    await message.answer(reply)
+
+
+@router.message(F.text.in_(_NEAREST_TRIGGER))
+async def handle_nearest(message: Message, bot: Bot, tenant: TenantConfig) -> None:
+    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+    reply, _ = await _ai(message.from_user.id, "покажи ближайшие записи", bot, tenant)
+    await message.answer(reply)
+
+
+@router.message(F.text.in_(_MAIL_TRIGGER))
+async def handle_mail_button(message: Message, tenant: TenantConfig) -> None:
+    row = await repo.get_email_settings(tenant.tenant_id)
+    has_email = row and row["email_address"]
+    if has_email:
+        senders = row["email_allowed_senders"] or "все"
+        text = (
+            f"📧 <b>Email мониторинг активен</b>\n\n"
+            f"Адрес: <code>{row['email_address']}</code>\n"
+            f"Отправители: {senders}\n\n"
+            "Управление: /admin → Email мониторинг"
+        )
+    else:
+        text = (
+            "📧 <b>Email мониторинг не настроен</b>\n\n"
+            "Нажмите /admin → Email мониторинг чтобы подключить."
+        )
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="⚙️ Настроить", callback_data="adm:email")
+    ]])
+    await message.answer(text, parse_mode="HTML", reply_markup=kb)
+
+
+async def _ai(user_id: int, text: str, bot: Bot, tenant: TenantConfig) -> tuple[str, bool]:
+    try:
+        return await chat(user_id=user_id, user_text=text, bot=bot, tenant=tenant)
+    except Exception:
+        log.exception("AI error (tenant #%d)", tenant.tenant_id)
+        return "Что-то пошло не так. Попробуйте ещё раз.", False
 
 
 # ── New booking flow ──────────────────────────────────────────────────────────
@@ -197,7 +257,7 @@ async def _book_service(message: Message, bot: Bot, tenant: TenantConfig, servic
 
 @router.message()
 async def handle_message(message: Message, bot: Bot, tenant: TenantConfig) -> None:
-    if not message.text:
+    if not message.text or message.text in _SKIP_TRIGGERS:
         return
     await bot.send_chat_action(chat_id=message.chat.id, action="typing")
     try:
