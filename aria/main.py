@@ -37,6 +37,7 @@ from aria.handlers.admin import router as admin_router
 from aria.handlers.start import router as start_router
 from aria.handlers.chat import router as chat_router
 from aria.services.scheduler import get_scheduler
+from aria.services.email_monitor import run_email_monitor
 
 logging.basicConfig(
     level=logging.INFO,
@@ -93,9 +94,20 @@ async def main() -> None:
         for t in tenants
     ]
 
+    # Start email monitors for tenants that have email configured
+    email_tasks = [
+        asyncio.create_task(run_email_monitor(t, bot))
+        for t, bot in zip(tenants, bots)
+        if t.email_address and t.email_password
+    ]
+    if email_tasks:
+        log.info("Email monitors started for %d bot(s)", len(email_tasks))
+
     try:
         await dp.start_polling(*bots, drop_pending_updates=True)
     finally:
+        for task in email_tasks:
+            task.cancel()
         for bot in bots:
             await bot.session.close()
 

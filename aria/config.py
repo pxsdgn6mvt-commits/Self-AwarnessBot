@@ -41,6 +41,15 @@ class TenantConfig:
     anthropic_api_key: str = ""
     database_url: str = ""
 
+    # Email monitoring (IMAP)
+    # Gmail: enable IMAP + create App Password at myaccount.google.com/apppasswords
+    email_address: str = ""
+    email_password: str = ""
+    email_imap_server: str = "imap.gmail.com"
+    email_imap_port: int = 993
+    email_allowed_senders: str = ""   # comma-separated; empty = allow all
+    email_poll_seconds: int = 60
+
     @property
     def services_tree_dict(self) -> dict[str, list[str]]:
         raw = self.salon_services_tree.strip()
@@ -99,6 +108,12 @@ def _build_tenant(n: int, prefix: str) -> TenantConfig:
         claude_model=_env("ARIA_CLAUDE_MODEL", "claude-haiku-4-5-20251001"),
         anthropic_api_key=_env("ANTHROPIC_API_KEY"),
         database_url=_env("ARIA_DATABASE_URL", "postgresql://localhost/aria_salon"),
+        email_address=p("EMAIL_ADDRESS", "ARIA_EMAIL_ADDRESS", ""),
+        email_password=p("EMAIL_PASSWORD", "ARIA_EMAIL_PASSWORD", ""),
+        email_imap_server=p("EMAIL_IMAP_SERVER", "ARIA_EMAIL_IMAP_SERVER", "imap.gmail.com"),
+        email_imap_port=pi("EMAIL_IMAP_PORT", "ARIA_EMAIL_IMAP_PORT", 993),
+        email_allowed_senders=p("EMAIL_ALLOWED_SENDERS", "ARIA_EMAIL_ALLOWED_SENDERS", ""),
+        email_poll_seconds=pi("EMAIL_POLL_SECONDS", "ARIA_EMAIL_POLL_SECONDS", 60),
     )
 
 
