@@ -180,6 +180,20 @@ async def get_upcoming_booking(user_id: int) -> Optional[asyncpg.Record]:
         )
 
 
+async def get_upcoming_bookings(user_id: int, limit: int = 10) -> list:
+    now = datetime.now(timezone.utc)
+    async with _p().acquire() as conn:  # type: ignore[union-attr]
+        return await conn.fetch(
+            """
+            SELECT * FROM aria_bookings
+            WHERE user_id=$1 AND status='confirmed' AND scheduled_at > $2
+            ORDER BY scheduled_at ASC
+            LIMIT $3
+            """,
+            user_id, now, limit,
+        )
+
+
 async def update_booking_time(booking_id: int, new_time: datetime) -> None:
     async with _p().acquire() as conn:  # type: ignore[union-attr]
         await conn.execute(

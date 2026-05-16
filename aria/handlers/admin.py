@@ -321,7 +321,12 @@ async def email_got_address(message: Message, state: FSMContext) -> None:
 
 @router.message(EmailSG.password)
 async def email_got_password(message: Message, state: FSMContext) -> None:
-    await state.update_data(email_password=message.text.strip())
+    password = message.text.strip() if message.text else ""
+    try:
+        await message.delete()
+    except Exception:
+        pass
+    await state.update_data(email_password=password)
     await state.set_state(EmailSG.senders)
     await message.answer(
         "📧 <b>Шаг 3 из 3 — Разрешённые отправители</b>\n\n"

@@ -122,6 +122,32 @@ def _create_sync(calendar_id: str, event: dict) -> Optional[dict]:
     return None
 
 
+def _delete_sync(calendar_id: str, event_id: str) -> None:
+    token = _get_access_token()
+    if not token:
+        return
+    cal = urllib.parse.quote(calendar_id, safe="")
+    ev  = urllib.parse.quote(event_id, safe="")
+    _requests.delete(
+        f"https://www.googleapis.com/calendar/v3/calendars/{cal}/events/{ev}",
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=10,
+    )
+
+
+async def delete_event(tenant_id: int, event_id: str) -> None:
+    import aria.db.repo as repo
+    if not event_id:
+        return
+    row = await repo.get_gcal_tokens(tenant_id)
+    calendar_id = (row["gcal_calendar_id"] if row else None) or "primary"
+    if calendar_id == "primary":
+        return
+    await asyncio.get_event_loop().run_in_executor(
+        None, _delete_sync, calendar_id, event_id
+    )
+
+
 async def create_event(
     tenant_id: int,
     client_name: str,

@@ -122,9 +122,30 @@ async def handle_tomorrow(message: Message, bot: Bot, tenant: TenantConfig) -> N
 
 @router.message(F.text.in_(_NEAREST_TRIGGER))
 async def handle_nearest(message: Message, bot: Bot, tenant: TenantConfig) -> None:
-    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
-    reply, _ = await _ai(message.from_user.id, "покажи ближайшие записи", bot, tenant)
-    await message.answer(reply)
+    from aria.handlers.booking import show_bookings_list
+    await show_bookings_list(message, message.from_user.id)
+
+
+@router.callback_query(F.data == "new:booking")
+async def new_booking_callback(
+    callback: CallbackQuery, state: FSMContext, bot: Bot, tenant: TenantConfig
+) -> None:
+    await callback.answer()
+    tree = await _load_tree(tenant)
+    if tree:
+        await callback.message.edit_text(
+            "Выберите категорию:", reply_markup=_category_kb(tree)
+        )
+        return
+    services = _parse_services(tenant)
+    if not services:
+        await callback.message.answer("Напишите название услуги — я помогу записать.")
+        return
+    if len(services) > tenant.max_services:
+        await _warn_owner(bot, tenant, len(services))
+    await callback.message.edit_text(
+        "Выберите услугу:", reply_markup=_flat_kb(services, tenant.max_services)
+    )
 
 
 @router.message(F.text.in_(_MAIL_TRIGGER))

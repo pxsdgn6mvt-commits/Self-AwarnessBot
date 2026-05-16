@@ -320,3 +320,94 @@ async def cancel_booking(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     await callback.message.edit_text("Запись отменена.")
     await callback.answer()
+
+
+# ── Bookings list + deletion ──────────────────────────────────────────────────
+
+async def show_bookings_list(
+    target: Union[Message, CallbackQuery],
+    user_id: int,
+) -> None:
+    bookings = await repo.get_upcoming_bookings(user_id, limit=10)
+    new_btn = InlineKeyboardButton(text="➕ Новая запись", callback_data="new:booking")
+
+    if not bookings:
+        await _send(target, "📋 Нет предстоящих записей.", InlineKeyboardMarkup(
+            inline_keyboard=[[new_btn]]
+        ))
+        return
+
+    lines, rows = [], []
+    for b in bookings:
+        dt: datetime = b["scheduled_at"]
+        if dt.tzinfo:
+            dt = dt.astimezone()
+        d = dt.date()
+        label = f"❌ {dt.strftime('%d.%m')} {dt.strftime('%H:%M')} — {b['client_name']}"
+        rows.append([InlineKeyboardButton(text=label, callback_data=f"book:del:{b['id']}")])
+        lines.append(
+            f"📅 <b>{_fmt_date(d)}</b> {dt.strftime('%H:%M')}\n"
+            f"👤 {b['client_name']} · 💅 {b['service']}"
+        )
+    rows.append([new_btn])
+    text = "📋 <b>Предстоящие записи:</b>\n\n" + "\n\n".join(lines)
+    await _send(target, text, InlineKeyboardMarkup(inline_keyboard=rows))
+
+
+async def _send(
+    target: Union[Message, CallbackQuery],
+    text: str,
+    kb: InlineKeyboardMarkup,
+) -> None:
+    if isinstance(target, CallbackQuery):
+        await target.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+    else:
+        await target.answer(text, parse_mode="HTML", reply_markup=kb)
+
+
+@router.callback_query(F.data == "book:list")
+async def back_to_list(callback: CallbackQuery) -> None:
+    await callback.answer()
+    await show_bookings_list(callback, callback.from_user.id)
+
+
+@router.callback_query(F.data.startswith("book:del:"))
+async def ask_cancel_booking(callback: CallbackQuery) -> None:
+    await callback.answer()
+    booking_id = int(callback.data.split(":")[-1])
+    booking = await repo.get_booking(booking_id)
+    if not booking:
+        await callback.answer("Запись не найдена.", show_alert=True)
+        return
+    dt: datetime = booking["scheduled_at"]
+    if dt.tzinfo:
+        dt = dt.astimezone()
+    await callback.message.edit_text(
+        f"Отменить запись?\n\n"
+        f"📅 <b>{_fmt_date(dt.date())}</b> в {dt.strftime('%H:%M')}\n"
+        f"👤 {booking['client_name']}\n"
+        f"💅 {booking['service']}",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="✅ Отменить", callback_data=f"book:del_yes:{booking_id}"),
+            InlineKeyboardButton(text="← Назад",    callback_data="book:list"),
+        ]]),
+    )
+
+
+@router.callback_query(F.data.startswith("book:del_yes:"))
+async def do_cancel_booking(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    booking_id = int(callback.data.split(":")[-1])
+    booking = await repo.get_booking(booking_id)
+    if not booking:
+        await callback.answer("Запись уже удалена.", show_alert=True)
+        return
+    await repo.update_booking_status(booking_id, "cancelled")
+    if booking["calendar_event_id"]:
+        try:
+            from aria.services import gcal
+            await gcal.delete_event(tenant.tenant_id, booking["calendar_event_id"])
+        except Exception:
+            log.exception("GCal event deletion failed for booking #%d", booking_id)
+    await callback.answer("Запись отменена.", show_alert=True)
+    await show_bookings_list(callback, callback.from_user.id)
