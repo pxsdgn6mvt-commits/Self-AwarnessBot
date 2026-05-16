@@ -55,6 +55,11 @@ class Settings:
     MAX_SERVICES: int        # max shown in inline keyboard (env: SALON_MAX_SERVICES)
     SALON_AVATAR_URL: str    # Telegram file_id or HTTPS URL (env: SALON_AVATAR_URL)
 
+    # ── Hierarchical services (optional, overrides SALON_SERVICES UI) ─────────
+    # Format: "Category1[sub1,sub2];Category2[sub3,sub4]"
+    # env: SALON_SERVICES_TREE
+    SALON_SERVICES_TREE: str
+
     def __init__(self) -> None:
         self.BOT_TOKEN = _require("ARIA_BOT_TOKEN")
         self.OWNER_TELEGRAM_ID = _int("ARIA_OWNER_TELEGRAM_ID", 0)
@@ -92,6 +97,31 @@ class Settings:
         # Optional avatar shown at /start and after booking confirmation.
         # Accepts a Telegram file_id (fastest) or an HTTPS image URL.
         self.SALON_AVATAR_URL: str = _str("SALON_AVATAR_URL", "")
+
+        # Hierarchical service tree. When set, overrides the flat SALON_SERVICES
+        # keyboard with a two-step category → subcategory selection.
+        self.SALON_SERVICES_TREE: str = _str("SALON_SERVICES_TREE", "")
+
+    @property
+    def services_tree(self) -> dict[str, list[str]]:
+        """
+        Parse SALON_SERVICES_TREE into an ordered dict of category → [subcategories].
+        Format: "Маникюр[классический,гель-лак];Волосы[стрижка,окраска]"
+        Returns {} when not configured (flat SALON_SERVICES is used instead).
+        """
+        raw = self.SALON_SERVICES_TREE.strip()
+        if not raw:
+            return {}
+        result: dict[str, list[str]] = {}
+        for chunk in raw.split(";"):
+            chunk = chunk.strip()
+            if "[" not in chunk or not chunk.endswith("]"):
+                continue
+            cat, rest = chunk.split("[", 1)
+            subs = [s.strip() for s in rest[:-1].split(",") if s.strip()]
+            if cat.strip() and subs:
+                result[cat.strip()] = subs
+        return result
 
     @property
     def working_days(self) -> list[int]:
