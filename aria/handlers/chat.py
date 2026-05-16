@@ -63,7 +63,7 @@ def _parse_services(tenant: TenantConfig) -> list[str]:
 
 
 async def _load_tree(tenant: TenantConfig) -> dict[str, list[str]]:
-    db_tree = await repo.get_services_tree()
+    db_tree = await repo.get_services_tree(tenant.tenant_id)
     return db_tree if db_tree else tenant.services_tree_dict
 
 

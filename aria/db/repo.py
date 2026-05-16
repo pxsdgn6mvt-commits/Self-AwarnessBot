@@ -47,6 +47,27 @@ async def init_db(dsn: str) -> None:
                 log.info("Migration: added PRIMARY KEY to %s", table)
             except Exception:
                 pass  # Already has PRIMARY KEY — nothing to do
+
+        # Migration: add tenant_id to service categories if missing
+        try:
+            await conn.execute(
+                "ALTER TABLE aria_service_categories"
+                " ADD COLUMN IF NOT EXISTS tenant_id INTEGER NOT NULL DEFAULT 1"
+            )
+            await conn.execute(
+                "ALTER TABLE aria_service_categories"
+                " DROP CONSTRAINT IF EXISTS aria_service_categories_name_key"
+            )
+            try:
+                await conn.execute(
+                    "ALTER TABLE aria_service_categories"
+                    " ADD CONSTRAINT aria_service_categories_tenant_name_key"
+                    " UNIQUE (tenant_id, name)"
+                )
+            except Exception:
+                pass  # Constraint already exists
+        except Exception:
+            pass
     log.info("aria DB schema ready")
 
 
@@ -271,10 +292,11 @@ def get_pool_instance() -> Optional[asyncpg.Pool]:
 
 # ── Service catalogue (owner-managed) ────────────────────────────────────────
 
-async def get_categories() -> list[asyncpg.Record]:
+async def get_categories(tenant_id: int) -> list[asyncpg.Record]:
     async with _p().acquire() as conn:
         return await conn.fetch(
-            "SELECT * FROM aria_service_categories ORDER BY position, id"
+            "SELECT * FROM aria_service_categories WHERE tenant_id=$1 ORDER BY position, id",
+            tenant_id,
         )
 
 
@@ -286,20 +308,23 @@ async def get_items(category_id: int) -> list[asyncpg.Record]:
         )
 
 
-async def add_category(name: str) -> int:
+async def add_category(tenant_id: int, name: str) -> int:
     async with _p().acquire() as conn:
         row = await conn.fetchrow(
             """
-            INSERT INTO aria_service_categories(name, position)
-            VALUES ($1, (SELECT COALESCE(MAX(position),0)+1 FROM aria_service_categories))
-            ON CONFLICT (name) DO NOTHING
+            INSERT INTO aria_service_categories(tenant_id, name, position)
+            VALUES ($1, $2,
+                (SELECT COALESCE(MAX(position),0)+1
+                 FROM aria_service_categories WHERE tenant_id=$1))
+            ON CONFLICT (tenant_id, name) DO NOTHING
             RETURNING id
             """,
-            name,
+            tenant_id, name,
         )
         if row is None:
             row = await conn.fetchrow(
-                "SELECT id FROM aria_service_categories WHERE name=$1", name
+                "SELECT id FROM aria_service_categories WHERE tenant_id=$1 AND name=$2",
+                tenant_id, name,
             )
         return row["id"]
 
@@ -331,9 +356,9 @@ async def delete_item(item_id: int) -> None:
         )
 
 
-async def get_services_tree() -> dict[str, list[str]]:
-    """Return {category: [items]} from DB. Empty dict if nothing configured."""
-    cats = await get_categories()
+async def get_services_tree(tenant_id: int) -> dict[str, list[str]]:
+    """Return {category: [items]} for this tenant from DB."""
+    cats = await get_categories(tenant_id)
     if not cats:
         return {}
     result: dict[str, list[str]] = {}

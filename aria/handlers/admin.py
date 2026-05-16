@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from aiogram import Bot, F, Router
+from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -31,8 +31,8 @@ def _is_owner(user_id: int, tenant: TenantConfig) -> bool:
     return bool(tenant.owner_telegram_id) and user_id == tenant.owner_telegram_id
 
 
-async def _categories_kb() -> InlineKeyboardMarkup:
-    cats = await repo.get_categories()
+async def _categories_kb(tenant_id: int) -> InlineKeyboardMarkup:
+    cats = await repo.get_categories(tenant_id)
     rows: list[list[InlineKeyboardButton]] = [
         [
             InlineKeyboardButton(text=c["name"], callback_data=f"adm:cat:{c['id']}"),
@@ -44,7 +44,7 @@ async def _categories_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-async def _items_kb(category_id: int) -> InlineKeyboardMarkup:
+async def _items_kb(category_id: int, tenant_id: int) -> InlineKeyboardMarkup:
     items = await repo.get_items(category_id)
     rows: list[list[InlineKeyboardButton]] = [
         [
@@ -68,7 +68,7 @@ async def cmd_admin(message: Message, state: FSMContext, tenant: TenantConfig) -
         "Нажмите на категорию для управления услугами внутри.\n"
         "🗑 — удалить категорию со всеми услугами.",
         parse_mode="HTML",
-        reply_markup=await _categories_kb(),
+        reply_markup=await _categories_kb(tenant.tenant_id),
     )
 
 
@@ -81,7 +81,7 @@ async def show_services(callback: CallbackQuery, state: FSMContext, tenant: Tena
     await callback.message.edit_text(
         "👩‍💼 <b>Управление услугами</b>\n\nНажмите на категорию или добавьте новую.",
         parse_mode="HTML",
-        reply_markup=await _categories_kb(),
+        reply_markup=await _categories_kb(tenant.tenant_id),
     )
     await callback.answer()
 
@@ -92,6 +92,7 @@ async def prompt_add_category(callback: CallbackQuery, state: FSMContext, tenant
         await callback.answer()
         return
     await state.set_state(AdminSG.add_category)
+    await state.update_data(tenant_id=tenant.tenant_id)
     await callback.message.answer("Введите название новой категории:")
     await callback.answer()
 
@@ -102,9 +103,14 @@ async def save_category(message: Message, state: FSMContext) -> None:
     if not name:
         await message.answer("Название не может быть пустым. Попробуйте снова:")
         return
-    await repo.add_category(name)
+    data = await state.get_data()
+    tenant_id = data.get("tenant_id", 1)
+    await repo.add_category(tenant_id, name)
     await state.clear()
-    await message.answer(f"✅ Категория «{name}» добавлена.", reply_markup=await _categories_kb())
+    await message.answer(
+        f"✅ Категория «{name}» добавлена.",
+        reply_markup=await _categories_kb(tenant_id),
+    )
 
 
 @router.callback_query(F.data.startswith("adm:dcat:"))
@@ -114,7 +120,10 @@ async def delete_category(callback: CallbackQuery, state: FSMContext, tenant: Te
         return
     await repo.delete_category(int(callback.data.split(":")[-1]))
     await state.clear()
-    await callback.message.edit_text("🗑 Категория удалена.", reply_markup=await _categories_kb())
+    await callback.message.edit_text(
+        "🗑 Категория удалена.",
+        reply_markup=await _categories_kb(tenant.tenant_id),
+    )
     await callback.answer()
 
 
@@ -125,7 +134,7 @@ async def show_category(callback: CallbackQuery, state: FSMContext, tenant: Tena
         return
     await state.clear()
     cat_id = int(callback.data.split(":")[-1])
-    cats = await repo.get_categories()
+    cats = await repo.get_categories(tenant.tenant_id)
     cat = next((c for c in cats if c["id"] == cat_id), None)
     if not cat:
         await callback.answer("Категория не найдена.")
@@ -134,7 +143,7 @@ async def show_category(callback: CallbackQuery, state: FSMContext, tenant: Tena
     await callback.message.edit_text(
         f"📂 <b>{cat['name']}</b> — {len(items)} услуг(а)\n\nНажмите 🗑 рядом с услугой, чтобы удалить.",
         parse_mode="HTML",
-        reply_markup=await _items_kb(cat_id),
+        reply_markup=await _items_kb(cat_id, tenant.tenant_id),
     )
     await callback.answer()
 
@@ -145,11 +154,11 @@ async def prompt_add_item(callback: CallbackQuery, state: FSMContext, tenant: Te
         await callback.answer()
         return
     cat_id = int(callback.data.split(":")[-1])
-    cats = await repo.get_categories()
+    cats = await repo.get_categories(tenant.tenant_id)
     cat = next((c for c in cats if c["id"] == cat_id), None)
     cat_name = cat["name"] if cat else "?"
     await state.set_state(AdminSG.add_item)
-    await state.update_data(category_id=cat_id, category_name=cat_name)
+    await state.update_data(category_id=cat_id, category_name=cat_name, tenant_id=tenant.tenant_id)
     await callback.message.answer(f"Введите название услуги для «{cat_name}»:")
     await callback.answer()
 
@@ -165,7 +174,7 @@ async def save_item(message: Message, state: FSMContext) -> None:
     await state.clear()
     await message.answer(
         f"✅ Услуга «{name}» добавлена в «{data['category_name']}».",
-        reply_markup=await _items_kb(data["category_id"]),
+        reply_markup=await _items_kb(data["category_id"], data.get("tenant_id", 1)),
     )
 
 
@@ -176,7 +185,9 @@ async def delete_item(callback: CallbackQuery, tenant: TenantConfig) -> None:
         return
     parts = callback.data.split(":")
     await repo.delete_item(int(parts[2]))
-    await callback.message.edit_reply_markup(reply_markup=await _items_kb(int(parts[3])))
+    await callback.message.edit_reply_markup(
+        reply_markup=await _items_kb(int(parts[3]), tenant.tenant_id)
+    )
     await callback.answer("Услуга удалена")
 
 

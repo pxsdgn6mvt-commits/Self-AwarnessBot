@@ -56,9 +56,11 @@ CREATE TABLE IF NOT EXISTS aria_conversations (
 
 -- Service catalogue managed by the salon owner via /admin
 CREATE TABLE IF NOT EXISTS aria_service_categories (
-    id       SERIAL PRIMARY KEY,
-    name     TEXT    NOT NULL UNIQUE,
-    position INTEGER NOT NULL DEFAULT 0
+    id        SERIAL PRIMARY KEY,
+    tenant_id INTEGER NOT NULL DEFAULT 1,
+    name      TEXT    NOT NULL,
+    position  INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (tenant_id, name)
 );
 
 CREATE TABLE IF NOT EXISTS aria_service_items (
