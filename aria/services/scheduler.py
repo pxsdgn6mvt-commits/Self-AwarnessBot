@@ -1,16 +1,18 @@
 """
 APScheduler background jobs for Aria.
 
-  • Reminder    — fires at 09:00 local time the day before an appointment
-  • No-show     — fires 2 hours after an appointment
-  • Waitlist    — fires immediately when a slot opens
+  • Reminder      — fires at 09:00 local time the day before an appointment
+  • No-show       — fires 2 hours after an appointment
+  • Waitlist      — fires immediately when a slot opens
+  • Reactivation  — daily at 10:00 UTC, notifies owners about inactive clients
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, TYPE_CHECKING
+from typing import Any, Callable, TYPE_CHECKING
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.date import DateTrigger
@@ -180,3 +182,45 @@ def schedule_waitlist_notify(waitlist_id: int, owner_id: int, bot: Any) -> None:
         replace_existing=True,
         args=[waitlist_id, owner_id, bot],
     )
+
+
+# ── Daily reactivation ────────────────────────────────────────────────────────
+
+async def _run_reactivation(bots_getter: Callable[[], dict[int, Any]]) -> None:
+    """Notify owners about salon clients who haven't visited in 45+ days."""
+    tenants = await repo.list_active_owner_bots()
+    bots = bots_getter()
+    for t in tenants:
+        tid = t["id"]
+        bot = bots.get(tid)
+        if not bot:
+            continue
+        owner_id = t["owner_tg_id"]
+        try:
+            inactive = await repo.get_clients_without_recent_booking(tid, days=45, limit=20)
+            if not inactive:
+                continue
+            shown = inactive[:10]
+            names = "\n".join(f"• {r['client_name']}" for r in shown)
+            suffix = f" (первые 10 из {len(inactive)})" if len(inactive) > 10 else ""
+            await bot.send_message(
+                chat_id=owner_id,
+                text=f"💤 Клиенты без визита 45+ дней{suffix}:\n\n{names}",
+            )
+            log.info("Reactivation: tenant %d — %d inactive clients", tid, len(inactive))
+            await asyncio.sleep(0.5)
+        except Exception as exc:
+            log.warning("Reactivation failed for tenant %d: %s", tid, exc)
+
+
+def schedule_daily_reactivation(bots_getter: Callable[[], dict[int, Any]]) -> None:
+    """Register daily reactivation job at 10:00 UTC."""
+    from apscheduler.triggers.cron import CronTrigger
+    get_scheduler().add_job(
+        _run_reactivation,
+        trigger=CronTrigger(hour=10, minute=0, timezone="UTC"),
+        id="daily_reactivation",
+        replace_existing=True,
+        args=[bots_getter],
+    )
+    log.info("Daily reactivation job registered (10:00 UTC)")

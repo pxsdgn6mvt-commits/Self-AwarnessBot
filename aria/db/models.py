@@ -140,4 +140,11 @@ BEGIN
     END IF;
 EXCEPTION WHEN others THEN NULL;
 END $$;
+
+-- ── CRM columns ───────────────────────────────────────────────────────────────
+ALTER TABLE aria_clients ADD COLUMN IF NOT EXISTS communication_style TEXT NOT NULL DEFAULT 'casual';
+ALTER TABLE aria_clients ADD COLUMN IF NOT EXISTS is_vip              BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE aria_clients ADD COLUMN IF NOT EXISTS vip_until           TIMESTAMPTZ;
+ALTER TABLE aria_clients ADD COLUMN IF NOT EXISTS reactivation_sent   BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE aria_clients ADD COLUMN IF NOT EXISTS notes               TEXT;
 """

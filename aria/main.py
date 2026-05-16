@@ -17,6 +17,7 @@ from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import ErrorEvent
 
+from aria import runtime
 from aria.config import settings
 from aria.db.repo import (
     close_pool, create_tenant, get_tenant, get_tenant_by_token,
@@ -26,7 +27,7 @@ from aria.handlers import admin, chat, email_setup, quick, start
 from aria.handlers.setup import router as setup_router
 from aria.middleware import TenantMiddleware
 from aria.services.commands import set_commands
-from aria.services.scheduler import get_scheduler
+from aria.services.scheduler import get_scheduler, schedule_daily_reactivation
 
 logging.basicConfig(
     level=logging.INFO,
@@ -137,6 +138,7 @@ async def _watch_tenants(dp: Dispatcher) -> None:
                         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
                     )
                     _bots[tid] = bot
+                    runtime.bots[tid] = bot
                     _tasks[tid] = asyncio.create_task(_poll_bot(bot, dp, tid))
                     log.info("Started polling for tenant #%d (%s)", tid, row["salon_name"])
 
@@ -148,6 +150,7 @@ async def _watch_tenants(dp: Dispatcher) -> None:
                     except Exception:
                         pass
                     del _bots[tid]
+                    runtime.bots.pop(tid, None)
                     del _tasks[tid]
                     log.info("Stopped polling for tenant #%d", tid)
         except Exception:
@@ -183,6 +186,7 @@ async def main() -> None:
     await init_db(settings.DATABASE_URL)
     await _ensure_initial_tenant()
     get_scheduler().start()
+    schedule_daily_reactivation(lambda: _bots)
 
     dp = _build_dispatcher()
 
@@ -194,6 +198,7 @@ async def main() -> None:
         )
         tid = row["id"]
         _bots[tid] = bot
+        runtime.bots[tid] = bot
         _tasks[tid] = asyncio.create_task(_poll_bot(bot, dp, tid))
 
     log.info("Aria polling mode — %d bot(s)", len(_bots))

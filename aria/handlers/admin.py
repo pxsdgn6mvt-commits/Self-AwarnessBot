@@ -5,7 +5,9 @@ Lets you add new salon bots, list tenants, and deactivate them.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from datetime import datetime, timedelta, timezone
 
 from aiogram import Router
 from aiogram.filters import Command
@@ -159,3 +161,90 @@ async def cmd_cancel(message: Message, state: FSMContext) -> None:
         await message.answer("Отменено.")
     else:
         await message.answer("Нечего отменять.")
+
+
+# ── /broadcast ────────────────────────────────────────────────────────────────
+
+@router.message(Command("broadcast"))
+async def cmd_broadcast(message: Message) -> None:
+    if not _is_admin(message.from_user.id):
+        return
+
+    parts = message.text.split(None, 1)
+    if len(parts) < 2:
+        await message.answer("Использование: /broadcast <текст>")
+        return
+
+    text = parts[1]
+    from aria import runtime
+    tenants = await repo.list_active_owner_bots()
+    sent = failed = 0
+    for t in tenants:
+        bot = runtime.bots.get(t["id"])
+        if not bot:
+            failed += 1
+            continue
+        try:
+            await bot.send_message(chat_id=t["owner_tg_id"], text=text)
+            sent += 1
+            await asyncio.sleep(0.05)
+        except Exception as exc:
+            log.warning("Broadcast failed for tenant %d: %s", t["id"], exc)
+            failed += 1
+
+    await message.answer(f"✅ Отправлено: {sent}, ошибок: {failed}")
+
+
+# ── /set_vip / /revoke_vip ────────────────────────────────────────────────────
+
+@router.message(Command("set_vip"))
+async def cmd_set_vip(message: Message) -> None:
+    if not _is_admin(message.from_user.id):
+        return
+
+    parts = message.text.split()
+    if len(parts) < 3:
+        await message.answer(
+            "Использование: /set_vip <tenant_id> <user_id> [дней]\n"
+            "Пример: /set_vip 1 123456789 30"
+        )
+        return
+
+    try:
+        tid     = int(parts[1])
+        user_id = int(parts[2])
+        days    = int(parts[3]) if len(parts) > 3 else None
+    except ValueError:
+        await message.answer("Неверный формат. Пример: /set_vip 1 123456789 30")
+        return
+
+    vip_until = datetime.now(timezone.utc) + timedelta(days=days) if days else None
+    await repo.set_client_vip(tid, user_id, True, vip_until)
+
+    until_str = vip_until.strftime("%d.%m.%Y") if vip_until else "бессрочно"
+    await message.answer(
+        f"✅ VIP назначен: user {user_id} в тенанте #{tid}, действует до {until_str}"
+    )
+    log.info("Admin set VIP: tenant %d user %d until %s", tid, user_id, until_str)
+
+
+@router.message(Command("revoke_vip"))
+async def cmd_revoke_vip(message: Message) -> None:
+    if not _is_admin(message.from_user.id):
+        return
+
+    parts = message.text.split()
+    if len(parts) < 3:
+        await message.answer("Использование: /revoke_vip <tenant_id> <user_id>")
+        return
+
+    try:
+        tid     = int(parts[1])
+        user_id = int(parts[2])
+    except ValueError:
+        await message.answer("Неверный формат.")
+        return
+
+    await repo.set_client_vip(tid, user_id, False, None)
+    await message.answer(f"✅ VIP отозван: user {user_id} в тенанте #{tid}")
+    log.info("Admin revoked VIP: tenant %d user %d", tid, user_id)

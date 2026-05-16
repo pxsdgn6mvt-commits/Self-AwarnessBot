@@ -139,6 +139,72 @@ async def upsert_client(tenant_id: int, user_id: int, lang: str = "en") -> None:
         )
 
 
+async def get_client_profile(tenant_id: int, user_id: int) -> Optional[asyncpg.Record]:
+    async with _p().acquire() as conn:
+        return await conn.fetchrow(
+            "SELECT * FROM aria_clients WHERE tenant_id=$1 AND user_id=$2",
+            tenant_id, user_id,
+        )
+
+
+async def update_client_style(tenant_id: int, user_id: int, style: str) -> None:
+    async with _p().acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO aria_clients(tenant_id, user_id, communication_style)
+            VALUES ($1,$2,$3)
+            ON CONFLICT (tenant_id, user_id) DO UPDATE SET communication_style=$3
+            """,
+            tenant_id, user_id, style,
+        )
+
+
+async def set_client_vip(
+    tenant_id: int, user_id: int, is_vip: bool, vip_until: Optional[datetime] = None
+) -> None:
+    async with _p().acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO aria_clients(tenant_id, user_id, is_vip, vip_until)
+            VALUES ($1,$2,$3,$4)
+            ON CONFLICT (tenant_id, user_id) DO UPDATE SET is_vip=$3, vip_until=$4
+            """,
+            tenant_id, user_id, is_vip, vip_until,
+        )
+
+
+async def get_clients_without_recent_booking(
+    tenant_id: int, days: int = 45, limit: int = 20
+) -> list[asyncpg.Record]:
+    """Client names whose last confirmed past booking was more than `days` days ago."""
+    async with _p().acquire() as conn:
+        return await conn.fetch(
+            """
+            SELECT client_name, MAX(scheduled_at) AS last_visit
+            FROM aria_bookings
+            WHERE tenant_id=$1 AND status='confirmed' AND scheduled_at < NOW()
+            GROUP BY client_name
+            HAVING MAX(scheduled_at) < NOW() - ($2 * INTERVAL '1 day')
+            ORDER BY last_visit ASC
+            LIMIT $3
+            """,
+            tenant_id, days, limit,
+        )
+
+
+async def list_active_owner_bots() -> list[asyncpg.Record]:
+    """Active tenants with a configured owner — for broadcast and reactivation."""
+    async with _p().acquire() as conn:
+        return await conn.fetch(
+            """
+            SELECT id, owner_tg_id, salon_name, bot_token
+            FROM aria_tenants
+            WHERE active=TRUE AND setup_complete=TRUE AND owner_tg_id IS NOT NULL
+            ORDER BY id
+            """
+        )
+
+
 # ── Bookings ──────────────────────────────────────────────────────────────────
 
 async def create_booking(
