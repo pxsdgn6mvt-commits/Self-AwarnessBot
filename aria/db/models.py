@@ -68,4 +68,27 @@ CREATE TABLE IF NOT EXISTS aria_service_items (
     position    INTEGER NOT NULL DEFAULT 0,
     UNIQUE (category_id, name)
 );
+
+-- Migrations: ensure PRIMARY KEY exists on tables that may have been created
+-- without it by older schema versions.
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'aria_clients'::regclass AND contype = 'p'
+    ) THEN
+        DELETE FROM aria_clients a USING aria_clients b
+            WHERE a.ctid < b.ctid AND a.user_id = b.user_id;
+        ALTER TABLE aria_clients ADD PRIMARY KEY (user_id);
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'aria_conversations'::regclass AND contype = 'p'
+    ) THEN
+        DELETE FROM aria_conversations a USING aria_conversations b
+            WHERE a.ctid < b.ctid AND a.user_id = b.user_id;
+        ALTER TABLE aria_conversations ADD PRIMARY KEY (user_id);
+    END IF;
+END $$;
 """
