@@ -1,4 +1,4 @@
-"""Handlers for /start, /help, /reset commands."""
+"""Handlers for /start, /help, /reset."""
 
 from __future__ import annotations
 
@@ -14,18 +14,16 @@ from aiogram.types import (
 )
 
 import aria.db.repo as repo
-from aria.config import settings
+from aria.config import TenantConfig
 
 log = logging.getLogger(__name__)
 router = Router()
 
 MAIN_KB = ReplyKeyboardMarkup(
-    keyboard=[
-        [
-            KeyboardButton(text="➕ Новая запись"),
-            KeyboardButton(text="📋 Ближайшие"),
-        ],
-    ],
+    keyboard=[[
+        KeyboardButton(text="➕ Новая запись"),
+        KeyboardButton(text="📋 Ближайшие"),
+    ]],
     resize_keyboard=True,
 )
 
@@ -36,12 +34,8 @@ _WELCOME = (
 )
 
 
-async def _send_avatar(message: Message, caption: str) -> bool:
-    """
-    Send the salon avatar photo if SALON_AVATAR_URL is configured.
-    Returns True if photo was sent, False if no avatar is set.
-    """
-    url = settings.SALON_AVATAR_URL.strip()
+async def _send_avatar(message: Message, tenant: TenantConfig, caption: str) -> bool:
+    url = tenant.salon_avatar_url.strip()
     if not url:
         return False
     try:
@@ -49,20 +43,18 @@ async def _send_avatar(message: Message, caption: str) -> bool:
         await message.answer_photo(photo=photo, caption=caption)
         return True
     except Exception:
-        log.warning("Could not send avatar photo from %s", url)
+        log.warning("tenant #%d: could not send avatar", tenant.tenant_id)
         return False
 
 
 @router.message(CommandStart())
-async def cmd_start(message: Message) -> None:
-    user_id = message.from_user.id
-    await repo.upsert_client(user_id)
-    await repo.clear_history(user_id)
-
-    welcome_text = _WELCOME.format(salon=settings.SALON_NAME)
-    sent_as_photo = await _send_avatar(message, caption=welcome_text)
-    if not sent_as_photo:
-        await message.answer(welcome_text, reply_markup=MAIN_KB)
+async def cmd_start(message: Message, tenant: TenantConfig) -> None:
+    await repo.upsert_client(message.from_user.id)
+    await repo.clear_history(message.from_user.id)
+    welcome = _WELCOME.format(salon=tenant.salon_name)
+    sent = await _send_avatar(message, tenant, caption=welcome)
+    if not sent:
+        await message.answer(welcome, reply_markup=MAIN_KB)
     else:
         await message.answer("Чем могу помочь?", reply_markup=MAIN_KB)
 

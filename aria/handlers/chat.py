@@ -1,4 +1,4 @@
-"""Main message handler — routes text messages through the AI service."""
+"""Main message handler — routes text through the AI service."""
 
 from __future__ import annotations
 
@@ -14,132 +14,115 @@ from aiogram.types import (
 )
 
 import aria.db.repo as repo
-from aria.config import settings
+from aria.config import TenantConfig
 from aria.services.ai import chat
 
 log = logging.getLogger(__name__)
 router = Router()
 
-_SERVICES_TRIGGER = {"➕ Новая запись", "+ Новая запись", "новая запись"}
+_BOOKING_TRIGGER = {"➕ Новая запись", "+ Новая запись", "новая запись"}
 
 
-# ── Service list helpers ──────────────────────────────────────────────────────
+# ── Keyboards ─────────────────────────────────────────────────────────────────
 
-def _parse_services() -> list[str]:
-    return [s.strip() for s in settings.SALON_SERVICES.split(",") if s.strip()]
-
-
-async def _load_tree() -> dict[str, list[str]]:
-    """DB first, then SALON_SERVICES_TREE env var, then empty."""
-    tree = await repo.get_services_tree()
-    return tree if tree else settings.services_tree
-
-
-def _flat_kb(services: list[str]) -> InlineKeyboardMarkup:
-    """Single-level keyboard — one button per service, index-based callback."""
-    capped = services[: settings.MAX_SERVICES]
+def _flat_kb(services: list[str], limit: int) -> InlineKeyboardMarkup:
+    capped = services[:limit]
     rows = [
-        [InlineKeyboardButton(text=name, callback_data=f"svc:{i}")]
-        for i, name in enumerate(capped)
+        [InlineKeyboardButton(text=s, callback_data=f"svc:{i}")]
+        for i, s in enumerate(capped)
     ]
-    if len(services) > settings.MAX_SERVICES:
-        rows.append([
-            InlineKeyboardButton(
-                text=f"… ещё {len(services) - settings.MAX_SERVICES} скрыто",
-                callback_data="svc:overflow",
-            )
-        ])
+    if len(services) > limit:
+        rows.append([InlineKeyboardButton(
+            text=f"… ещё {len(services) - limit} скрыто",
+            callback_data="svc:overflow",
+        )])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def _category_kb(tree: dict[str, list[str]]) -> InlineKeyboardMarkup:
-    """First level: one button per category."""
-    cats = list(tree.keys())[: settings.MAX_SERVICES]
     rows = [
         [InlineKeyboardButton(text=cat, callback_data=f"cat:{i}")]
-        for i, cat in enumerate(cats)
+        for i, cat in enumerate(list(tree.keys()))
     ]
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def _subcategory_kb(cat_index: int, subs: list[str]) -> InlineKeyboardMarkup:
-    """Second level: subcategory buttons + «← Назад»."""
-    capped = subs[: settings.MAX_SERVICES]
+def _subcategory_kb(cat_idx: int, subs: list[str]) -> InlineKeyboardMarkup:
     rows = [
-        [InlineKeyboardButton(text=sub, callback_data=f"sub:{cat_index}:{i}")]
-        for i, sub in enumerate(capped)
+        [InlineKeyboardButton(text=s, callback_data=f"sub:{cat_idx}:{i}")]
+        for i, s in enumerate(subs)
     ]
-    rows.append([
-        InlineKeyboardButton(text="← Назад", callback_data="cat:back")
-    ])
+    rows.append([InlineKeyboardButton(text="← Назад", callback_data="cat:back")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-# ── Owner notifications ───────────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
-async def _warn_owner_service_limit(bot: Bot, total: int) -> None:
-    owner_id = settings.OWNER_TELEGRAM_ID
-    if not owner_id:
+def _parse_services(tenant: TenantConfig) -> list[str]:
+    return [s.strip() for s in tenant.salon_services.split(",") if s.strip()]
+
+
+async def _load_tree(tenant: TenantConfig) -> dict[str, list[str]]:
+    db_tree = await repo.get_services_tree()
+    return db_tree if db_tree else tenant.services_tree_dict
+
+
+async def _warn_owner(bot: Bot, tenant: TenantConfig, total: int) -> None:
+    if not tenant.owner_telegram_id:
         return
-    limit = settings.MAX_SERVICES
     try:
         await bot.send_message(
-            chat_id=owner_id,
+            chat_id=tenant.owner_telegram_id,
             text=(
                 f"⚠️ <b>Лимит процедур достигнут</b>\n\n"
-                f"В SALON_SERVICES настроено <b>{total}</b> услуг, "
-                f"но в меню отображается только <b>{limit}</b>.\n\n"
-                f"Уберите лишние или увеличьте SALON_MAX_SERVICES."
+                f"Настроено <b>{total}</b> услуг, "
+                f"показывается только <b>{tenant.max_services}</b>.\n\n"
+                f"Уберите лишние или увеличьте ARIA_BOT_{tenant.tenant_id}_MAX_SERVICES."
             ),
             parse_mode="HTML",
         )
     except Exception:
-        log.warning("Could not notify owner about service limit overflow")
+        log.warning("tenant #%d: could not notify owner", tenant.tenant_id)
 
 
-# ── Avatar helper ─────────────────────────────────────────────────────────────
-
-async def _send_avatar_after_booking(message: Message, reply_text: str) -> None:
-    url = settings.SALON_AVATAR_URL.strip()
+async def _send_avatar_reply(message: Message, tenant: TenantConfig, text: str) -> None:
+    url = tenant.salon_avatar_url.strip()
     if not url:
-        await message.answer(reply_text)
+        await message.answer(text)
         return
     try:
         photo = URLInputFile(url) if url.startswith("http") else url
-        await message.answer_photo(photo=photo, caption=reply_text)
+        await message.answer_photo(photo=photo, caption=text)
     except Exception:
-        log.warning("Could not send avatar photo: %s", url)
-        await message.answer(reply_text)
+        await message.answer(text)
 
 
-# ── Handlers ──────────────────────────────────────────────────────────────────
+# ── New booking flow ──────────────────────────────────────────────────────────
 
-@router.message(F.text.casefold().in_({t.casefold() for t in _SERVICES_TRIGGER}))
-async def handle_new_booking(message: Message, bot: Bot) -> None:
-    tree = await _load_tree()
+@router.message(F.text.casefold().in_({t.casefold() for t in _BOOKING_TRIGGER}))
+async def handle_new_booking(message: Message, bot: Bot, tenant: TenantConfig) -> None:
+    tree = await _load_tree(tenant)
     if tree:
         await message.answer("Выберите категорию:", reply_markup=_category_kb(tree))
         return
 
-    services = _parse_services()
+    services = _parse_services(tenant)
     if not services:
-        await message.answer("Напишите, какую услугу хотите записать, и я помогу.")
+        await message.answer("Напишите название услуги — я помогу записать.")
         return
-    if len(services) > settings.MAX_SERVICES:
-        await _warn_owner_service_limit(bot, len(services))
-    await message.answer("Выберите услугу:", reply_markup=_flat_kb(services))
+    if len(services) > tenant.max_services:
+        await _warn_owner(bot, tenant, len(services))
+    await message.answer("Выберите услугу:", reply_markup=_flat_kb(services, tenant.max_services))
 
 
 @router.callback_query(F.data.startswith("cat:"))
-async def handle_category(callback: CallbackQuery) -> None:
+async def handle_category(callback: CallbackQuery, tenant: TenantConfig) -> None:
     await callback.answer()
     raw = callback.data.split(":", 1)[1]
+    tree = await _load_tree(tenant)
 
-    tree = await _load_tree()
     if raw == "back":
-        await callback.message.edit_text(
-            "Выберите категорию:", reply_markup=_category_kb(tree)
-        )
+        await callback.message.edit_text("Выберите категорию:", reply_markup=_category_kb(tree))
         return
 
     try:
@@ -148,7 +131,7 @@ async def handle_category(callback: CallbackQuery) -> None:
         cat_name = cats[idx]
         subs = tree[cat_name]
     except (ValueError, IndexError, KeyError):
-        await callback.message.answer("Не удалось открыть категорию. Попробуйте снова.")
+        await callback.message.answer("Категория не найдена. Попробуйте снова.")
         return
 
     await callback.message.edit_text(
@@ -159,92 +142,76 @@ async def handle_category(callback: CallbackQuery) -> None:
 
 
 @router.callback_query(F.data.startswith("sub:"))
-async def handle_subcategory(callback: CallbackQuery, bot: Bot) -> None:
+async def handle_subcategory(callback: CallbackQuery, bot: Bot, tenant: TenantConfig) -> None:
     await callback.answer()
     parts = callback.data.split(":")
-    # format: sub:<cat_idx>:<sub_idx>
     try:
-        cat_idx = int(parts[1])
-        sub_idx = int(parts[2])
-        tree = await _load_tree()
+        tree = await _load_tree(tenant)
         cats = list(tree.keys())
-        cat_name = cats[cat_idx]
-        service = f"{cat_name} — {tree[cat_name][sub_idx]}"
+        cat_name = cats[int(parts[1])]
+        service = f"{cat_name} — {tree[cat_name][int(parts[2])]}"
     except (IndexError, ValueError, KeyError):
         await callback.message.answer("Не удалось определить услугу. Попробуйте снова.")
         return
 
-    user_id = callback.from_user.id
-    prompt = f"Хочу записаться на «{service}»"
-
-    await bot.send_chat_action(chat_id=callback.message.chat.id, action="typing")
-    try:
-        reply, booking_confirmed = await chat(user_id=user_id, user_text=prompt, bot=bot)
-    except Exception:
-        log.exception("AI error for user %d after subcategory selection", user_id)
-        reply = "Что-то пошло не так. Попробуйте ещё раз."
-        booking_confirmed = False
-
-    if booking_confirmed:
-        await _send_avatar_after_booking(callback.message, reply)
-    else:
-        await callback.message.answer(reply)
+    await _book_service(callback.message, bot, tenant, service)
 
 
 @router.callback_query(F.data.startswith("svc:"))
-async def handle_service_selected(callback: CallbackQuery, bot: Bot) -> None:
+async def handle_service_flat(callback: CallbackQuery, bot: Bot, tenant: TenantConfig) -> None:
     await callback.answer()
     raw = callback.data.split(":", 1)[1]
-
     if raw == "overflow":
         await callback.message.answer(
-            "Показаны только первые услуги. "
             "Напишите название нужной услуги текстом — я найду её."
         )
         return
-
     try:
-        idx = int(raw)
-        service = _parse_services()[idx]
+        service = _parse_services(tenant)[int(raw)]
     except (ValueError, IndexError):
         await callback.message.answer("Не удалось определить услугу. Попробуйте снова.")
         return
-
-    user_id = callback.from_user.id
-    prompt = f"Хочу записаться на «{service}»"
-
-    await bot.send_chat_action(chat_id=callback.message.chat.id, action="typing")
-    try:
-        reply, booking_confirmed = await chat(user_id=user_id, user_text=prompt, bot=bot)
-    except Exception:
-        log.exception("AI error for user %d after service selection", user_id)
-        reply = "Что-то пошло не так. Попробуйте ещё раз."
-        booking_confirmed = False
-
-    if booking_confirmed:
-        await _send_avatar_after_booking(callback.message, reply)
-    else:
-        await callback.message.answer(reply)
+    await _book_service(callback.message, bot, tenant, service)
 
 
-@router.message()
-async def handle_message(message: Message, bot: Bot) -> None:
-    if not message.text:
-        return
-
-    user_id = message.from_user.id
+async def _book_service(message: Message, bot: Bot, tenant: TenantConfig, service: str) -> None:
     await bot.send_chat_action(chat_id=message.chat.id, action="typing")
-
     try:
-        reply, booking_confirmed = await chat(
-            user_id=user_id, user_text=message.text, bot=bot
+        reply, confirmed = await chat(
+            user_id=message.chat.id,
+            user_text=f"Хочу записаться на «{service}»",
+            bot=bot,
+            tenant=tenant,
         )
     except Exception:
-        log.exception("AI error for user %d", user_id)
-        reply = "Что-то пошло не так. Попробуйте ещё раз через несколько секунд."
-        booking_confirmed = False
+        log.exception("AI error after service selection (tenant #%d)", tenant.tenant_id)
+        reply, confirmed = "Что-то пошло не так. Попробуйте ещё раз.", False
 
-    if booking_confirmed:
-        await _send_avatar_after_booking(message, reply)
+    if confirmed:
+        await _send_avatar_reply(message, tenant, reply)
+    else:
+        await message.answer(reply)
+
+
+# ── Generic message handler ───────────────────────────────────────────────────
+
+@router.message()
+async def handle_message(message: Message, bot: Bot, tenant: TenantConfig) -> None:
+    if not message.text:
+        return
+    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+    try:
+        reply, confirmed = await chat(
+            user_id=message.from_user.id,
+            user_text=message.text,
+            bot=bot,
+            tenant=tenant,
+        )
+    except Exception:
+        log.exception("AI error (tenant #%d)", tenant.tenant_id)
+        reply, confirmed = "Что-то пошло не так. Попробуйте ещё раз.", False
+
+    if confirmed:
+        await _send_avatar_reply(message, tenant, reply)
     else:
         await message.answer(reply)
