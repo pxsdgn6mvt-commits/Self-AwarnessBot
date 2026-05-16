@@ -194,6 +194,34 @@ async def get_upcoming_bookings(user_id: int, limit: int = 10) -> list:
         )
 
 
+async def get_bookings_on_date(user_id: int, target_date: "date") -> list:
+    from datetime import date as _date
+    async with _p().acquire() as conn:  # type: ignore[union-attr]
+        return await conn.fetch(
+            """
+            SELECT * FROM aria_bookings
+            WHERE user_id=$1 AND status='confirmed'
+              AND scheduled_at::date = $2
+            ORDER BY scheduled_at ASC
+            """,
+            user_id, target_date,
+        )
+
+
+async def cancel_bookings_on_date(user_id: int, target_date: "date") -> list:
+    """Cancel all confirmed bookings on given date; return cancelled rows."""
+    rows = await get_bookings_on_date(user_id, target_date)
+    if not rows:
+        return []
+    ids = [r["id"] for r in rows]
+    async with _p().acquire() as conn:  # type: ignore[union-attr]
+        await conn.execute(
+            "UPDATE aria_bookings SET status='cancelled' WHERE id=ANY($1::int[])",
+            ids,
+        )
+    return list(rows)
+
+
 async def update_booking_time(booking_id: int, new_time: datetime) -> None:
     async with _p().acquire() as conn:  # type: ignore[union-attr]
         await conn.execute(

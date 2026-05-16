@@ -235,9 +235,10 @@ async def menu_gcal(callback: CallbackQuery, tenant: TenantConfig) -> None:
             "Все новые записи автоматически появляются в вашем календаре.",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🔌 Отключить",      callback_data="gcal:disconnect")],
-                [InlineKeyboardButton(text="🔄 Переподключить", callback_data="gcal:connect")],
-                [InlineKeyboardButton(text="← Назад",           callback_data="menu:back")],
+                [InlineKeyboardButton(text="🔍 Проверить связь",  callback_data="gcal:test")],
+                [InlineKeyboardButton(text="🔌 Отключить",        callback_data="gcal:disconnect")],
+                [InlineKeyboardButton(text="🔄 Переподключить",   callback_data="gcal:connect")],
+                [InlineKeyboardButton(text="← Назад",             callback_data="menu:back")],
             ]),
         )
     else:
@@ -311,6 +312,48 @@ async def got_gcal_email(
         await msg.edit_text(
             "❌ Не удалось создать календарь. Проверьте адрес и попробуйте снова.\n\n"
             "📱 Меню → Google Calendar → Подключить"
+        )
+
+
+@router.callback_query(F.data == "gcal:test")
+async def gcal_test(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    from aria.handlers.admin import _is_owner
+    from aria.services.gcal import _get_access_token, is_configured
+    if not await _is_owner(callback.from_user.id, tenant):
+        await callback.answer("Только для владельца.", show_alert=True)
+        return
+    await callback.answer("Проверяю...")
+    if not is_configured():
+        await callback.message.edit_text(
+            "📅 <b>Google Calendar</b>\n\n"
+            "❌ GOOGLE_CALENDAR_CREDENTIALS не задан в Railway.",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text="← Назад", callback_data="menu:gcal"),
+            ]]),
+        )
+        return
+    token = _get_access_token()
+    if token:
+        await callback.message.edit_text(
+            "📅 <b>Google Calendar</b>\n\n"
+            "✅ Связь работает — токен получен успешно.\n"
+            "Записи должны создаваться автоматически.",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text="← Назад", callback_data="menu:gcal"),
+            ]]),
+        )
+    else:
+        await callback.message.edit_text(
+            "📅 <b>Google Calendar</b>\n\n"
+            "❌ Не удалось подключиться к Google.\n\n"
+            "Проверьте что GOOGLE_CALENDAR_CREDENTIALS содержит "
+            "корректный Service Account JSON (тип: service_account).",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text="← Назад", callback_data="menu:gcal"),
+            ]]),
         )
 
 

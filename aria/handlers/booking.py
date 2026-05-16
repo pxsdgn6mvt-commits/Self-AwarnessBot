@@ -349,6 +349,7 @@ async def show_bookings_list(
             f"📅 <b>{_fmt_date(d)}</b> {dt.strftime('%H:%M')}\n"
             f"👤 {b['client_name']} · 💅 {b['service']}"
         )
+    rows.append([InlineKeyboardButton(text="🗑 Удалить все на дату", callback_data="book:del_date")])
     rows.append([new_btn])
     text = "📋 <b>Предстоящие записи:</b>\n\n" + "\n\n".join(lines)
     await _send(target, text, InlineKeyboardMarkup(inline_keyboard=rows))
@@ -410,4 +411,80 @@ async def do_cancel_booking(callback: CallbackQuery, tenant: TenantConfig) -> No
         except Exception:
             log.exception("GCal event deletion failed for booking #%d", booking_id)
     await callback.answer("Запись отменена.", show_alert=True)
+    await show_bookings_list(callback, callback.from_user.id)
+
+
+# ── Delete all on date ────────────────────────────────────────────────────────
+
+def _del_date_kb() -> InlineKeyboardMarkup:
+    today = date.today()
+    rows = []
+    for i in range(7):
+        d = today + timedelta(days=i)
+        prefix = "Сегодня, " if i == 0 else ("Завтра, " if i == 1 else "")
+        rows.append([InlineKeyboardButton(
+            text=f"{prefix}{_fmt_date(d)}",
+            callback_data=f"book:del_date:{d.isoformat()}",
+        )])
+    rows.append([InlineKeyboardButton(text="← Назад", callback_data="book:list")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+@router.callback_query(F.data == "book:del_date")
+async def pick_date_for_bulk_delete(callback: CallbackQuery) -> None:
+    await callback.answer()
+    await callback.message.edit_text(
+        "🗑 <b>Удалить все записи на дату</b>\n\nВыберите дату:",
+        parse_mode="HTML",
+        reply_markup=_del_date_kb(),
+    )
+
+
+@router.callback_query(F.data.startswith("book:del_date:"))
+async def confirm_bulk_delete(callback: CallbackQuery) -> None:
+    await callback.answer()
+    raw = callback.data[len("book:del_date:"):]
+    try:
+        d = date.fromisoformat(raw)
+    except ValueError:
+        return
+    bookings = await repo.get_bookings_on_date(callback.from_user.id, d)
+    if not bookings:
+        await callback.message.edit_text(
+            f"На <b>{_fmt_date(d)}</b> нет записей.",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text="← Назад", callback_data="book:list"),
+            ]]),
+        )
+        return
+    names = ", ".join(b["client_name"] for b in bookings)
+    await callback.message.edit_text(
+        f"🗑 Удалить <b>все {len(bookings)} записи</b> на <b>{_fmt_date(d)}</b>?\n\n"
+        f"👤 {names}",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text=f"✅ Удалить все ({len(bookings)})",
+                                 callback_data=f"book:del_date_yes:{raw}"),
+            InlineKeyboardButton(text="← Назад", callback_data="book:list"),
+        ]]),
+    )
+
+
+@router.callback_query(F.data.startswith("book:del_date_yes:"))
+async def do_bulk_delete(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    raw = callback.data[len("book:del_date_yes:"):]
+    try:
+        d = date.fromisoformat(raw)
+    except ValueError:
+        return
+    cancelled = await repo.cancel_bookings_on_date(callback.from_user.id, d)
+    from aria.services import gcal
+    for b in cancelled:
+        if b["calendar_event_id"]:
+            try:
+                await gcal.delete_event(tenant.tenant_id, b["calendar_event_id"])
+            except Exception:
+                log.exception("GCal bulk delete failed for booking #%d", b["id"])
+    await callback.answer(f"Удалено {len(cancelled)} записей.", show_alert=True)
     await show_bookings_list(callback, callback.from_user.id)
