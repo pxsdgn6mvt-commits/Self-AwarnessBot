@@ -52,6 +52,135 @@ def health():
     return "ok", 200
 
 
+@app.route("/gcal/callback")
+def gcal_callback():
+    code      = request.args.get("code")
+    state_val = request.args.get("state")
+    error     = request.args.get("error")
+
+    if error:
+        log.warning("GCal OAuth error: %s", error)
+        return _gcal_error_page("Авторизация отклонена. Вернитесь в бот и попробуйте снова.")
+    if not code or not state_val:
+        return _gcal_error_page("Неверный запрос.")
+
+    try:
+        tenant_id = int(state_val)
+    except ValueError:
+        return _gcal_error_page("Неверный запрос.")
+
+    import requests as req
+
+    client_id     = os.getenv("GOOGLE_CLIENT_ID", "")
+    client_secret = os.getenv("GOOGLE_CLIENT_SECRET", "")
+    public_url    = os.getenv("ARIA_PUBLIC_URL", "").rstrip("/")
+    redirect_uri  = f"{public_url}/gcal/callback"
+
+    resp = req.post(
+        "https://oauth2.googleapis.com/token",
+        data={
+            "client_id":     client_id,
+            "client_secret": client_secret,
+            "code":          code,
+            "redirect_uri":  redirect_uri,
+            "grant_type":    "authorization_code",
+        },
+        timeout=10,
+    )
+    if not resp.ok:
+        log.error("GCal token exchange: %s %s", resp.status_code, resp.text)
+        return _gcal_error_page("Не удалось получить доступ. Попробуйте ещё раз.")
+
+    token_data    = resp.json()
+    access_token  = token_data.get("access_token", "")
+    refresh_token = token_data.get("refresh_token", "")
+    expires_in    = token_data.get("expires_in", 3600)
+
+    if not refresh_token:
+        return _gcal_error_page(
+            "Google не выдал разрешение. "
+            "Вернитесь в бот, нажмите «Переподключить» и попробуйте снова."
+        )
+
+    import asyncio
+    import asyncpg
+    from datetime import datetime, timedelta, timezone
+
+    async def _save() -> int | None:
+        db_url = os.getenv("ARIA_DATABASE_URL", "")
+        pool = await asyncpg.create_pool(db_url, min_size=1, max_size=1)
+        expiry = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+        try:
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    UPDATE aria_tenant_settings
+                    SET gcal_access_token=$2, gcal_refresh_token=$3,
+                        gcal_token_expiry=$4
+                    WHERE tenant_id=$1
+                    """,
+                    tenant_id, access_token, refresh_token, expiry,
+                )
+                row = await conn.fetchrow(
+                    "SELECT owner_telegram_id FROM aria_tenant_settings"
+                    " WHERE tenant_id=$1",
+                    tenant_id,
+                )
+            return row["owner_telegram_id"] if row else None
+        finally:
+            await pool.close()
+
+    try:
+        owner_id = asyncio.run(_save())
+    except Exception:
+        log.exception("Failed to save GCal tokens for tenant %d", tenant_id)
+        return _gcal_error_page("Ошибка сохранения. Попробуйте ещё раз.")
+
+    if owner_id:
+        bot_token = (
+            os.getenv(f"ARIA_BOT_{tenant_id}_TOKEN")
+            or os.getenv("ARIA_BOT_TOKEN", "")
+        )
+        if bot_token:
+            try:
+                req.get(
+                    f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                    params={
+                        "chat_id":    owner_id,
+                        "text": (
+                            "✅ <b>Google Calendar подключён!</b>\n\n"
+                            "Все новые записи будут автоматически появляться "
+                            "в вашем Google Calendar."
+                        ),
+                        "parse_mode": "HTML",
+                    },
+                    timeout=5,
+                )
+            except Exception:
+                pass
+
+    return (
+        "<html><head><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width,initial-scale=1'></head>"
+        "<body style='font-family:sans-serif;text-align:center;padding:60px 20px'>"
+        "<div style='font-size:64px'>✅</div>"
+        "<h2>Google Calendar подключён!</h2>"
+        "<p style='color:#666'>Вернитесь в Telegram — бот уже уведомлён.</p>"
+        "<p style='color:#aaa;font-size:13px'>Это окно можно закрыть.</p>"
+        "</body></html>"
+    )
+
+
+def _gcal_error_page(msg: str):
+    return (
+        "<html><head><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width,initial-scale=1'></head>"
+        "<body style='font-family:sans-serif;text-align:center;padding:60px 20px'>"
+        "<div style='font-size:64px'>❌</div>"
+        f"<h2>{msg}</h2>"
+        "</body></html>"
+    ), 400
+
 
 @app.route("/api/chat", methods=["POST"])
 def chat():

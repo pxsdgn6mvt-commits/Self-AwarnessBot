@@ -19,7 +19,7 @@ from aiogram.types import (
 
 import aria.db.repo as repo
 from aria.config import TenantConfig
-from aria.services.gcal import add_to_calendar_url
+from aria.services import gcal
 
 log = logging.getLogger(__name__)
 router = Router()
@@ -260,28 +260,57 @@ async def confirm_booking(
     client_name = data["client_name"]
     service     = data["service"]
 
-    await repo.create_booking(
+    booking_id = await repo.create_booking(
         user_id=callback.from_user.id,
         client_name=client_name,
         service=service,
         scheduled_at=scheduled_at,
     )
 
-    gcal_url = add_to_calendar_url(
-        title=f"{service} — {client_name}",
-        start=scheduled_at,
-        duration_minutes=tenant.salon_slot_minutes,
-        details=f"Клиент: {client_name}\nУслуга: {service}",
-    )
+    # Try automatic GCal sync if connected; fall back to manual "Add" link
+    gcal_event_url = ""
+    if await gcal.is_connected(tenant.tenant_id):
+        try:
+            result = await gcal.create_event(
+                tenant_id=tenant.tenant_id,
+                client_name=client_name,
+                service=service,
+                scheduled_at=scheduled_at,
+                duration_minutes=tenant.salon_slot_minutes,
+            )
+            if result:
+                event_id, gcal_event_url = result
+                await repo.update_booking_gcal_event(booking_id, event_id)
+        except Exception:
+            log.exception("GCal event creation failed (tenant #%d)", tenant.tenant_id)
+
+    if gcal_event_url:
+        # Auto-synced: show link to the created event
+        kb = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="📅 Открыть в Google Calendar", url=gcal_event_url),
+        ]])
+        gcal_note = "\n📆 Добавлено в Google Calendar"
+    else:
+        # Not connected or failed: offer one-tap manual add
+        fallback_url = gcal.add_to_calendar_url(
+            title=f"{service} — {client_name}",
+            start=scheduled_at,
+            duration_minutes=tenant.salon_slot_minutes,
+            details=f"Клиент: {client_name}\nУслуга: {service}",
+        )
+        kb = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="📅 Добавить в Google Calendar", url=fallback_url),
+        ]])
+        gcal_note = ""
+
     await callback.message.edit_text(
         f"✅ <b>Запись создана!</b>\n\n"
         f"👤 {client_name}\n"
         f"💅 {service}\n"
-        f"📅 {data['dt_display']}",
+        f"📅 {data['dt_display']}"
+        f"{gcal_note}",
         parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="📅 Добавить в Google Calendar", url=gcal_url),
-        ]]),
+        reply_markup=kb,
     )
     await callback.answer()
 
