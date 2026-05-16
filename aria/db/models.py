@@ -54,6 +54,13 @@ CREATE TABLE IF NOT EXISTS aria_conversations (
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Per-tenant runtime settings (owner set automatically on first /start)
+CREATE TABLE IF NOT EXISTS aria_tenant_settings (
+    tenant_id         INTEGER PRIMARY KEY,
+    owner_telegram_id BIGINT  NOT NULL,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Service catalogue managed by the salon owner via /admin
 CREATE TABLE IF NOT EXISTS aria_service_categories (
     id        SERIAL PRIMARY KEY,

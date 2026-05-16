@@ -290,6 +290,31 @@ def get_pool_instance() -> Optional[asyncpg.Pool]:
     return _pool
 
 
+# ── Tenant settings ───────────────────────────────────────────────────────────
+
+async def get_tenant_owner(tenant_id: int) -> Optional[int]:
+    """Return owner Telegram ID stored in DB, or None if not set yet."""
+    async with _p().acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT owner_telegram_id FROM aria_tenant_settings WHERE tenant_id=$1",
+            tenant_id,
+        )
+        return row["owner_telegram_id"] if row else None
+
+
+async def set_tenant_owner(tenant_id: int, owner_telegram_id: int) -> None:
+    """Persist owner Telegram ID for this tenant (called once on first /start)."""
+    async with _p().acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO aria_tenant_settings(tenant_id, owner_telegram_id)
+            VALUES ($1, $2)
+            ON CONFLICT (tenant_id) DO NOTHING
+            """,
+            tenant_id, owner_telegram_id,
+        )
+
+
 # ── Service catalogue (owner-managed) ────────────────────────────────────────
 
 async def get_categories(tenant_id: int) -> list[asyncpg.Record]:

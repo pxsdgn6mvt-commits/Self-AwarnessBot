@@ -19,18 +19,25 @@ from aria.config import TenantConfig
 log = logging.getLogger(__name__)
 router = Router()
 
-MAIN_KB = ReplyKeyboardMarkup(
+OWNER_KB = ReplyKeyboardMarkup(
     keyboard=[[
+        KeyboardButton(text="📋 Записи"),
         KeyboardButton(text="➕ Новая запись"),
-        KeyboardButton(text="📋 Ближайшие"),
+    ], [
+        KeyboardButton(text="⚙️ Услуги (/admin)"),
     ]],
     resize_keyboard=True,
 )
 
+_OWNER_WELCOME = (
+    "👑 Добро пожаловать! Вы зарегистрированы как владелец.\n\n"
+    "Используйте /admin чтобы добавить свои услуги и процедуры.\n"
+    "После этого можно управлять записями прямо здесь."
+)
+
 _WELCOME = (
-    "Привет! Я Aria, администратор {salon}.\n\n"
-    "Я помогу записаться, перенести или отменить визит.\n\n"
-    "Просто напишите мне или используйте кнопки внизу."
+    "👑 С возвращением!\n\n"
+    "Используйте кнопки ниже или просто напишите что нужно сделать."
 )
 
 
@@ -47,33 +54,56 @@ async def _send_avatar(message: Message, tenant: TenantConfig, caption: str) -> 
         return False
 
 
+async def resolve_owner(user_id: int, tenant: TenantConfig) -> int | None:
+    """Return the owner Telegram ID for this tenant (DB or env var)."""
+    db_owner = await repo.get_tenant_owner(tenant.tenant_id)
+    if db_owner:
+        return db_owner
+    if tenant.owner_telegram_id:
+        return tenant.owner_telegram_id
+    return None
+
+
 @router.message(CommandStart())
 async def cmd_start(message: Message, tenant: TenantConfig) -> None:
-    await repo.upsert_client(message.from_user.id)
-    await repo.clear_history(message.from_user.id)
-    welcome = _WELCOME.format(salon=tenant.salon_name)
-    sent = await _send_avatar(message, tenant, caption=welcome)
+    user_id = message.from_user.id
+    owner_id = await resolve_owner(user_id, tenant)
+
+    if owner_id is None:
+        # First person to /start becomes the owner
+        await repo.set_tenant_owner(tenant.tenant_id, user_id)
+        await repo.upsert_client(user_id)
+        await repo.clear_history(user_id)
+        sent = await _send_avatar(message, tenant, caption=_OWNER_WELCOME)
+        if not sent:
+            await message.answer(_OWNER_WELCOME, reply_markup=OWNER_KB)
+        else:
+            await message.answer("Чем могу помочь?", reply_markup=OWNER_KB)
+        return
+
+    # Known owner returning
+    await repo.upsert_client(user_id)
+    await repo.clear_history(user_id)
+    sent = await _send_avatar(message, tenant, caption=_WELCOME)
     if not sent:
-        await message.answer(welcome, reply_markup=MAIN_KB)
+        await message.answer(_WELCOME, reply_markup=OWNER_KB)
     else:
-        await message.answer("Чем могу помочь?", reply_markup=MAIN_KB)
+        await message.answer("Чем могу помочь?", reply_markup=OWNER_KB)
 
 
 @router.message(Command("reset"))
 async def cmd_reset(message: Message) -> None:
     await repo.clear_history(message.from_user.id)
-    await message.answer("Начнём сначала — чем могу помочь?", reply_markup=MAIN_KB)
+    await message.answer("Начнём сначала.", reply_markup=OWNER_KB)
 
 
 @router.message(Command("help"))
 async def cmd_help(message: Message) -> None:
     await message.answer(
-        "Просто напишите мне — специальные команды не нужны.\n\n"
-        "Вы можете:\n"
-        "• Записаться на услугу\n"
-        "• Перенести или отменить запись\n"
-        "• Узнать о наших услугах\n"
-        "• Встать в лист ожидания\n\n"
-        "/reset — начать новый диалог",
-        reply_markup=MAIN_KB,
+        "Команды:\n"
+        "/admin — управление услугами и процедурами\n"
+        "/reset — сбросить диалог\n\n"
+        "Или просто напишите что нужно сделать — например:\n"
+        "«Запиши Анну на маникюр в пятницу в 14:00»",
+        reply_markup=OWNER_KB,
     )

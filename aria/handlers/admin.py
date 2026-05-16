@@ -17,6 +17,7 @@ from aiogram.types import (
 
 import aria.db.repo as repo
 from aria.config import TenantConfig
+from aria.handlers.start import resolve_owner
 
 log = logging.getLogger(__name__)
 router = Router()
@@ -27,8 +28,9 @@ class AdminSG(StatesGroup):
     add_item     = State()
 
 
-def _is_owner(user_id: int, tenant: TenantConfig) -> bool:
-    return bool(tenant.owner_telegram_id) and user_id == tenant.owner_telegram_id
+async def _is_owner(user_id: int, tenant: TenantConfig) -> bool:
+    owner_id = await resolve_owner(user_id, tenant)
+    return owner_id is not None and user_id == owner_id
 
 
 async def _categories_kb(tenant_id: int) -> InlineKeyboardMarkup:
@@ -60,7 +62,7 @@ async def _items_kb(category_id: int, tenant_id: int) -> InlineKeyboardMarkup:
 
 @router.message(Command("admin"))
 async def cmd_admin(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
-    if not _is_owner(message.from_user.id, tenant):
+    if not await _is_owner(message.from_user.id, tenant):
         return
     await state.clear()
     await message.answer(
@@ -74,7 +76,7 @@ async def cmd_admin(message: Message, state: FSMContext, tenant: TenantConfig) -
 
 @router.callback_query(F.data == "adm:services")
 async def show_services(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
-    if not _is_owner(callback.from_user.id, tenant):
+    if not await _is_owner(callback.from_user.id, tenant):
         await callback.answer()
         return
     await state.clear()
@@ -88,7 +90,7 @@ async def show_services(callback: CallbackQuery, state: FSMContext, tenant: Tena
 
 @router.callback_query(F.data == "adm:addcat")
 async def prompt_add_category(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
-    if not _is_owner(callback.from_user.id, tenant):
+    if not await _is_owner(callback.from_user.id, tenant):
         await callback.answer()
         return
     await state.set_state(AdminSG.add_category)
@@ -115,7 +117,7 @@ async def save_category(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(F.data.startswith("adm:dcat:"))
 async def delete_category(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
-    if not _is_owner(callback.from_user.id, tenant):
+    if not await _is_owner(callback.from_user.id, tenant):
         await callback.answer()
         return
     await repo.delete_category(int(callback.data.split(":")[-1]))
@@ -129,7 +131,7 @@ async def delete_category(callback: CallbackQuery, state: FSMContext, tenant: Te
 
 @router.callback_query(F.data.startswith("adm:cat:"))
 async def show_category(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
-    if not _is_owner(callback.from_user.id, tenant):
+    if not await _is_owner(callback.from_user.id, tenant):
         await callback.answer()
         return
     await state.clear()
@@ -150,7 +152,7 @@ async def show_category(callback: CallbackQuery, state: FSMContext, tenant: Tena
 
 @router.callback_query(F.data.startswith("adm:addsub:"))
 async def prompt_add_item(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
-    if not _is_owner(callback.from_user.id, tenant):
+    if not await _is_owner(callback.from_user.id, tenant):
         await callback.answer()
         return
     cat_id = int(callback.data.split(":")[-1])
@@ -180,7 +182,7 @@ async def save_item(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(F.data.startswith("adm:dsub:"))
 async def delete_item(callback: CallbackQuery, tenant: TenantConfig) -> None:
-    if not _is_owner(callback.from_user.id, tenant):
+    if not await _is_owner(callback.from_user.id, tenant):
         await callback.answer()
         return
     parts = callback.data.split(":")
