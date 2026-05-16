@@ -196,3 +196,173 @@ async def delete_item(callback: CallbackQuery, tenant: TenantConfig) -> None:
 @router.callback_query(F.data == "adm:noop")
 async def noop(callback: CallbackQuery) -> None:
     await callback.answer()
+
+
+# ── Email settings ─────────────────────────────────────────────────────────────
+
+class EmailSG(StatesGroup):
+    address  = State()
+    password = State()
+    senders  = State()
+
+
+def _main_admin_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📋 Услуги и категории", callback_data="adm:services")],
+        [InlineKeyboardButton(text="📧 Email мониторинг",   callback_data="adm:email")],
+    ])
+
+
+async def _email_status_kb(tenant_id: int) -> InlineKeyboardMarkup:
+    row = await repo.get_email_settings(tenant_id)
+    has_email = row and row["email_address"]
+    rows = []
+    if has_email:
+        rows.append([InlineKeyboardButton(text="✏️ Изменить", callback_data="adm:email:setup")])
+        rows.append([InlineKeyboardButton(text="🗑 Отключить", callback_data="adm:email:clear")])
+    else:
+        rows.append([InlineKeyboardButton(text="➕ Подключить email", callback_data="adm:email:setup")])
+    rows.append([InlineKeyboardButton(text="← Назад", callback_data="adm:main")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+@router.message(Command("admin"))
+async def cmd_admin_v2(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
+    if not await _is_owner(message.from_user.id, tenant):
+        return
+    await state.clear()
+    await message.answer(
+        "⚙️ <b>Панель управления</b>",
+        parse_mode="HTML",
+        reply_markup=_main_admin_kb(),
+    )
+
+
+@router.callback_query(F.data == "adm:main")
+async def show_main_admin(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
+    if not await _is_owner(callback.from_user.id, tenant):
+        await callback.answer()
+        return
+    await state.clear()
+    await callback.message.edit_text(
+        "⚙️ <b>Панель управления</b>",
+        parse_mode="HTML",
+        reply_markup=_main_admin_kb(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "adm:email")
+async def show_email_menu(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    if not await _is_owner(callback.from_user.id, tenant):
+        await callback.answer()
+        return
+    row = await repo.get_email_settings(tenant.tenant_id)
+    has_email = row and row["email_address"]
+    if has_email:
+        senders = row["email_allowed_senders"] or "все"
+        text = (
+            f"📧 <b>Email мониторинг</b>\n\n"
+            f"Адрес: <code>{row['email_address']}</code>\n"
+            f"Сервер: {row['email_imap_server']}:{row['email_imap_port']}\n"
+            f"Разрешённые отправители: {senders}\n"
+            f"Опрос каждые: {row['email_poll_seconds']} сек"
+        )
+    else:
+        text = (
+            "📧 <b>Email мониторинг</b>\n\n"
+            "Не настроен.\n\n"
+            "Бот будет проверять входящие письма от нужных отправителей "
+            "и уведомлять вас в Telegram."
+        )
+    await callback.message.edit_text(text, parse_mode="HTML",
+                                     reply_markup=await _email_status_kb(tenant.tenant_id))
+    await callback.answer()
+
+
+@router.callback_query(F.data == "adm:email:clear")
+async def clear_email(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    if not await _is_owner(callback.from_user.id, tenant):
+        await callback.answer()
+        return
+    await repo.clear_email_settings(tenant.tenant_id)
+    await callback.message.edit_text(
+        "📧 Email мониторинг отключён.",
+        reply_markup=await _email_status_kb(tenant.tenant_id),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "adm:email:setup")
+async def start_email_setup(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
+    if not await _is_owner(callback.from_user.id, tenant):
+        await callback.answer()
+        return
+    await state.set_state(EmailSG.address)
+    await state.update_data(tenant_id=tenant.tenant_id)
+    await callback.message.answer(
+        "📧 <b>Шаг 1 из 3 — Email адрес</b>\n\n"
+        "Введите email-адрес для мониторинга:\n"
+        "<i>Пример: salon@gmail.com</i>",
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@router.message(EmailSG.address)
+async def email_got_address(message: Message, state: FSMContext) -> None:
+    addr = message.text.strip()
+    if "@" not in addr:
+        await message.answer("Введите корректный email-адрес:")
+        return
+    await state.update_data(email_address=addr)
+    await state.set_state(EmailSG.password)
+
+    is_gmail = "gmail" in addr.lower()
+    hint = (
+        "\n\n⚠️ <b>Gmail:</b> обычный пароль не подойдёт!\n"
+        "Нужен App Password:\n"
+        "1. Аккаунт Google → Безопасность\n"
+        "2. Двухэтапная верификация → включить\n"
+        "3. Пароли приложений → создать → скопировать 16 символов"
+        if is_gmail else ""
+    )
+    await message.answer(
+        f"📧 <b>Шаг 2 из 3 — Пароль</b>\n\nВведите пароль от почты:{hint}",
+        parse_mode="HTML",
+    )
+
+
+@router.message(EmailSG.password)
+async def email_got_password(message: Message, state: FSMContext) -> None:
+    await state.update_data(email_password=message.text.strip())
+    await state.set_state(EmailSG.senders)
+    await message.answer(
+        "📧 <b>Шаг 3 из 3 — Разрешённые отправители</b>\n\n"
+        "Введите email-адреса через запятую, от которых принимать письма.\n"
+        "Или напишите <b>все</b> чтобы принимать от любых отправителей.\n\n"
+        "<i>Пример: client@mail.ru, booking@platform.com</i>",
+        parse_mode="HTML",
+    )
+
+
+@router.message(EmailSG.senders)
+async def email_got_senders(message: Message, state: FSMContext) -> None:
+    raw = message.text.strip()
+    senders = "" if raw.lower() in ("все", "all", "*") else raw
+    data = await state.get_data()
+    await repo.save_email_settings(
+        data["tenant_id"],
+        email_address=data["email_address"],
+        email_password=data["email_password"],
+        email_allowed_senders=senders,
+    )
+    await state.clear()
+    senders_display = senders or "все"
+    await message.answer(
+        f"✅ Email мониторинг настроен!\n\n"
+        f"Адрес: <code>{data['email_address']}</code>\n"
+        f"Отправители: {senders_display}\n\n"
+        f"Бот начнёт проверять почту в течение минуты.",
+        parse_mode="HTML",
+    )

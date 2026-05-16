@@ -94,14 +94,12 @@ async def main() -> None:
         for t in tenants
     ]
 
-    # Start email monitors for tenants that have email configured
+    # Start email monitor for every tenant — each loop waits for DB settings
     email_tasks = [
         asyncio.create_task(run_email_monitor(t, bot))
         for t, bot in zip(tenants, bots)
-        if t.email_address and t.email_password
     ]
-    if email_tasks:
-        log.info("Email monitors started for %d bot(s)", len(email_tasks))
+    log.info("Email monitor loops started for %d bot(s)", len(email_tasks))
 
     try:
         await dp.start_polling(*bots, drop_pending_updates=True)

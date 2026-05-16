@@ -315,6 +315,52 @@ async def set_tenant_owner(tenant_id: int, owner_telegram_id: int) -> None:
         )
 
 
+async def get_email_settings(tenant_id: int) -> Optional[asyncpg.Record]:
+    """Return the full settings row or None if not configured."""
+    async with _p().acquire() as conn:
+        return await conn.fetchrow(
+            "SELECT * FROM aria_tenant_settings WHERE tenant_id=$1",
+            tenant_id,
+        )
+
+
+async def save_email_settings(
+    tenant_id: int,
+    *,
+    email_address: str,
+    email_password: str,
+    email_imap_server: str = "imap.gmail.com",
+    email_imap_port: int = 993,
+    email_allowed_senders: str = "",
+    email_poll_seconds: int = 60,
+) -> None:
+    async with _p().acquire() as conn:
+        await conn.execute(
+            """
+            UPDATE aria_tenant_settings SET
+                email_address=$2, email_password=$3,
+                email_imap_server=$4, email_imap_port=$5,
+                email_allowed_senders=$6, email_poll_seconds=$7
+            WHERE tenant_id=$1
+            """,
+            tenant_id, email_address, email_password,
+            email_imap_server, email_imap_port,
+            email_allowed_senders, email_poll_seconds,
+        )
+
+
+async def clear_email_settings(tenant_id: int) -> None:
+    async with _p().acquire() as conn:
+        await conn.execute(
+            """
+            UPDATE aria_tenant_settings SET
+                email_address=NULL, email_password=NULL
+            WHERE tenant_id=$1
+            """,
+            tenant_id,
+        )
+
+
 # ── Service catalogue (owner-managed) ────────────────────────────────────────
 
 async def get_categories(tenant_id: int) -> list[asyncpg.Record]:

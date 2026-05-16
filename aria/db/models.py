@@ -54,11 +54,17 @@ CREATE TABLE IF NOT EXISTS aria_conversations (
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Per-tenant runtime settings (owner set automatically on first /start)
+-- Per-tenant runtime settings (owner set on first /start; email set via /admin)
 CREATE TABLE IF NOT EXISTS aria_tenant_settings (
-    tenant_id         INTEGER PRIMARY KEY,
-    owner_telegram_id BIGINT  NOT NULL,
-    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    tenant_id           INTEGER PRIMARY KEY,
+    owner_telegram_id   BIGINT  NOT NULL,
+    email_address       TEXT,
+    email_password      TEXT,
+    email_imap_server   TEXT    NOT NULL DEFAULT 'imap.gmail.com',
+    email_imap_port     INTEGER NOT NULL DEFAULT 993,
+    email_allowed_senders TEXT  NOT NULL DEFAULT '',
+    email_poll_seconds  INTEGER NOT NULL DEFAULT 60,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Service catalogue managed by the salon owner via /admin

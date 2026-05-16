@@ -218,40 +218,75 @@ async def _get_owner_id(tenant: TenantConfig) -> Optional[int]:
 
 # ── Main monitor loop ──────────────────────────────────────────────────────────
 
+async def _load_settings(tenant: TenantConfig) -> tuple[str, str, str, int, set[str], int] | None:
+    """
+    Load email settings from DB first, fall back to env vars.
+    Returns (address, password, imap_server, imap_port, allowed_set, poll_seconds)
+    or None if email is not configured.
+    """
+    import aria.db.repo as repo
+    try:
+        row = await repo.get_email_settings(tenant.tenant_id)
+        if row and row["email_address"] and row["email_password"]:
+            allowed = {
+                s.strip().lower()
+                for s in (row["email_allowed_senders"] or "").split(",")
+                if s.strip()
+            }
+            return (
+                row["email_address"],
+                row["email_password"],
+                row["email_imap_server"] or "imap.gmail.com",
+                row["email_imap_port"] or 993,
+                allowed,
+                row["email_poll_seconds"] or 60,
+            )
+    except Exception:
+        pass
+
+    # Fall back to env-var config
+    if tenant.email_address and tenant.email_password:
+        allowed = {
+            s.strip().lower()
+            for s in tenant.email_allowed_senders.split(",")
+            if s.strip()
+        }
+        return (
+            tenant.email_address, tenant.email_password,
+            tenant.email_imap_server, tenant.email_imap_port,
+            allowed, tenant.email_poll_seconds,
+        )
+    return None
+
+
 async def run_email_monitor(tenant: TenantConfig, bot: Bot) -> None:
     """
-    Long-running coroutine. Call once per tenant that has email configured.
-    Silently exits if EMAIL_ADDRESS or EMAIL_PASSWORD are not set.
+    Long-running coroutine started for every tenant at boot.
+    Re-reads DB settings on each cycle — picks up /admin changes within one poll interval.
     """
-    if not tenant.email_address or not tenant.email_password:
-        return
-
-    allowed: set[str] = {
-        s.strip().lower()
-        for s in tenant.email_allowed_senders.split(",")
-        if s.strip()
-    }
-
-    log.info(
-        "tenant #%d: email monitor started — %s  server=%s:%d  poll=%ds  senders=%s",
-        tenant.tenant_id,
-        tenant.email_address,
-        tenant.email_imap_server,
-        tenant.email_imap_port,
-        tenant.email_poll_seconds,
-        allowed or "ALL",
-    )
-
+    log.info("tenant #%d: email monitor loop running (waiting for settings)", tenant.tenant_id)
     failure_streak = 0
+
     while True:
+        cfg = await _load_settings(tenant)
+
+        if cfg is None:
+            # Not configured yet — check again in 60 s
+            await asyncio.sleep(60)
+            continue
+
+        address, password, imap_server, imap_port, allowed, poll_seconds = cfg
+
         try:
-            await _poll_once(tenant, bot, allowed)
+            await _poll_once_with_cfg(tenant, bot, address, password,
+                                      imap_server, imap_port, allowed)
+            if failure_streak:
+                log.info("tenant #%d: email monitor recovered", tenant.tenant_id)
             failure_streak = 0
         except imaplib.IMAP4.error as exc:
-            # Authentication errors — log clearly, back off longer
             log.error(
-                "tenant #%d: IMAP auth/protocol error: %s  "
-                "(check EMAIL_ADDRESS and EMAIL_PASSWORD — Gmail requires an App Password)",
+                "tenant #%d: IMAP auth error: %s  "
+                "(Gmail needs an App Password, not your account password)",
                 tenant.tenant_id, exc,
             )
             failure_streak = min(failure_streak + 2, len(_RETRY_DELAYS) - 1)
@@ -259,8 +294,50 @@ async def run_email_monitor(tenant: TenantConfig, bot: Bot) -> None:
             log.warning("tenant #%d: IMAP network error: %s", tenant.tenant_id, exc)
             failure_streak = min(failure_streak + 1, len(_RETRY_DELAYS) - 1)
         except Exception as exc:
-            log.exception("tenant #%d: email monitor unexpected error: %s", tenant.tenant_id, exc)
+            log.exception("tenant #%d: email monitor error: %s", tenant.tenant_id, exc)
             failure_streak = min(failure_streak + 1, len(_RETRY_DELAYS) - 1)
 
-        delay = _RETRY_DELAYS[failure_streak] if failure_streak else tenant.email_poll_seconds
+        delay = _RETRY_DELAYS[failure_streak] if failure_streak else poll_seconds
         await asyncio.sleep(delay)
+
+
+async def _poll_once_with_cfg(
+    tenant: TenantConfig, bot: Bot,
+    address: str, password: str,
+    imap_server: str, imap_port: int,
+    allowed: set[str],
+) -> None:
+    loop = asyncio.get_event_loop()
+    conn: Optional[imaplib.IMAP4_SSL] = None
+    try:
+        conn = await loop.run_in_executor(
+            None, _connect, imap_server, imap_port, address, password
+        )
+        messages = await loop.run_in_executor(None, _fetch_unseen, conn, allowed)
+    finally:
+        if conn:
+            try:
+                conn.logout()
+            except Exception:
+                pass
+
+    owner_id = await _get_owner_id(tenant)
+    for uid, subject, body in messages:
+        uid_str = uid.decode() if isinstance(uid, bytes) else str(uid)
+        log.info("tenant #%d: email uid=%s subject=%r", tenant.tenant_id, uid_str, subject)
+        text = f"[Email] Тема: {subject}\n\n{body[:2000]}".strip()
+        try:
+            reply, _ = await chat(
+                user_id=owner_id or tenant.tenant_id,
+                user_text=text,
+                bot=bot,
+                tenant=tenant,
+            )
+            if owner_id:
+                await bot.send_message(
+                    chat_id=owner_id,
+                    text=f"📧 <b>{subject}</b>\n\n{reply}",
+                    parse_mode="HTML",
+                )
+        except Exception:
+            log.exception("tenant #%d: failed to process email uid=%s", tenant.tenant_id, uid_str)
