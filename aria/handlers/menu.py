@@ -1,4 +1,4 @@
-"""Inline menu — gives the owner access to all bot functions via button navigation."""
+"""Inline menu — settings panel for salon owners; admin panel for platform admin."""
 
 from __future__ import annotations
 
@@ -13,7 +13,9 @@ from aiogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    KeyboardButton,
     Message,
+    ReplyKeyboardMarkup,
 )
 
 import aria.db.repo as repo
@@ -26,31 +28,46 @@ log = logging.getLogger(__name__)
 router = Router()
 
 
+# ── Admin reply keyboard (shown in @AriaReseptionist_Bot) ─────────────────────
+
+ADMIN_KB = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="📋 Список ботов"), KeyboardButton(text="➕ Добавить бота")],
+        [KeyboardButton(text="📣 Рассылка"),      KeyboardButton(text="📱 Управление")],
+    ],
+    resize_keyboard=True,
+    is_persistent=True,
+)
+
+
+# ── Helper ────────────────────────────────────────────────────────────────────
+
+def _is_admin_bot(tenant: TenantConfig, user_id: int) -> bool:
+    """True when the platform admin is using their own management bot."""
+    return tenant.is_owner(user_id) and user_id == settings.ADMIN_TELEGRAM_ID
+
+
 # ── Keyboard builders ─────────────────────────────────────────────────────────
 
-def _main_menu_kb(is_admin: bool = False) -> InlineKeyboardMarkup:
-    rows = [
+def _owner_settings_kb() -> InlineKeyboardMarkup:
+    """Settings panel for salon owner bots — no back button."""
+    return InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="📅 Сегодня",     callback_data="sched:today"),
-            InlineKeyboardButton(text="📅 Завтра",      callback_data="sched:tomorrow"),
+            InlineKeyboardButton(text="🕐 Часовой пояс",    callback_data="cfg:tz"),
+            InlineKeyboardButton(text="📅 Google Calendar", callback_data="cfg:cal"),
         ],
         [
-            InlineKeyboardButton(text="📆 Эта неделя",  callback_data="sched:week"),
-            InlineKeyboardButton(text="📆 Следующая",   callback_data="sched:next_week"),
+            InlineKeyboardButton(text="📧 Email",            callback_data="cfg:email"),
+            InlineKeyboardButton(text="🔍 Тест GCal",        callback_data="cfg:test_cal"),
         ],
-        [
-            InlineKeyboardButton(text="📋 Ближайшие",   callback_data="sched:upcoming"),
-            InlineKeyboardButton(text="➕ Новая запись", callback_data="qb_start"),
-        ],
-        [InlineKeyboardButton(text="⚙️ Настройки",     callback_data="menu:settings")],
-    ]
-    if is_admin:
-        rows.append([InlineKeyboardButton(text="👑 Администрирование", callback_data="menu:admin")])
-    rows.append([InlineKeyboardButton(text="✖️ Закрыть", callback_data="menu:close")])
-    return InlineKeyboardMarkup(inline_keyboard=rows)
+        [InlineKeyboardButton(text="🗑 Сбросить историю",    callback_data="cfg:reset_chat")],
+        [InlineKeyboardButton(text="📊 Статус бота",         callback_data="cfg:status")],
+        [InlineKeyboardButton(text="✖️ Закрыть",             callback_data="menu:close")],
+    ])
 
 
-def _settings_kb() -> InlineKeyboardMarkup:
+def _admin_settings_kb() -> InlineKeyboardMarkup:
+    """Settings panel for admin bot — has Back button to admin panel."""
     return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="🕐 Часовой пояс",    callback_data="cfg:tz"),
@@ -66,7 +83,8 @@ def _settings_kb() -> InlineKeyboardMarkup:
     ])
 
 
-def _admin_kb() -> InlineKeyboardMarkup:
+def _admin_inline_kb() -> InlineKeyboardMarkup:
+    """Main admin panel for @AriaReseptionist_Bot."""
     return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="📋 Список ботов",  callback_data="adm:list"),
@@ -77,7 +95,8 @@ def _admin_kb() -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="👑 Дать VIP",      callback_data="adm:vip_help"),
             InlineKeyboardButton(text="❌ Отозвать VIP",  callback_data="adm:revoke_help"),
         ],
-        [InlineKeyboardButton(text="◀️ Назад",            callback_data="menu:main")],
+        [InlineKeyboardButton(text="⚙️ Настройки",        callback_data="menu:settings")],
+        [InlineKeyboardButton(text="✖️ Закрыть",          callback_data="menu:close")],
     ])
 
 
@@ -116,9 +135,8 @@ async def _show_week(message: Message, tenant: TenantConfig, offset_weeks: int =
     lines = [f"📆 <b>{week_label}</b> ({date_range})\n"]
     for i in range(7):
         d = monday_date + timedelta(days=i)
-        d_iso = d.isoformat()
         day_label = f"{_DAY_RU[i]} {d.strftime('%-d %b')}"
-        day_events = by_day.get(d_iso, [])
+        day_events = by_day.get(d.isoformat(), [])
         if day_events:
             lines.append(f"\n<b>{day_label}:</b>")
             for e in day_events:
@@ -129,20 +147,35 @@ async def _show_week(message: Message, tenant: TenantConfig, offset_weeks: int =
     await message.answer("\n".join(lines))
 
 
-# ── Entry point: reply keyboard button ───────────────────────────────────────
+# ── Entry points: reply keyboard buttons ──────────────────────────────────────
 
 @router.message(F.text == "📱 Меню", SetupDone())
 async def cmd_menu(message: Message, tenant: TenantConfig) -> None:
-    is_admin = message.from_user.id == settings.ADMIN_TELEGRAM_ID
-    await message.answer("📱 <b>Меню</b>", reply_markup=_main_menu_kb(is_admin))
+    if _is_admin_bot(tenant, message.from_user.id):
+        await message.answer("👑 <b>Управление платформой</b>", reply_markup=_admin_inline_kb())
+    else:
+        await message.answer("⚙️ <b>Настройки</b>", reply_markup=_owner_settings_kb())
+
+
+@router.message(F.text == "📱 Управление", SetupDone())
+async def cmd_admin_manage(message: Message, tenant: TenantConfig) -> None:
+    if not _is_admin_bot(tenant, message.from_user.id):
+        return
+    await message.answer("👑 <b>Управление платформой</b>", reply_markup=_admin_inline_kb())
 
 
 # ── Menu navigation ───────────────────────────────────────────────────────────
 
 @router.callback_query(F.data == "menu:main", SetupDone())
 async def cb_menu_main(callback: CallbackQuery, tenant: TenantConfig) -> None:
-    is_admin = callback.from_user.id == settings.ADMIN_TELEGRAM_ID
-    await callback.message.edit_text("📱 <b>Меню</b>", reply_markup=_main_menu_kb(is_admin))
+    if _is_admin_bot(tenant, callback.from_user.id):
+        await callback.message.edit_text(
+            "👑 <b>Управление платформой</b>", reply_markup=_admin_inline_kb()
+        )
+    else:
+        await callback.message.edit_text(
+            "⚙️ <b>Настройки</b>", reply_markup=_owner_settings_kb()
+        )
     await callback.answer()
 
 
@@ -151,16 +184,8 @@ async def cb_menu_settings(callback: CallbackQuery, tenant: TenantConfig) -> Non
     if not tenant.is_owner(callback.from_user.id):
         await callback.answer("Нет доступа.", show_alert=True)
         return
-    await callback.message.edit_text("⚙️ <b>Настройки</b>", reply_markup=_settings_kb())
-    await callback.answer()
-
-
-@router.callback_query(F.data == "menu:admin")
-async def cb_menu_admin(callback: CallbackQuery) -> None:
-    if callback.from_user.id != settings.ADMIN_TELEGRAM_ID:
-        await callback.answer("Нет доступа.", show_alert=True)
-        return
-    await callback.message.edit_text("👑 <b>Администрирование</b>", reply_markup=_admin_kb())
+    kb = _admin_settings_kb() if _is_admin_bot(tenant, callback.from_user.id) else _owner_settings_kb()
+    await callback.message.edit_text("⚙️ <b>Настройки</b>", reply_markup=kb)
     await callback.answer()
 
 
@@ -173,7 +198,7 @@ async def cb_menu_close(callback: CallbackQuery) -> None:
     await callback.answer()
 
 
-# ── Schedule callbacks ────────────────────────────────────────────────────────
+# ── Schedule callbacks (accessible from inline menu for owner bots) ────────────
 
 @router.callback_query(F.data == "sched:today", SetupDone())
 async def cb_sched_today(callback: CallbackQuery, tenant: TenantConfig) -> None:
@@ -331,13 +356,13 @@ async def cb_adm_add(callback: CallbackQuery, state: FSMContext) -> None:
 
 
 @router.callback_query(F.data == "adm:broadcast")
-async def cb_adm_broadcast(callback: CallbackQuery) -> None:
+async def cb_adm_broadcast(callback: CallbackQuery, state: FSMContext) -> None:
     if callback.from_user.id != settings.ADMIN_TELEGRAM_ID:
         await callback.answer("Нет доступа.", show_alert=True)
         return
-    await callback.message.answer(
-        "Используй команду:\n<code>/broadcast текст рассылки</code>"
-    )
+    from aria.handlers.admin import AdminBroadcast
+    await state.set_state(AdminBroadcast.waiting_text)
+    await callback.message.answer("Введи текст рассылки. /cancel чтобы отменить.")
     await callback.answer()
 
 

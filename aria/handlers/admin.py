@@ -9,7 +9,7 @@ import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
-from aiogram import Router
+from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -29,6 +29,76 @@ def _is_admin(user_id: int) -> bool:
 
 class AddBot(StatesGroup):
     waiting_token = State()
+
+
+class AdminBroadcast(StatesGroup):
+    waiting_text = State()
+
+
+# ── Keyboard button handlers (ADMIN_KB) ───────────────────────────────────────
+
+@router.message(F.text == "📋 Список ботов")
+async def kb_list_bots(message: Message, tenant: TenantConfig) -> None:
+    if not _is_admin(message.from_user.id):
+        return
+    tenants = await repo.list_active_tenants()
+    if not tenants:
+        await message.answer("Нет активных ботов.")
+        return
+    lines = []
+    for t in tenants:
+        status = "✅" if t["setup_complete"] else "⏳ ожидает настройки"
+        cal = "📅" if t["google_cal_id"] else "💾"
+        tz = t.get("timezone") or "UTC"
+        owner = t["owner_tg_id"] or "—"
+        lines.append(
+            f"#{t['id']} <b>{t['salon_name']}</b> {cal}\n"
+            f"  {status} | tz: {tz} | owner: {owner}"
+        )
+    await message.answer("Активные боты:\n\n" + "\n\n".join(lines))
+
+
+@router.message(F.text == "➕ Добавить бота")
+async def kb_add_bot(message: Message, state: FSMContext) -> None:
+    if not _is_admin(message.from_user.id):
+        return
+    await state.set_state(AddBot.waiting_token)
+    await message.answer(
+        "Пришли токен нового бота (получить у @BotFather).\n\n"
+        "После добавления владелец салона откроет бот и пройдёт настройку за 1 минуту."
+    )
+
+
+@router.message(F.text == "📣 Рассылка")
+async def kb_broadcast(message: Message, state: FSMContext) -> None:
+    if not _is_admin(message.from_user.id):
+        return
+    await state.set_state(AdminBroadcast.waiting_text)
+    await message.answer("Введи текст рассылки. /cancel чтобы отменить.")
+
+
+@router.message(AdminBroadcast.waiting_text)
+async def process_broadcast_text(message: Message, state: FSMContext) -> None:
+    text = message.text.strip()
+    await state.clear()
+
+    from aria import runtime
+    tenants = await repo.list_active_owner_bots()
+    sent = failed = 0
+    for t in tenants:
+        bot = runtime.bots.get(t["id"])
+        if not bot:
+            failed += 1
+            continue
+        try:
+            await bot.send_message(chat_id=t["owner_tg_id"], text=text)
+            sent += 1
+            await asyncio.sleep(0.05)
+        except Exception as exc:
+            log.warning("Broadcast failed for tenant %d: %s", t["id"], exc)
+            failed += 1
+
+    await message.answer(f"✅ Отправлено: {sent}, ошибок: {failed}")
 
 
 # ── /add_bot ──────────────────────────────────────────────────────────────────

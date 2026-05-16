@@ -14,7 +14,9 @@ from aiogram.types import (
 )
 
 import aria.db.repo as repo
+from aria.config import settings as _settings
 from aria.filters import SetupDone
+from aria.handlers.menu import ADMIN_KB
 from aria.handlers.quick import MAIN_KB
 from aria.middleware import TenantMiddleware
 from aria.services.booking import invalidate_adapter
@@ -56,15 +58,26 @@ async def cmd_start(message: Message, state: FSMContext, tenant: TenantConfig) -
                               message.from_user.language_code or "ru")
     await repo.clear_history(tenant.id, message.from_user.id)
 
-    await message.answer(
-        f"Привет, {tenant.owner_name}! Я Aria — твой ресепшн для <b>{tenant.salon_name}</b>.\n\n"
-        "Используй кнопки внизу или просто пиши:\n"
-        "• «что у меня сегодня?»\n"
-        "• «запиши Катю на ресницы 20 мая в 14:00»\n"
-        "• «что на этой неделе?»\n\n"
-        "/help — список примеров",
-        reply_markup=MAIN_KB,
-    )
+    if tenant.is_owner(message.from_user.id) and message.from_user.id == _settings.ADMIN_TELEGRAM_ID:
+        await message.answer(
+            "👑 <b>Aria — панель управления</b>\n\n"
+            "Управляй ботами через кнопки ниже или команды:\n"
+            "• /list_bots — список активных ботов\n"
+            "• /add_bot — добавить новый бот\n"
+            "• /broadcast &lt;текст&gt; — рассылка всем владельцам\n"
+            "• /set_vip &lt;tid&gt; &lt;uid&gt; [дней] — назначить VIP",
+            reply_markup=ADMIN_KB,
+        )
+    else:
+        await message.answer(
+            f"Привет, {tenant.owner_name}! Я Aria — твой ресепшн для <b>{tenant.salon_name}</b>.\n\n"
+            "Используй кнопки внизу или просто пиши:\n"
+            "• «что у меня сегодня?»\n"
+            "• «запиши Катю на ресницы 20 мая в 14:00»\n"
+            "• «что на этой неделе?»\n\n"
+            "/help — список примеров",
+            reply_markup=MAIN_KB,
+        )
 
 
 @router.message(Command("reset"))
