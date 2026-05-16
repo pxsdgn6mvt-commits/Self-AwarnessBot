@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS aria_tenant_settings (
     email_imap_port     INTEGER NOT NULL DEFAULT 993,
     email_allowed_senders TEXT  NOT NULL DEFAULT '',
     email_poll_seconds  INTEGER NOT NULL DEFAULT 60,
+    email_since         TEXT,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

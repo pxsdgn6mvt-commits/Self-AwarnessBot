@@ -85,6 +85,7 @@ async def init_db(dsn: str) -> None:
             ("email_imap_port",       "INTEGER NOT NULL DEFAULT 993"),
             ("email_allowed_senders", "TEXT NOT NULL DEFAULT ''"),
             ("email_poll_seconds",    "INTEGER NOT NULL DEFAULT 60"),
+            ("email_since",           "TEXT"),
         ]:
             if col not in existing_cols:
                 try:
@@ -365,6 +366,7 @@ async def _ensure_email_cols(conn: asyncpg.Connection) -> None:
         ("email_imap_port",       "INTEGER NOT NULL DEFAULT 993"),
         ("email_allowed_senders", "TEXT NOT NULL DEFAULT ''"),
         ("email_poll_seconds",    "INTEGER NOT NULL DEFAULT 60"),
+        ("email_since",           "TEXT"),
     ]:
         if col not in existing:
             await conn.execute(f"ALTER TABLE aria_tenant_settings ADD COLUMN {col} {defn}")
@@ -375,7 +377,8 @@ _UPDATE_EMAIL_SQL = """
     UPDATE aria_tenant_settings SET
         email_address=$2, email_password=$3,
         email_imap_server=$4, email_imap_port=$5,
-        email_allowed_senders=$6, email_poll_seconds=$7
+        email_allowed_senders=$6, email_poll_seconds=$7,
+        email_since=$8
     WHERE tenant_id=$1
 """
 
@@ -390,10 +393,15 @@ async def save_email_settings(
     email_allowed_senders: str = "",
     email_poll_seconds: int = 60,
 ) -> None:
+    from datetime import date as _date
+    dt = _date.today()
+    months = ("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec")
+    email_since = f"{dt.day}-{months[dt.month - 1]}-{dt.year}"
     args = (
         tenant_id, email_address, email_password,
         email_imap_server, email_imap_port,
         email_allowed_senders, email_poll_seconds,
+        email_since,
     )
     async with _p().acquire() as conn:
         try:

@@ -110,19 +110,22 @@ def _connect(server: str, port: int, address: str, password: str) -> imaplib.IMA
 def _fetch_unseen(
     conn: imaplib.IMAP4_SSL,
     allowed: set[str],
+    since_str: Optional[str] = None,
 ) -> list[tuple[bytes, str, str]]:
     """
-    Search INBOX for unread messages, filter by allowed senders,
+    Search INBOX for unread messages received on or after *since_str*
+    (IMAP date format "16-May-2026"), filter by allowed senders, and
     return [(uid_bytes, subject, body)].
 
-    Emails from disallowed senders are left unread.
-    Emails from allowed senders are left as-is (marked read by IMAP4_SSL fetch
-    by default; explicit \\Seen flag not set here so the flag depends on server).
-    We rely on UID uniqueness — once processed, the message stays in INBOX
-    but subsequent polls won't re-fetch it because we only search UNSEEN.
+    `since_str` is set to today when the owner configures email, so pre-existing
+    inbox messages are never processed — only mail that arrives after setup.
+
+    Emails from disallowed senders have their \\Seen flag reverted so they
+    remain visible if the allow-list is widened later.
     """
     conn.select("INBOX", readonly=False)
-    _, data = conn.uid("search", None, "UNSEEN")
+    criteria = f"UNSEEN SINCE {since_str}" if since_str else "UNSEEN"
+    _, data = conn.uid("search", None, criteria)
     if not data or not data[0]:
         return []
 
@@ -218,10 +221,12 @@ async def _get_owner_id(tenant: TenantConfig) -> Optional[int]:
 
 # ── Main monitor loop ──────────────────────────────────────────────────────────
 
-async def _load_settings(tenant: TenantConfig) -> tuple[str, str, str, int, set[str], int] | None:
+async def _load_settings(
+    tenant: TenantConfig,
+) -> tuple[str, str, str, int, set[str], int, Optional[str]] | None:
     """
     Load email settings from DB first, fall back to env vars.
-    Returns (address, password, imap_server, imap_port, allowed_set, poll_seconds)
+    Returns (address, password, imap_server, imap_port, allowed_set, poll_seconds, since_str)
     or None if email is not configured.
     """
     import aria.db.repo as repo
@@ -233,6 +238,11 @@ async def _load_settings(tenant: TenantConfig) -> tuple[str, str, str, int, set[
                 for s in (row["email_allowed_senders"] or "").split(",")
                 if s.strip()
             }
+            since_str: Optional[str] = None
+            try:
+                since_str = row["email_since"] or None
+            except (KeyError, IndexError):
+                pass
             return (
                 row["email_address"],
                 row["email_password"],
@@ -240,11 +250,12 @@ async def _load_settings(tenant: TenantConfig) -> tuple[str, str, str, int, set[
                 row["email_imap_port"] or 993,
                 allowed,
                 row["email_poll_seconds"] or 60,
+                since_str,
             )
     except Exception:
         pass
 
-    # Fall back to env-var config
+    # Fall back to env-var config (no since_str — process all unseen)
     if tenant.email_address and tenant.email_password:
         allowed = {
             s.strip().lower()
@@ -254,7 +265,7 @@ async def _load_settings(tenant: TenantConfig) -> tuple[str, str, str, int, set[
         return (
             tenant.email_address, tenant.email_password,
             tenant.email_imap_server, tenant.email_imap_port,
-            allowed, tenant.email_poll_seconds,
+            allowed, tenant.email_poll_seconds, None,
         )
     return None
 
@@ -275,11 +286,11 @@ async def run_email_monitor(tenant: TenantConfig, bot: Bot) -> None:
             await asyncio.sleep(60)
             continue
 
-        address, password, imap_server, imap_port, allowed, poll_seconds = cfg
+        address, password, imap_server, imap_port, allowed, poll_seconds, since_str = cfg
 
         try:
             await _poll_once_with_cfg(tenant, bot, address, password,
-                                      imap_server, imap_port, allowed)
+                                      imap_server, imap_port, allowed, since_str)
             if failure_streak:
                 log.info("tenant #%d: email monitor recovered", tenant.tenant_id)
             failure_streak = 0
@@ -306,6 +317,7 @@ async def _poll_once_with_cfg(
     address: str, password: str,
     imap_server: str, imap_port: int,
     allowed: set[str],
+    since_str: Optional[str] = None,
 ) -> None:
     loop = asyncio.get_event_loop()
     conn: Optional[imaplib.IMAP4_SSL] = None
@@ -313,7 +325,9 @@ async def _poll_once_with_cfg(
         conn = await loop.run_in_executor(
             None, _connect, imap_server, imap_port, address, password
         )
-        messages = await loop.run_in_executor(None, _fetch_unseen, conn, allowed)
+        messages = await loop.run_in_executor(
+            None, _fetch_unseen, conn, allowed, since_str
+        )
     finally:
         if conn:
             try:
