@@ -65,6 +65,10 @@ CREATE TABLE IF NOT EXISTS aria_tenant_settings (
     email_allowed_senders TEXT  NOT NULL DEFAULT '',
     email_poll_seconds  INTEGER NOT NULL DEFAULT 60,
     email_since         TEXT,
+    gcal_access_token  TEXT,
+    gcal_refresh_token TEXT,
+    gcal_token_expiry  TIMESTAMPTZ,
+    gcal_calendar_id   TEXT NOT NULL DEFAULT 'primary',
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

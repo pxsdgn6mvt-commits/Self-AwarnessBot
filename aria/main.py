@@ -36,6 +36,7 @@ from aria.db.repo import init_db, close_pool
 from aria.handlers.admin import router as admin_router
 from aria.handlers.start import router as start_router
 from aria.handlers.chat import router as chat_router
+from aria.handlers.booking import router as booking_router
 from aria.services.scheduler import get_scheduler
 from aria.services.email_monitor import run_email_monitor
 
@@ -83,6 +84,7 @@ async def main() -> None:
     dp = Dispatcher(storage=MemoryStorage())
     dp.update.outer_middleware(TenantMiddleware(tenant_map))
     dp.include_router(admin_router)
+    dp.include_router(booking_router)
     dp.include_router(start_router)
     dp.include_router(chat_router)
 

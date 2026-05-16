@@ -86,6 +86,10 @@ async def init_db(dsn: str) -> None:
             ("email_allowed_senders", "TEXT NOT NULL DEFAULT ''"),
             ("email_poll_seconds",    "INTEGER NOT NULL DEFAULT 60"),
             ("email_since",           "TEXT"),
+            ("gcal_access_token",  "TEXT"),
+            ("gcal_refresh_token", "TEXT"),
+            ("gcal_token_expiry",  "TIMESTAMPTZ"),
+            ("gcal_calendar_id",   "TEXT NOT NULL DEFAULT 'primary'"),
         ]:
             if col not in existing_cols:
                 try:
@@ -193,6 +197,14 @@ async def update_booking_status(booking_id: int, status: str) -> None:
         await conn.execute(
             "UPDATE aria_bookings SET status=$1 WHERE id=$2",
             status, booking_id,
+        )
+
+
+async def update_booking_gcal_event(booking_id: int, event_id: str) -> None:
+    async with _p().acquire() as conn:
+        await conn.execute(
+            "UPDATE aria_bookings SET calendar_event_id=$1 WHERE id=$2",
+            event_id, booking_id,
         )
 
 
@@ -347,6 +359,58 @@ async def get_email_settings(tenant_id: int) -> Optional[asyncpg.Record]:
     async with _p().acquire() as conn:
         return await conn.fetchrow(
             "SELECT * FROM aria_tenant_settings WHERE tenant_id=$1",
+            tenant_id,
+        )
+
+
+async def get_gcal_tokens(tenant_id: int) -> Optional[asyncpg.Record]:
+    async with _p().acquire() as conn:
+        return await conn.fetchrow(
+            "SELECT gcal_access_token, gcal_refresh_token, gcal_token_expiry, gcal_calendar_id"
+            " FROM aria_tenant_settings WHERE tenant_id=$1",
+            tenant_id,
+        )
+
+
+async def save_gcal_tokens(
+    tenant_id: int,
+    access_token: str,
+    refresh_token: str,
+    token_expiry: datetime,
+    calendar_id: str = "primary",
+) -> None:
+    async with _p().acquire() as conn:
+        await conn.execute(
+            """
+            UPDATE aria_tenant_settings SET
+                gcal_access_token=$2, gcal_refresh_token=$3,
+                gcal_token_expiry=$4, gcal_calendar_id=$5
+            WHERE tenant_id=$1
+            """,
+            tenant_id, access_token, refresh_token, token_expiry, calendar_id,
+        )
+
+
+async def update_gcal_access_token(
+    tenant_id: int, access_token: str, expiry: datetime
+) -> None:
+    async with _p().acquire() as conn:
+        await conn.execute(
+            "UPDATE aria_tenant_settings SET gcal_access_token=$2, gcal_token_expiry=$3"
+            " WHERE tenant_id=$1",
+            tenant_id, access_token, expiry,
+        )
+
+
+async def clear_gcal_tokens(tenant_id: int) -> None:
+    async with _p().acquire() as conn:
+        await conn.execute(
+            """
+            UPDATE aria_tenant_settings SET
+                gcal_access_token=NULL, gcal_refresh_token=NULL,
+                gcal_token_expiry=NULL, gcal_calendar_id='primary'
+            WHERE tenant_id=$1
+            """,
             tenant_id,
         )
 

@@ -39,6 +39,7 @@ def _menu_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="💅 Мои услуги",        callback_data="menu:services")],
         [InlineKeyboardButton(text="📧 Email мониторинг",  callback_data="menu:email")],
+        [InlineKeyboardButton(text="📅 Google Calendar",   callback_data="menu:gcal")],
         [InlineKeyboardButton(text="ℹ️ Помощь",            callback_data="menu:help")],
     ])
 
@@ -197,6 +198,87 @@ async def menu_help(callback: CallbackQuery, tenant: TenantConfig) -> None:
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(text="← Назад", callback_data="menu:back"),
         ]]),
+    )
+
+
+@router.callback_query(F.data == "menu:gcal")
+async def menu_gcal(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    from aria.handlers.admin import _is_owner
+    from aria.services import gcal
+    import os
+    if not await _is_owner(callback.from_user.id, tenant):
+        await callback.answer("Только для владельца.", show_alert=True)
+        return
+    await callback.answer()
+    connected = await gcal.is_connected(tenant.tenant_id)
+    if connected:
+        text = "📅 <b>Google Calendar</b>\n\n✅ Подключён\n\nЗаписи создаются автоматически в вашем календаре."
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔌 Отключить",     callback_data="gcal:disconnect")],
+            [InlineKeyboardButton(text="🔄 Переподключить", callback_data="gcal:connect")],
+            [InlineKeyboardButton(text="← Назад",          callback_data="menu:back")],
+        ])
+    else:
+        has_creds = bool(os.getenv("GOOGLE_CLIENT_ID") and os.getenv("GOOGLE_CLIENT_SECRET"))
+        if not has_creds:
+            text = (
+                "📅 <b>Google Calendar</b>\n\n"
+                "❌ Не настроен\n\n"
+                "Для подключения нужны:\n"
+                "• <code>GOOGLE_CLIENT_ID</code>\n"
+                "• <code>GOOGLE_CLIENT_SECRET</code>\n"
+                "• <code>ARIA_PUBLIC_URL</code>\n\n"
+                "Добавьте их в настройки Railway."
+            )
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="← Назад", callback_data="menu:back")],
+            ])
+        else:
+            text = "📅 <b>Google Calendar</b>\n\n❌ Не подключён\n\nНажмите кнопку ниже, войдите в Google — и всё готово."
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔗 Подключить Google Calendar", callback_data="gcal:connect")],
+                [InlineKeyboardButton(text="← Назад", callback_data="menu:back")],
+            ])
+    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+
+
+@router.callback_query(F.data == "gcal:connect")
+async def gcal_connect(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    from aria.handlers.admin import _is_owner
+    from aria.services import gcal
+    if not await _is_owner(callback.from_user.id, tenant):
+        await callback.answer("Только для владельца.", show_alert=True)
+        return
+    await callback.answer()
+    url = gcal.get_auth_url(tenant.tenant_id)
+    await callback.message.edit_text(
+        "📅 <b>Подключение Google Calendar</b>\n\n"
+        "Нажмите кнопку ниже, войдите в Google и разрешите доступ к Calendar.\n\n"
+        "После авторизации вы автоматически вернётесь и получите подтверждение.",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔗 Открыть Google", url=url)],
+            [InlineKeyboardButton(text="← Назад", callback_data="menu:gcal")],
+        ]),
+    )
+
+
+@router.callback_query(F.data == "gcal:disconnect")
+async def gcal_disconnect(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    from aria.handlers.admin import _is_owner
+    import aria.db.repo as repo_local
+    if not await _is_owner(callback.from_user.id, tenant):
+        await callback.answer("Только для владельца.", show_alert=True)
+        return
+    await repo_local.clear_gcal_tokens(tenant.tenant_id)
+    await callback.answer("Google Calendar отключён.", show_alert=True)
+    await callback.message.edit_text(
+        "📅 <b>Google Calendar</b>\n\n❌ Отключён.",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔗 Подключить снова", callback_data="gcal:connect")],
+            [InlineKeyboardButton(text="← Назад",            callback_data="menu:back")],
+        ]),
     )
 
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from aiogram import Bot, F, Router
+from aiogram.fsm.context import FSMContext
 from aiogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
@@ -15,6 +16,7 @@ from aiogram.types import (
 
 import aria.db.repo as repo
 from aria.config import TenantConfig
+from aria.handlers.booking import start_booking
 from aria.services.ai import chat
 
 log = logging.getLogger(__name__)
@@ -160,7 +162,7 @@ async def _ai(user_id: int, text: str, bot: Bot, tenant: TenantConfig) -> tuple[
 # ── New booking flow ──────────────────────────────────────────────────────────
 
 @router.message(F.text.casefold().in_({t.casefold() for t in _BOOKING_TRIGGER}))
-async def handle_new_booking(message: Message, bot: Bot, tenant: TenantConfig) -> None:
+async def handle_new_booking(message: Message, state: FSMContext, bot: Bot, tenant: TenantConfig) -> None:
     tree = await _load_tree(tenant)
     if tree:
         await message.answer("Выберите категорию:", reply_markup=_category_kb(tree))
@@ -202,7 +204,9 @@ async def handle_category(callback: CallbackQuery, tenant: TenantConfig) -> None
 
 
 @router.callback_query(F.data.startswith("sub:"))
-async def handle_subcategory(callback: CallbackQuery, bot: Bot, tenant: TenantConfig) -> None:
+async def handle_subcategory(
+    callback: CallbackQuery, state: FSMContext, bot: Bot, tenant: TenantConfig
+) -> None:
     await callback.answer()
     parts = callback.data.split(":")
     try:
@@ -214,11 +218,13 @@ async def handle_subcategory(callback: CallbackQuery, bot: Bot, tenant: TenantCo
         await callback.message.answer("Не удалось определить услугу. Попробуйте снова.")
         return
 
-    await _book_service(callback.message, bot, tenant, service)
+    await start_booking(callback, state, tenant, service)
 
 
 @router.callback_query(F.data.startswith("svc:"))
-async def handle_service_flat(callback: CallbackQuery, bot: Bot, tenant: TenantConfig) -> None:
+async def handle_service_flat(
+    callback: CallbackQuery, state: FSMContext, bot: Bot, tenant: TenantConfig
+) -> None:
     await callback.answer()
     raw = callback.data.split(":", 1)[1]
     if raw == "overflow":
@@ -231,26 +237,7 @@ async def handle_service_flat(callback: CallbackQuery, bot: Bot, tenant: TenantC
     except (ValueError, IndexError):
         await callback.message.answer("Не удалось определить услугу. Попробуйте снова.")
         return
-    await _book_service(callback.message, bot, tenant, service)
-
-
-async def _book_service(message: Message, bot: Bot, tenant: TenantConfig, service: str) -> None:
-    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
-    try:
-        reply, confirmed = await chat(
-            user_id=message.chat.id,
-            user_text=f"Хочу записаться на «{service}»",
-            bot=bot,
-            tenant=tenant,
-        )
-    except Exception:
-        log.exception("AI error after service selection (tenant #%d)", tenant.tenant_id)
-        reply, confirmed = "Что-то пошло не так. Попробуйте ещё раз.", False
-
-    if confirmed:
-        await _send_avatar_reply(message, tenant, reply)
-    else:
-        await message.answer(reply)
+    await start_booking(callback, state, tenant, service)
 
 
 # ── Generic message handler ───────────────────────────────────────────────────
