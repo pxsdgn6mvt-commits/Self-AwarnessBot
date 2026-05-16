@@ -19,7 +19,7 @@ from aiogram.types import (
 
 import aria.db.repo as repo
 from aria.config import TenantConfig
-from aria.services import gcal
+from aria.services.gcal import add_to_calendar_url
 
 log = logging.getLogger(__name__)
 router = Router()
@@ -233,15 +233,11 @@ async def got_time(
     await state.update_data(chosen_time=time_str, dt_display=dt_display)
     await state.set_state(BookingSG.confirm)
 
-    connected = await gcal.is_connected(tenant.tenant_id)
-    gcal_line = "\n📆 Событие добавится в <b>Google Calendar</b>" if connected else ""
-
     await callback.message.edit_text(
         f"📋 <b>Проверьте запись:</b>\n\n"
         f"👤 Клиент: <b>{data['client_name']}</b>\n"
         f"💅 Услуга: <b>{data['service']}</b>\n"
-        f"📅 {dt_display}"
-        f"{gcal_line}",
+        f"📅 {dt_display}",
         parse_mode="HTML",
         reply_markup=_confirm_kb(),
     )
@@ -264,41 +260,28 @@ async def confirm_booking(
     client_name = data["client_name"]
     service     = data["service"]
 
-    booking_id = await repo.create_booking(
+    await repo.create_booking(
         user_id=callback.from_user.id,
         client_name=client_name,
         service=service,
         scheduled_at=scheduled_at,
     )
 
-    gcal_link = ""
-    if await gcal.is_connected(tenant.tenant_id):
-        try:
-            result = await gcal.create_event(
-                tenant_id=tenant.tenant_id,
-                client_name=client_name,
-                service=service,
-                scheduled_at=scheduled_at,
-                duration_minutes=tenant.salon_slot_minutes,
-            )
-            if result:
-                event_id, gcal_link = result
-                await repo.update_booking_gcal_event(booking_id, event_id)
-        except Exception:
-            log.exception("GCal event creation failed (tenant #%d)", tenant.tenant_id)
-
-    gcal_part = (
-        f'\n\n📆 <a href="{gcal_link}">Открыть в Google Calendar</a>'
-        if gcal_link else ""
+    gcal_url = add_to_calendar_url(
+        title=f"{service} — {client_name}",
+        start=scheduled_at,
+        duration_minutes=tenant.salon_slot_minutes,
+        details=f"Клиент: {client_name}\nУслуга: {service}",
     )
     await callback.message.edit_text(
         f"✅ <b>Запись создана!</b>\n\n"
         f"👤 {client_name}\n"
         f"💅 {service}\n"
-        f"📅 {data['dt_display']}"
-        f"{gcal_part}",
+        f"📅 {data['dt_display']}",
         parse_mode="HTML",
-        disable_web_page_preview=True,
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="📅 Добавить в Google Calendar", url=gcal_url),
+        ]]),
     )
     await callback.answer()
 
