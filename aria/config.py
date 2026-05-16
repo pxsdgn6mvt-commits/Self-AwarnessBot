@@ -24,7 +24,10 @@ class Settings:
     ANTHROPIC_API_KEY: str       # shared fallback; tenants can override per-row
     ADMIN_TELEGRAM_ID: int       # your personal Telegram ID — full admin access
 
-    # ── Initial tenant seed ───────────────────────────────────────────────
+    # ── Management bot ────────────────────────────────────────────────────
+    # Set MANAGEMENT_BOT_TOKEN to the token of @AriaReseptionist_Bot.
+    # That bot will show the admin panel UI; all other bots show the salon UI.
+    MANAGEMENT_BOT_TOKEN: str
     # Used on first startup to auto-create the initial tenant from env vars.
     # After that, new tenants are added via /add_bot admin command.
     BOT_TOKEN: str
@@ -46,6 +49,8 @@ class Settings:
         )
         self.ANTHROPIC_API_KEY = _require("ANTHROPIC_API_KEY")
         self.ADMIN_TELEGRAM_ID = _int("ARIA_OWNER_TELEGRAM_ID", 0)
+
+        self.MANAGEMENT_BOT_TOKEN = _str("MANAGEMENT_BOT_TOKEN", "")
 
         self.BOT_TOKEN = _require("ARIA_BOT_TOKEN")
         self.OWNER_TELEGRAM_ID = _int("ARIA_OWNER_TELEGRAM_ID", 0)

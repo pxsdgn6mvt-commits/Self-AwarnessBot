@@ -43,8 +43,11 @@ ADMIN_KB = ReplyKeyboardMarkup(
 # ── Helper ────────────────────────────────────────────────────────────────────
 
 def _is_admin_bot(tenant: TenantConfig, user_id: int) -> bool:
-    """True when the platform admin is using their own management bot."""
-    return tenant.is_owner(user_id) and user_id == settings.ADMIN_TELEGRAM_ID
+    """True when the admin is using the designated management bot (MANAGEMENT_BOT_TOKEN)."""
+    mgmt_token = settings.MANAGEMENT_BOT_TOKEN
+    if not mgmt_token:
+        return False
+    return user_id == settings.ADMIN_TELEGRAM_ID and tenant.bot_token == mgmt_token
 
 
 # ── Keyboard builders ─────────────────────────────────────────────────────────
