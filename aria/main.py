@@ -22,6 +22,7 @@ from aria.config import settings
 from aria.db.repo import init_db, close_pool
 from aria.handlers.start import router as start_router
 from aria.handlers.chat import router as chat_router
+from aria.handlers.admin import router as admin_router
 from aria.services.scheduler import get_scheduler
 
 logging.basicConfig(
@@ -55,7 +56,8 @@ async def main() -> None:
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)
 
-    # Order matters — start/help/reset before the catch-all chat handler
+    # Order matters — admin and start before the catch-all chat handler
+    dp.include_router(admin_router)
     dp.include_router(start_router)
     dp.include_router(chat_router)
 

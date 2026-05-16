@@ -53,4 +53,19 @@ CREATE TABLE IF NOT EXISTS aria_conversations (
     history     JSONB   NOT NULL DEFAULT '[]',
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Service catalogue managed by the salon owner via /admin
+CREATE TABLE IF NOT EXISTS aria_service_categories (
+    id       SERIAL PRIMARY KEY,
+    name     TEXT    NOT NULL UNIQUE,
+    position INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS aria_service_items (
+    id          SERIAL PRIMARY KEY,
+    category_id INTEGER NOT NULL REFERENCES aria_service_categories(id) ON DELETE CASCADE,
+    name        TEXT    NOT NULL,
+    position    INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (category_id, name)
+);
 """

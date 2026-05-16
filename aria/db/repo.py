@@ -250,3 +250,77 @@ async def clear_history(user_id: int) -> None:
 
 def get_pool_instance() -> Optional[asyncpg.Pool]:
     return _pool
+
+
+# ── Service catalogue (owner-managed) ────────────────────────────────────────
+
+async def get_categories() -> list[asyncpg.Record]:
+    async with _p().acquire() as conn:
+        return await conn.fetch(
+            "SELECT * FROM aria_service_categories ORDER BY position, id"
+        )
+
+
+async def get_items(category_id: int) -> list[asyncpg.Record]:
+    async with _p().acquire() as conn:
+        return await conn.fetch(
+            "SELECT * FROM aria_service_items WHERE category_id=$1 ORDER BY position, id",
+            category_id,
+        )
+
+
+async def add_category(name: str) -> int:
+    async with _p().acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO aria_service_categories(name, position)
+            VALUES ($1, (SELECT COALESCE(MAX(position),0)+1 FROM aria_service_categories))
+            ON CONFLICT (name) DO NOTHING
+            RETURNING id
+            """,
+            name,
+        )
+        if row is None:
+            row = await conn.fetchrow(
+                "SELECT id FROM aria_service_categories WHERE name=$1", name
+            )
+        return row["id"]
+
+
+async def delete_category(category_id: int) -> None:
+    async with _p().acquire() as conn:
+        await conn.execute(
+            "DELETE FROM aria_service_categories WHERE id=$1", category_id
+        )
+
+
+async def add_item(category_id: int, name: str) -> None:
+    async with _p().acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO aria_service_items(category_id, name, position)
+            VALUES ($1, $2, (SELECT COALESCE(MAX(position),0)+1
+                             FROM aria_service_items WHERE category_id=$1))
+            ON CONFLICT DO NOTHING
+            """,
+            category_id, name,
+        )
+
+
+async def delete_item(item_id: int) -> None:
+    async with _p().acquire() as conn:
+        await conn.execute(
+            "DELETE FROM aria_service_items WHERE id=$1", item_id
+        )
+
+
+async def get_services_tree() -> dict[str, list[str]]:
+    """Return {category: [items]} from DB. Empty dict if nothing configured."""
+    cats = await get_categories()
+    if not cats:
+        return {}
+    result: dict[str, list[str]] = {}
+    for cat in cats:
+        items = await get_items(cat["id"])
+        result[cat["name"]] = [it["name"] for it in items]
+    return result

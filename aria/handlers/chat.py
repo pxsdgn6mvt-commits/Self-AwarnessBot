@@ -13,6 +13,7 @@ from aiogram.types import (
     URLInputFile,
 )
 
+import aria.db.repo as repo
 from aria.config import settings
 from aria.services.ai import chat
 
@@ -26,6 +27,12 @@ _SERVICES_TRIGGER = {"➕ Новая запись", "+ Новая запись",
 
 def _parse_services() -> list[str]:
     return [s.strip() for s in settings.SALON_SERVICES.split(",") if s.strip()]
+
+
+async def _load_tree() -> dict[str, list[str]]:
+    """DB first, then SALON_SERVICES_TREE env var, then empty."""
+    tree = await repo.get_services_tree()
+    return tree if tree else settings.services_tree
 
 
 def _flat_kb(services: list[str]) -> InlineKeyboardMarkup:
@@ -109,7 +116,7 @@ async def _send_avatar_after_booking(message: Message, reply_text: str) -> None:
 
 @router.message(F.text.casefold().in_({t.casefold() for t in _SERVICES_TRIGGER}))
 async def handle_new_booking(message: Message, bot: Bot) -> None:
-    tree = settings.services_tree
+    tree = await _load_tree()
     if tree:
         await message.answer("Выберите категорию:", reply_markup=_category_kb(tree))
         return
@@ -128,8 +135,8 @@ async def handle_category(callback: CallbackQuery) -> None:
     await callback.answer()
     raw = callback.data.split(":", 1)[1]
 
+    tree = await _load_tree()
     if raw == "back":
-        tree = settings.services_tree
         await callback.message.edit_text(
             "Выберите категорию:", reply_markup=_category_kb(tree)
         )
@@ -137,7 +144,6 @@ async def handle_category(callback: CallbackQuery) -> None:
 
     try:
         idx = int(raw)
-        tree = settings.services_tree
         cats = list(tree.keys())
         cat_name = cats[idx]
         subs = tree[cat_name]
@@ -160,7 +166,7 @@ async def handle_subcategory(callback: CallbackQuery, bot: Bot) -> None:
     try:
         cat_idx = int(parts[1])
         sub_idx = int(parts[2])
-        tree = settings.services_tree
+        tree = await _load_tree()
         cats = list(tree.keys())
         cat_name = cats[cat_idx]
         service = f"{cat_name} — {tree[cat_name][sub_idx]}"
