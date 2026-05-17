@@ -22,6 +22,7 @@ from aiogram.types import (
 
 import aria.db.repo as repo
 from aria.config import settings
+from aria.filters import SetupDone
 from aria.tenant import TenantConfig
 
 log = logging.getLogger(__name__)
@@ -75,7 +76,7 @@ async def _items_kb(category_id: int, tenant_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-@router.callback_query(F.data == "adm:services")
+@router.callback_query(F.data == "adm:services", SetupDone())
 async def show_services(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
     if not tenant.is_owner(callback.from_user.id):
         await callback.answer("Нет доступа.", show_alert=True)
@@ -88,7 +89,7 @@ async def show_services(callback: CallbackQuery, state: FSMContext, tenant: Tena
     await callback.answer()
 
 
-@router.callback_query(F.data == "adm:addcat")
+@router.callback_query(F.data == "adm:addcat", SetupDone())
 async def prompt_add_category(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
     if not tenant.is_owner(callback.from_user.id):
         await callback.answer("Нет доступа.", show_alert=True)
@@ -115,7 +116,7 @@ async def save_category(message: Message, state: FSMContext) -> None:
     )
 
 
-@router.callback_query(F.data.startswith("adm:dcat:"))
+@router.callback_query(F.data.startswith("adm:dcat:"), SetupDone())
 async def delete_category(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
     if not tenant.is_owner(callback.from_user.id):
         await callback.answer("Нет доступа.", show_alert=True)
@@ -129,7 +130,7 @@ async def delete_category(callback: CallbackQuery, state: FSMContext, tenant: Te
     await callback.answer()
 
 
-@router.callback_query(F.data.startswith("adm:cat:"))
+@router.callback_query(F.data.startswith("adm:cat:"), SetupDone())
 async def show_category(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
     if not tenant.is_owner(callback.from_user.id):
         await callback.answer("Нет доступа.", show_alert=True)
@@ -149,7 +150,7 @@ async def show_category(callback: CallbackQuery, state: FSMContext, tenant: Tena
     await callback.answer()
 
 
-@router.callback_query(F.data.startswith("adm:addsub:"))
+@router.callback_query(F.data.startswith("adm:addsub:"), SetupDone())
 async def prompt_add_item(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
     if not tenant.is_owner(callback.from_user.id):
         await callback.answer("Нет доступа.", show_alert=True)
@@ -179,7 +180,7 @@ async def save_item(message: Message, state: FSMContext) -> None:
     )
 
 
-@router.callback_query(F.data.startswith("adm:dsub:"))
+@router.callback_query(F.data.startswith("adm:dsub:"), SetupDone())
 async def delete_item(callback: CallbackQuery, tenant: TenantConfig) -> None:
     if not tenant.is_owner(callback.from_user.id):
         await callback.answer("Нет доступа.", show_alert=True)
@@ -197,7 +198,7 @@ async def noop(callback: CallbackQuery) -> None:
     await callback.answer()
 
 
-@router.callback_query(F.data == "adm:main")
+@router.callback_query(F.data == "adm:main", SetupDone())
 async def show_main_admin(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
     if not tenant.is_owner(callback.from_user.id):
         await callback.answer("Нет доступа.", show_alert=True)

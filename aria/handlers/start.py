@@ -82,12 +82,16 @@ async def cmd_start(message: Message, state: FSMContext, tenant: TenantConfig) -
 
 @router.message(Command("reset"))
 async def cmd_reset(message: Message, tenant: TenantConfig) -> None:
+    if not tenant:
+        return
     await repo.clear_history(tenant.id, message.from_user.id)
     await message.answer("История очищена. Начнём заново — чем могу помочь?")
 
 
 @router.message(Command("help"))
 async def cmd_help(message: Message, tenant: TenantConfig) -> None:
+    if not tenant:
+        return
     owner_hint = (
         "\n/status — статус бота, GCal и почты"
         "\n/connect_email — email-уведомления"
