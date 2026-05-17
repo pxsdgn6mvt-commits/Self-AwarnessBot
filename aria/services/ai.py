@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any, Optional
 
 import anthropic
@@ -202,6 +202,51 @@ TOOLS: list[dict] = [
             "required": ["message"],
         },
     },
+    {
+        "name": "cancel_booking",
+        "description": (
+            "Cancel a single appointment. "
+            "booking_id is either an integer (booking ID from the database) or a string "
+            "(Google Calendar event ID for bookings created externally via Yclients/Dikidi "
+            "that have no local database record). Always pass the value as a string."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "booking_id": {
+                    "type": "string",
+                    "description": (
+                        "Integer booking ID (e.g. '42') or GCal event ID string "
+                        "(e.g. 'abc123xyz'). Pass as string regardless of type."
+                    ),
+                },
+            },
+            "required": ["booking_id"],
+        },
+    },
+    {
+        "name": "cancel_bookings_in_range",
+        "description": (
+            "Cancel ALL appointments within an inclusive date range — both local DB records "
+            "and externally-created GCal events (from Yclients/Dikidi). "
+            "Use for commands like 'удали все записи до 20 мая' or 'cancel everything this week'. "
+            "Returns the count of cancelled events."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "date_from": {
+                    "type": "string",
+                    "description": "Start date, inclusive (YYYY-MM-DD)",
+                },
+                "date_to": {
+                    "type": "string",
+                    "description": "End date, inclusive (YYYY-MM-DD)",
+                },
+            },
+            "required": ["date_from", "date_to"],
+        },
+    },
 ]
 
 
@@ -312,6 +357,73 @@ async def _exec_tool(name: str, args: dict, ctx: ToolContext) -> str:
             except Exception as exc:
                 log.warning("Failed to notify owner: %s", exc)
         return json.dumps({"notified": True})
+
+    if name == "cancel_booking":
+        raw = args.get("booking_id", "")
+        booking = None
+        bid: Optional[int] = None
+        try:
+            bid = int(raw)
+            booking = await repo.get_booking(bid)
+        except (ValueError, TypeError):
+            pass
+
+        if booking:
+            # Normal path: found in DB
+            await repo.update_booking_status(bid, "cancelled")
+            try:
+                await adapter.delete_event(bid, booking.get("calendar_event_id"))
+            except Exception as exc:
+                log.warning("GCal delete skipped for booking %d: %s", bid, exc)
+            from aria.services.scheduler import cancel_booking_jobs
+            cancel_booking_jobs(bid)
+            return json.dumps({"cancelled": True, "booking_id": bid})
+
+        # Not in DB — treat raw value as a GCal event ID string
+        gcal_id = str(raw)
+        try:
+            await adapter.delete_event(None, gcal_id)
+            return json.dumps({"cancelled": True, "gcal_event_id": gcal_id})
+        except Exception as exc:
+            log.warning("Direct GCal delete failed for %s: %s", gcal_id, exc)
+            return json.dumps({"error": f"not found in DB and GCal delete failed: {exc}"})
+
+    if name == "cancel_bookings_in_range":
+        try:
+            d_from = date.fromisoformat(args["date_from"])
+            d_to   = date.fromisoformat(args["date_to"])
+        except (ValueError, KeyError):
+            return json.dumps({"error": "invalid date format — use YYYY-MM-DD"})
+
+        from aria.services.scheduler import cancel_booking_jobs
+        events = await adapter.get_events(d_from, d_to)
+        cancelled = 0
+        for ev in events:
+            raw_id = ev["id"]
+            gcal_event_id = ev.get("gcal_event_id")
+            try:
+                ev_bid: Optional[int] = int(raw_id)
+                ev_booking = await repo.get_booking(ev_bid)
+            except (ValueError, TypeError):
+                ev_bid = None
+                ev_booking = None
+
+            try:
+                if ev_booking:
+                    cal_id = ev_booking.get("calendar_event_id") or gcal_event_id
+                    await adapter.delete_event(ev_bid, cal_id)
+                    cancel_booking_jobs(ev_bid)
+                else:
+                    await adapter.delete_event(None, gcal_event_id or str(raw_id))
+                cancelled += 1
+            except Exception as exc:
+                log.warning("Failed to cancel event %s: %s", raw_id, exc)
+
+        return json.dumps({
+            "cancelled": cancelled,
+            "date_from": args["date_from"],
+            "date_to": args["date_to"],
+        })
 
     return json.dumps({"error": f"unknown tool: {name}"})
 

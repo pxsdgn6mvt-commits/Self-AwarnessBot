@@ -313,6 +313,34 @@ async def get_slots_on_date(date_str: str) -> list[datetime]:
         return [r["scheduled_at"] for r in rows]
 
 
+async def get_bookings_in_range(date_from: "date", date_to: "date") -> list:
+    """Return confirmed bookings with scheduled_at::date in [date_from, date_to]."""
+    async with _p().acquire() as conn:  # type: ignore[union-attr]
+        return await conn.fetch(
+            """
+            SELECT * FROM aria_bookings
+            WHERE status = 'confirmed'
+              AND scheduled_at::date >= $1
+              AND scheduled_at::date <= $2
+            ORDER BY scheduled_at ASC
+            """,
+            date_from, date_to,
+        )
+
+
+async def get_bookings_by_gcal_ids(gcal_ids: list) -> dict:
+    """Return {gcal_event_id: booking_id} for the given GCal event IDs."""
+    if not gcal_ids:
+        return {}
+    async with _p().acquire() as conn:  # type: ignore[union-attr]
+        rows = await conn.fetch(
+            "SELECT id, calendar_event_id FROM aria_bookings"
+            " WHERE calendar_event_id = ANY($1::text[])",
+            gcal_ids,
+        )
+    return {row["calendar_event_id"]: row["id"] for row in rows}
+
+
 # ── Waitlist ──────────────────────────────────────────────────────────────────
 
 async def add_to_waitlist(user_id: int, client_name: str, service: str) -> int:
