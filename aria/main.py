@@ -1,21 +1,8 @@
 """
-Aria salon bot — multi-tenant entry point.
+Aria — multi-tenant salon bot platform.
 
-All bots share one Dispatcher. A middleware injects the correct TenantConfig
-into each update based on the bot token, then all handlers receive it via DI.
-
-Env vars
---------
-Format A (multi-tenant, recommended):
-  ARIA_BOT_1_TOKEN=<token>   ARIA_BOT_1_SALON_NAME=...  ARIA_BOT_1_OWNER_ID=...
-  ARIA_BOT_2_TOKEN=<token>   ...
-
-Format B (legacy single-bot):
-  ARIA_BOT_TOKEN=<token>
-
-Shared:
-  ANTHROPIC_API_KEY, ARIA_DATABASE_URL, ARIA_CLAUDE_MODEL,
-  SALON_MAX_SERVICES, SALON_OPEN_HOUR, SALON_CLOSE_HOUR, ...
+Runs in long-polling mode. Each active tenant gets its own polling loop.
+A background watcher picks up new tenants and drops removed ones every 10 s.
 """
 
 from __future__ import annotations
@@ -23,22 +10,24 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
-from typing import Any, Callable, Awaitable
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import TelegramObject
+from aiogram.types import ErrorEvent
 
-from aria.config import TenantConfig, load_tenants
-from aria.db.repo import init_db, close_pool
-from aria.handlers.admin import router as admin_router
-from aria.handlers.start import router as start_router
-from aria.handlers.chat import router as chat_router
-from aria.handlers.booking import router as booking_router
-from aria.services.scheduler import get_scheduler
-from aria.services.email_monitor import run_email_monitor
+from aria import runtime
+from aria.config import settings
+from aria.db.repo import (
+    close_pool, create_tenant, get_tenant, get_tenant_by_token,
+    init_db, list_active_tenants,
+)
+from aria.handlers import admin, chat, email_setup, menu, quick, start
+from aria.handlers.setup import router as setup_router
+from aria.middleware import TenantMiddleware
+from aria.services.commands import set_commands
+from aria.services.scheduler import get_scheduler, schedule_daily_reactivation
 
 logging.basicConfig(
     level=logging.INFO,
@@ -47,73 +36,178 @@ logging.basicConfig(
 )
 log = logging.getLogger("aria")
 
+_bots: dict[int, Bot] = {}
+_tasks: dict[int, asyncio.Task] = {}
 
-class TenantMiddleware:
-    """Injects the correct TenantConfig into each update based on bot token."""
 
-    def __init__(self, tenant_map: dict) -> None:
-        self.tenant_map = tenant_map
+# ── Shared Dispatcher ─────────────────────────────────────────────────────────
 
-    async def __call__(
-        self,
-        handler: Callable,
-        event: TelegramObject,
-        data: dict,
-    ) -> Any:
-        bot = data.get("bot")
-        if bot:
-            data["tenant"] = self.tenant_map.get(bot.token)
-        return await handler(event, data)
+def _build_dispatcher() -> Dispatcher:
+    dp = Dispatcher(storage=MemoryStorage())
+    dp.update.middleware(TenantMiddleware())
+    dp.include_router(setup_router)
+    dp.include_router(admin.router)
+    dp.include_router(start.router)
+    dp.include_router(menu.router)
+    dp.include_router(quick.router)
+    dp.include_router(email_setup.router)
+    dp.include_router(chat.router)
 
+    @dp.errors()
+    async def on_error(event: ErrorEvent) -> None:
+        log.exception(
+            "Unhandled error for update %s: %s",
+            event.update.update_id if event.update else "?",
+            event.exception,
+            exc_info=event.exception,
+        )
+
+    return dp
+
+
+# ── Bot lifecycle helpers ─────────────────────────────────────────────────────
+
+async def _configure_bot(bot: Bot, dp: Dispatcher, tenant_id: int) -> None:
+    try:
+        me = await bot.get_me()
+        log.info("Configuring bot @%s (tenant #%d)", me.username, tenant_id)
+        row = await get_tenant(tenant_id)
+        if row and row["setup_complete"]:
+            await set_commands(bot, row["owner_tg_id"])
+        else:
+            await set_commands(bot)
+        if row and row.get("email_user") and row.get("email_host"):
+            from aria.services.email_monitor import start_email_job
+            start_email_job(tenant_id, bot)
+    except Exception:
+        log.exception("Bot configuration failed for tenant #%d", tenant_id)
+
+
+# ── Polling ───────────────────────────────────────────────────────────────────
+
+async def _poll_bot(bot: Bot, dp: Dispatcher, tenant_id: int) -> None:
+    allowed = dp.resolve_used_update_types()
+    offset = 0
+    try:
+        await bot.delete_webhook(drop_pending_updates=False)
+    except Exception:
+        pass
+    try:
+        await _configure_bot(bot, dp, tenant_id)
+        while True:
+            try:
+                updates = await bot.get_updates(
+                    offset=offset,
+                    timeout=30,
+                    allowed_updates=allowed,
+                )
+                for update in updates:
+                    try:
+                        await dp.feed_update(bot, update)
+                    except Exception:
+                        log.exception(
+                            "Error processing update %d (tenant #%d)",
+                            update.update_id, tenant_id,
+                        )
+                    offset = update.update_id + 1
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.exception("get_updates error tenant #%d, retry in 5s", tenant_id)
+                await asyncio.sleep(5)
+    except asyncio.CancelledError:
+        pass
+    except Exception:
+        log.exception("Bot polling failed for tenant #%d", tenant_id)
+    finally:
+        await bot.session.close()
+
+
+async def _watch_tenants(dp: Dispatcher) -> None:
+    while True:
+        await asyncio.sleep(10)
+        try:
+            rows = await list_active_tenants()
+            active_ids = {r["id"] for r in rows}
+
+            for row in rows:
+                tid = row["id"]
+                task = _tasks.get(tid)
+                if task is None or task.done():
+                    bot = Bot(
+                        token=row["bot_token"],
+                        default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+                    )
+                    _bots[tid] = bot
+                    runtime.bots[tid] = bot
+                    _tasks[tid] = asyncio.create_task(_poll_bot(bot, dp, tid))
+                    log.info("Started polling for tenant #%d (%s)", tid, row["salon_name"])
+
+            for tid in list(_bots.keys()):
+                if tid not in active_ids:
+                    _tasks[tid].cancel()
+                    try:
+                        await _bots[tid].session.close()
+                    except Exception:
+                        pass
+                    del _bots[tid]
+                    runtime.bots.pop(tid, None)
+                    del _tasks[tid]
+                    log.info("Stopped polling for tenant #%d", tid)
+        except Exception:
+            log.exception("Tenant watcher error")
+
+
+# ── Initial tenant seed ───────────────────────────────────────────────────────
+
+async def _ensure_initial_tenant() -> None:
+    existing = await get_tenant_by_token(settings.BOT_TOKEN)
+    if existing is None:
+        tid = await create_tenant(
+            bot_token=settings.BOT_TOKEN,
+            owner_tg_id=settings.OWNER_TELEGRAM_ID,
+            salon_name=settings.SALON_NAME,
+            owner_name=settings.OWNER_NAME,
+            services=settings.SALON_SERVICES,
+            hours=settings.SALON_HOURS,
+            open_hour=settings.SALON_OPEN_HOUR,
+            close_hour=settings.SALON_CLOSE_HOUR,
+            slot_minutes=settings.SALON_SLOT_MINUTES,
+            working_days=settings.SALON_WORKING_DAYS,
+            google_cal_credentials=settings.GOOGLE_CALENDAR_CREDENTIALS,
+            google_cal_id=settings.GOOGLE_CALENDAR_ID,
+            setup_complete=True,
+        )
+        log.info("Created initial tenant #%d (%s)", tid, settings.SALON_NAME)
+
+
+# ── Entry point ───────────────────────────────────────────────────────────────
 
 async def main() -> None:
-    tenants = load_tenants()
-    if not tenants:
-        log.error(
-            "No bot tokens found. Set ARIA_BOT_1_TOKEN (multi-tenant) "
-            "or ARIA_BOT_TOKEN (single-bot) and restart."
-        )
-        sys.exit(1)
-
-    await init_db(tenants[0].database_url)
+    await init_db(settings.DATABASE_URL)
+    await _ensure_initial_tenant()
     get_scheduler().start()
-    log.info("Aria polling mode — %d bot(s)", len(tenants))
+    schedule_daily_reactivation(lambda: _bots)
 
-    tenant_map = {t.bot_token: t for t in tenants}
+    dp = _build_dispatcher()
 
-    dp = Dispatcher(storage=MemoryStorage())
-    dp.update.outer_middleware(TenantMiddleware(tenant_map))
-    dp.include_router(admin_router)
-    dp.include_router(booking_router)
-    dp.include_router(start_router)
-    dp.include_router(chat_router)
-
-    bots = [
-        Bot(
-            token=t.bot_token,
+    rows = await list_active_tenants()
+    for row in rows:
+        bot = Bot(
+            token=row["bot_token"],
             default=DefaultBotProperties(parse_mode=ParseMode.HTML),
         )
-        for t in tenants
-    ]
+        tid = row["id"]
+        _bots[tid] = bot
+        runtime.bots[tid] = bot
+        _tasks[tid] = asyncio.create_task(_poll_bot(bot, dp, tid))
 
-    # Start email monitor for every tenant — each loop waits for DB settings
-    email_tasks = [
-        asyncio.create_task(run_email_monitor(t, bot))
-        for t, bot in zip(tenants, bots)
-    ]
-    log.info("Email monitor loops started for %d bot(s)", len(email_tasks))
-
-    try:
-        await dp.start_polling(*bots, drop_pending_updates=True)
-    finally:
-        for task in email_tasks:
-            task.cancel()
-        for bot in bots:
-            await bot.session.close()
-
-    get_scheduler().shutdown(wait=False)
-    await close_pool()
+    log.info("Aria polling mode — %d bot(s)", len(_bots))
+    await _watch_tenants(dp)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass

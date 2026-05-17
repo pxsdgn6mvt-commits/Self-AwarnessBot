@@ -1,7 +1,8 @@
-"""Handlers for /start, /help, /reset and main-menu button triggers."""
+"""Handlers for /start, /help, /reset, /status, /set_cal, /set_tz — only runs when setup is complete."""
 
 from __future__ import annotations
 
+import json as _json
 import logging
 
 from aiogram import F, Router
@@ -9,377 +10,364 @@ from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
-    CallbackQuery,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-    Message,
-    ReplyKeyboardMarkup,
-    KeyboardButton,
-    URLInputFile,
+    CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message,
 )
 
 import aria.db.repo as repo
-from aria.config import TenantConfig
-
-
-class GCalSG(StatesGroup):
-    waiting_email = State()
+from aria.config import settings as _settings
+from aria.filters import SetupDone
+from aria.handlers.menu import ADMIN_KB, _is_admin_bot
+from aria.handlers.quick import MAIN_KB
+from aria.middleware import TenantMiddleware
+from aria.services.booking import invalidate_adapter
+from aria.tenant import TenantConfig
 
 log = logging.getLogger(__name__)
 router = Router()
 
-# ── Main reply keyboard (matches original screenshot) ─────────────────────────
 
-MAIN_KB = ReplyKeyboardMarkup(
-    keyboard=[
-        [KeyboardButton(text="📅 Сегодня"),     KeyboardButton(text="📅 Завтра")],
-        [KeyboardButton(text="➕ Новая запись"), KeyboardButton(text="📋 Ближайшие")],
-        [KeyboardButton(text="📧 Почта"),        KeyboardButton(text="📱 Меню")],
-    ],
-    resize_keyboard=True,
-)
+# ── Owner settings FSM ────────────────────────────────────────────────────────
 
-# ── Inline menu (opened by «📱 Меню» button) ──────────────────────────────────
+class OwnerSettings(StatesGroup):
+    waiting_cal_id = State()
+    waiting_tz     = State()
 
-def _menu_kb() -> InlineKeyboardMarkup:
+
+_TIMEZONES = [
+    ("🇷🇺 Москва, Минск (UTC+3)",     "Europe/Moscow"),
+    ("🇺🇦 Киев (UTC+2/+3)",            "Europe/Kiev"),
+    ("🇦🇿 Баку, Тбилиси (UTC+4)",      "Asia/Baku"),
+    ("🇰🇿 Алматы, Ташкент (UTC+5)",    "Asia/Almaty"),
+    ("🇬🇧 Лондон (UTC±0)",             "Europe/London"),
+    ("🇩🇪 Берлин, Варшава (UTC+1/+2)", "Europe/Berlin"),
+    ("🇦🇪 Дубай (UTC+4)",              "Asia/Dubai"),
+    ("🇺🇸 Нью-Йорк (UTC-5/-4)",       "America/New_York"),
+]
+
+
+def _tz_kb(prefix: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💅 Мои услуги",        callback_data="menu:services")],
-        [InlineKeyboardButton(text="📧 Email мониторинг",  callback_data="menu:email")],
-        [InlineKeyboardButton(text="📅 Google Calendar",   callback_data="menu:gcal")],
-        [InlineKeyboardButton(text="ℹ️ Помощь",            callback_data="menu:help")],
+        [InlineKeyboardButton(text=label, callback_data=f"{prefix}{tz}")]
+        for label, tz in _TIMEZONES
     ])
 
 
-# ── Welcome texts ──────────────────────────────────────────────────────────────
+@router.message(CommandStart(), SetupDone())
+async def cmd_start(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
+    await repo.upsert_client(tenant.id, message.from_user.id,
+                              message.from_user.language_code or "ru")
+    await repo.clear_history(tenant.id, message.from_user.id)
 
-def _welcome(first_name: str, salon: str) -> str:
-    return (
-        f"Привет, {first_name}! Я Aria — твой ресепшн для <b>{salon}</b>.\n\n"
-        "Используй кнопки внизу или просто пиши:\n"
-        "• «что у меня сегодня?»\n"
-        "• «запиши Катю на ресницы 20 мая в 14:00»\n"
-        "• «что на этой неделе?»\n\n"
-        "/help — список примеров"
-    )
-
-
-def _first_welcome(first_name: str, salon: str) -> str:
-    return (
-        f"Привет, {first_name}! Я Aria — твой ресепшн для <b>{salon}</b>.\n\n"
-        "Ты зарегистрирован как владелец.\n\n"
-        "Начни с <b>📱 Меню → 💅 Мои услуги</b> — добавь свои категории "
-        "и процедуры, чтобы они появились в кнопке «➕ Новая запись».\n\n"
-        "/help — примеры команд"
-    )
-
-
-# ── Helpers ────────────────────────────────────────────────────────────────────
-
-async def resolve_owner(user_id: int, tenant: TenantConfig) -> int | None:
-    db_owner = await repo.get_tenant_owner(tenant.tenant_id)
-    if db_owner:
-        return db_owner
-    if tenant.owner_telegram_id:
-        return tenant.owner_telegram_id
-    return None
-
-
-async def _send_avatar(message: Message, tenant: TenantConfig, caption: str) -> bool:
-    url = tenant.salon_avatar_url.strip()
-    if not url:
-        return False
-    try:
-        photo = URLInputFile(url) if url.startswith("http") else url
-        await message.answer_photo(photo=photo, caption=caption, parse_mode="HTML")
-        return True
-    except Exception:
-        log.warning("tenant #%d: could not send avatar", tenant.tenant_id)
-        return False
-
-
-# ── /start ─────────────────────────────────────────────────────────────────────
-
-@router.message(CommandStart())
-async def cmd_start(message: Message, tenant: TenantConfig) -> None:
-    user_id   = message.from_user.id
-    first_name = message.from_user.first_name or "друг"
-    owner_id  = await resolve_owner(user_id, tenant)
-
-    if owner_id is None:
-        await repo.set_tenant_owner(tenant.tenant_id, user_id)
-        await repo.upsert_client(user_id)
-        await repo.clear_history(user_id)
-        text = _first_welcome(first_name, tenant.salon_name)
-        if not await _send_avatar(message, tenant, text):
-            await message.answer(text, reply_markup=MAIN_KB, parse_mode="HTML")
-        else:
-            await message.answer("Чем могу помочь?", reply_markup=MAIN_KB)
-        return
-
-    await repo.upsert_client(user_id)
-    await repo.clear_history(user_id)
-    text = _welcome(first_name, tenant.salon_name)
-    if not await _send_avatar(message, tenant, text):
-        await message.answer(text, reply_markup=MAIN_KB, parse_mode="HTML")
+    if _is_admin_bot(tenant, message.from_user.id):
+        await message.answer(
+            "👑 <b>Aria — панель управления</b>\n\n"
+            "Управляй ботами через кнопки ниже или команды:\n"
+            "• /list_bots — список активных ботов\n"
+            "• /add_bot — добавить новый бот\n"
+            "• /broadcast &lt;текст&gt; — рассылка всем владельцам\n"
+            "• /set_vip &lt;tid&gt; &lt;uid&gt; [дней] — назначить VIP",
+            reply_markup=ADMIN_KB,
+        )
     else:
-        await message.answer("Чем могу помочь?", reply_markup=MAIN_KB)
+        await message.answer(
+            f"Привет, {tenant.owner_name}! Я Aria — твой ресепшн для <b>{tenant.salon_name}</b>.\n\n"
+            "Используй кнопки внизу или просто пиши:\n"
+            "• «что у меня сегодня?»\n"
+            "• «запиши Катю на ресницы 20 мая в 14:00»\n"
+            "• «что на этой неделе?»\n\n"
+            "/help — список примеров",
+            reply_markup=MAIN_KB,
+        )
 
-
-# ── /reset, /help ──────────────────────────────────────────────────────────────
 
 @router.message(Command("reset"))
-async def cmd_reset(message: Message) -> None:
-    await repo.clear_history(message.from_user.id)
-    await message.answer("Начнём сначала.", reply_markup=MAIN_KB)
+async def cmd_reset(message: Message, tenant: TenantConfig) -> None:
+    await repo.clear_history(tenant.id, message.from_user.id)
+    await message.answer("История очищена. Начнём заново — чем могу помочь?")
 
 
 @router.message(Command("help"))
 async def cmd_help(message: Message, tenant: TenantConfig) -> None:
+    owner_hint = (
+        "\n/status — статус бота, GCal и почты"
+        "\n/connect_email — email-уведомления"
+        "\n/set_cal — изменить ID календаря"
+        "\n/set_tz — изменить часовой пояс"
+    ) if tenant.is_owner(message.from_user.id) else ""
     await message.answer(
-        f"<b>Примеры команд для {tenant.salon_name}:</b>\n\n"
-        "📅 «что у меня сегодня?»\n"
-        "📅 «что на этой неделе?»\n"
-        "➕ «запиши Катю на маникюр 22 мая в 11:00»\n"
-        "➕ «новая запись» — выбрать услугу кнопками\n"
-        "📋 «покажи ближайшие записи»\n"
-        "✏️ «перенеси Катю на пятницу в 15:00»\n"
-        "❌ «отмени запись Кати»\n\n"
-        "📱 <b>Меню</b> — настройки, услуги, email\n"
-        "/admin — управление услугами напрямую\n"
-        "/reset — сбросить диалог",
-        parse_mode="HTML",
-        reply_markup=MAIN_KB,
+        "Просто пиши мне:\n\n"
+        "• «что у меня сегодня?» — расписание на сегодня\n"
+        "• «что на завтра?» — расписание на завтра\n"
+        "• «что на неделе с 19 по 25 мая?» — диапазон дат\n"
+        "• «запиши Катю на ресницы 20 мая в 14:00» — добавить запись\n"
+        "• «перенеси запись #5 на 22 мая в 11:00» — перенос\n"
+        "• «отмени запись #5» — отмена\n"
+        "• «свободно 20 мая в 15:00?» — проверить слот\n\n"
+        f"/reset — очистить историю{owner_hint}"
     )
 
 
-# ── «📱 Меню» button ───────────────────────────────────────────────────────────
+# ── Owner-only commands ───────────────────────────────────────────────────────
 
-@router.message(F.text == "📱 Меню")
-async def handle_menu_button(message: Message, tenant: TenantConfig) -> None:
+@router.message(Command("status"), SetupDone())
+async def cmd_status(message: Message, tenant: TenantConfig, caller_id: int | None = None) -> None:
+    if not tenant.is_owner(caller_id if caller_id is not None else message.from_user.id):
+        return
+
+    import html as _html
+    from aria.config import settings
+    import aria.db.repo as repo
+
+    # ── Google Calendar ───────────────────────────────────────────────────
+    creds = settings.GOOGLE_CALENDAR_CREDENTIALS
+    svc_email = None
+    if creds:
+        try:
+            svc_email = _json.loads(creds).get("client_email")
+        except Exception:
+            pass
+
+    tz_val = tenant.timezone or "UTC"
+
+    if creds and tenant.google_cal_id:
+        gcal_status = f"✅ Подключён\nID: <code>{tenant.google_cal_id}</code>"
+    elif tenant.google_cal_id:
+        gcal_status = "⚠️ ID задан, нет credentials"
+    else:
+        gcal_status = "❌ Не подключён"
+
+    svc_line = f"\n<code>{svc_email}</code>" if svc_email else ""
+
+    # ── Email ─────────────────────────────────────────────────────────────
+    row = await repo.get_tenant(tenant.id)
+    email_user   = (row.get("email_user")        or "") if row else ""
+    email_host   = (row.get("email_host")        or "") if row else ""
+    filter_type  = (row.get("email_filter_type") or "all") if row else "all"
+    filter_value = (row.get("email_filter_value") or "") if row else ""
+
+    if email_user and email_host:
+        filter_desc = {
+            "all":      "все письма",
+            "keywords": f"по словам: {filter_value}",
+            "senders":  f"от: {filter_value}",
+        }.get(filter_type, filter_type)
+        email_status = (
+            f"✅ Подключена\n"
+            f"<code>{_html.escape(email_user)}</code>\n"
+            f"Фильтр: {_html.escape(filter_desc)}"
+        )
+    else:
+        email_status = "❌ Не подключена  /connect_email"
+
     await message.answer(
-        "⚙️ <b>Меню</b>",
-        parse_mode="HTML",
-        reply_markup=_menu_kb(),
+        f"<b>Статус бота</b>\n\n"
+        f"Салон: <b>{_html.escape(tenant.salon_name)}</b>\n"
+        f"Часовой пояс: <code>{tz_val}</code>\n\n"
+        f"📅 <b>Google Calendar:</b>\n{gcal_status}{svc_line}\n\n"
+        f"📧 <b>Email-уведомления:</b>\n{email_status}\n\n"
+        "Команды:\n"
+        "/set_cal — изменить ID календаря\n"
+        "/set_tz — изменить часовой пояс\n"
+        "/connect_email — настроить email"
     )
 
 
-@router.callback_query(F.data == "menu:services")
-async def menu_services(callback: CallbackQuery, tenant: TenantConfig) -> None:
-    from aria.handlers.admin import _categories_kb, _is_owner
-    if not await _is_owner(callback.from_user.id, tenant):
-        await callback.answer("Только для владельца.", show_alert=True)
+@router.message(Command("set_cal"), SetupDone())
+async def cmd_set_cal(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
+    if not tenant.is_owner(message.from_user.id):
         return
-    await callback.answer()
-    await callback.message.edit_text(
-        "💅 <b>Мои услуги</b>\n\n"
-        "Нажмите на категорию для управления.\n"
-        "🗑 — удалить категорию со всеми услугами.",
-        parse_mode="HTML",
-        reply_markup=await _categories_kb(tenant.tenant_id),
+
+    from aria.config import settings
+    creds = settings.GOOGLE_CALENDAR_CREDENTIALS
+    svc_email = None
+    if creds:
+        try:
+            svc_email = _json.loads(creds).get("client_email")
+        except Exception:
+            pass
+
+    svc_hint = (
+        f"\n\nУбедись, что ты поделился(ась) этим календарём с сервисным аккаунтом:\n"
+        f"<code>{svc_email}</code>\n(права: «Вносить изменения в мероприятия»)"
+        if svc_email else ""
+    )
+
+    await state.set_state(OwnerSettings.waiting_cal_id)
+    await message.answer(
+        "Введи ID Google Календаря.\n\n"
+        "Найти: calendar.google.com → ⚙️ → нужный календарь → "
+        "«Идентификатор календаря» (выглядит как <code>xxx@group.calendar.google.com</code> "
+        "или твой Gmail-адрес).\n\n"
+        "Напиши <b>убрать</b> чтобы отключить Google Calendar."
+        + svc_hint
     )
 
 
-@router.callback_query(F.data == "menu:email")
-async def menu_email(callback: CallbackQuery, tenant: TenantConfig) -> None:
-    from aria.handlers.admin import show_email_menu, _is_owner
-    if not await _is_owner(callback.from_user.id, tenant):
-        await callback.answer("Только для владельца.", show_alert=True)
-        return
-    await show_email_menu(callback, tenant)
+def _extract_cal_id(text: str) -> str:
+    """Extract calendar ID from a raw ID string or a Google Calendar iCal/HTML URL."""
+    import re
+    from urllib.parse import unquote
+    # iCal URL: .../calendar/ical/ENCODED_ID/...
+    m = re.search(r"/calendar/(?:ical|r)/([^/\s]+)/", text)
+    if m:
+        return unquote(m.group(1))
+    # HTML URL: calendar.google.com/calendar/u/0?cid=ENCODED_ID
+    m = re.search(r"[?&]cid=([^&\s]+)", text)
+    if m:
+        return unquote(m.group(1))
+    return text.strip()
 
 
-@router.callback_query(F.data == "menu:help")
-async def menu_help(callback: CallbackQuery, tenant: TenantConfig) -> None:
-    await callback.answer()
-    await callback.message.edit_text(
-        f"<b>Примеры команд:</b>\n\n"
-        "• «что у меня сегодня?»\n"
-        "• «запиши Катю на маникюр 22 мая в 11:00»\n"
-        "• «перенеси Катю на пятницу»\n"
-        "• «отмени запись Кати»\n"
-        "• «что на этой неделе?»\n\n"
-        "/admin — управление услугами\n"
-        "/reset — сбросить диалог",
-        parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="← Назад", callback_data="menu:back"),
-        ]]),
-    )
-
-
-@router.callback_query(F.data == "menu:gcal")
-async def menu_gcal(callback: CallbackQuery, tenant: TenantConfig) -> None:
-    from aria.handlers.admin import _is_owner
-    from aria.services.gcal import is_connected, is_configured
-    if not await _is_owner(callback.from_user.id, tenant):
-        await callback.answer("Только для владельца.", show_alert=True)
-        return
-    await callback.answer()
-
-    if not is_configured():
-        await callback.message.edit_text(
-            "📅 <b>Google Calendar</b>\n\n"
-            "Эта функция пока недоступна в вашей версии бота.",
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                InlineKeyboardButton(text="← Назад", callback_data="menu:back"),
-            ]]),
-        )
-        return
-
-    connected = await is_connected(tenant.tenant_id)
-    if connected:
-        await callback.message.edit_text(
-            "📅 <b>Google Calendar</b>\n\n"
-            "✅ Подключён\n\n"
-            "Все новые записи автоматически появляются в вашем календаре.",
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🔍 Проверить связь",  callback_data="gcal:test")],
-                [InlineKeyboardButton(text="🔌 Отключить",        callback_data="gcal:disconnect")],
-                [InlineKeyboardButton(text="🔄 Переподключить",   callback_data="gcal:connect")],
-                [InlineKeyboardButton(text="← Назад",             callback_data="menu:back")],
-            ]),
-        )
+@router.message(OwnerSettings.waiting_cal_id)
+async def process_set_cal(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
+    text = message.text.strip()
+    if text.lower() in ("убрать", "удалить", "нет", "no", "-"):
+        cal_id = None
     else:
-        await callback.message.edit_text(
-            "📅 <b>Google Calendar</b>\n\n"
-            "❌ Не подключён\n\n"
-            "Подключите свой Google Calendar — записи будут появляться там автоматически.",
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🔗 Подключить Google Calendar", callback_data="gcal:connect")],
-                [InlineKeyboardButton(text="← Назад", callback_data="menu:back")],
-            ]),
-        )
+        cal_id = _extract_cal_id(text)
 
-
-@router.callback_query(F.data == "gcal:connect")
-async def gcal_connect(
-    callback: CallbackQuery, state: FSMContext, tenant: TenantConfig
-) -> None:
-    from aria.handlers.admin import _is_owner
-    if not await _is_owner(callback.from_user.id, tenant):
-        await callback.answer("Только для владельца.", show_alert=True)
-        return
-    await callback.answer()
-    await state.set_state(GCalSG.waiting_email)
-    await callback.message.edit_text(
-        "📅 <b>Подключение Google Calendar</b>\n\n"
-        "Введите ваш Gmail адрес — бот создаст отдельный календарь "
-        "<b>Aria — Ваш салон</b> и поделится им с вами.\n\n"
-        "Все записи будут появляться там автоматически.",
-        parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="❌ Отмена", callback_data="gcal:cancel"),
-        ]]),
-    )
-
-
-@router.callback_query(F.data == "gcal:cancel")
-async def gcal_cancel(callback: CallbackQuery, state: FSMContext) -> None:
+    await repo.update_tenant(tenant.id, google_cal_id=cal_id)
+    invalidate_adapter(tenant.id)
+    TenantMiddleware.invalidate(tenant.bot_token)
     await state.clear()
-    await callback.answer()
-    await callback.message.edit_text(
-        "⚙️ <b>Меню</b>", parse_mode="HTML", reply_markup=_menu_kb()
+
+    if cal_id:
+        await message.answer(
+            f"✅ Google Calendar обновлён: <code>{cal_id}</code>\n\n"
+            "Попробуй добавить запись — если бот скажет «поделись календарём», "
+            "значит нужно ещё добавить доступ сервисному аккаунту."
+        )
+    else:
+        await message.answer("✅ Google Calendar отключён. Записи хранятся только в боте.")
+    log.info("Tenant %d updated google_cal_id to %s", tenant.id, cal_id)
+
+
+@router.message(Command("set_tz"), SetupDone())
+async def cmd_set_tz(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
+    if not tenant.is_owner(message.from_user.id):
+        return
+    await state.set_state(OwnerSettings.waiting_tz)
+    await message.answer(
+        f"Текущий часовой пояс: <code>{tenant.timezone or 'UTC'}</code>\n\n"
+        "Выбери новый или напиши IANA-имя вручную (например <code>Europe/Moscow</code>):",
+        reply_markup=_tz_kb("owner_tz:"),
     )
 
 
-@router.message(GCalSG.waiting_email)
-async def got_gcal_email(
-    message: Message, state: FSMContext, tenant: TenantConfig
-) -> None:
-    from aria.services.gcal import setup_calendar
-    email = message.text.strip().lower() if message.text else ""
-    if "@" not in email or "." not in email.split("@")[-1]:
-        await message.answer("Введите корректный email адрес (например: name@gmail.com):")
-        return
+@router.callback_query(OwnerSettings.waiting_tz, F.data.startswith("owner_tz:"))
+async def cb_set_tz(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
+    tz = callback.data[len("owner_tz:"):]
+    await _apply_tz(callback.message, state, tenant, tz)
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await callback.answer(f"✓ {tz}")
 
+
+@router.message(OwnerSettings.waiting_tz)
+async def text_set_tz(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+    tz = message.text.strip()
+    try:
+        ZoneInfo(tz)
+    except (ZoneInfoNotFoundError, Exception):
+        await message.answer("Не нашёл такой часовой пояс. Попробуй ещё раз или выбери кнопку:")
+        return
+    await _apply_tz(message, state, tenant, tz)
+
+
+async def _apply_tz(message: Message, state: FSMContext, tenant: TenantConfig, tz: str) -> None:
+    await repo.update_tenant(tenant.id, timezone=tz)
+    TenantMiddleware.invalidate(tenant.bot_token)
     await state.clear()
-    msg = await message.answer("⏳ Создаю календарь...")
-    calendar_id = await setup_calendar(email, tenant.salon_name)
-    if calendar_id:
-        await repo.save_gcal_calendar_id(tenant.tenant_id, calendar_id)
-        await msg.edit_text(
-            "✅ <b>Google Calendar подключён!</b>\n\n"
-            f"Создан календарь <b>Aria — {tenant.salon_name}</b>.\n\n"
-            f"На <code>{email}</code> придёт приглашение от Google — "
-            "примите его, и календарь появится в вашем Google Calendar.\n\n"
-            "Все новые записи будут добавляться туда автоматически.",
-            parse_mode="HTML",
-        )
+    await message.answer(f"✅ Часовой пояс обновлён: <code>{tz}</code>")
+    log.info("Tenant %d updated timezone to %s", tenant.id, tz)
+
+
+@router.message(Command("test_cal"), SetupDone())
+async def cmd_test_cal(message: Message, tenant: TenantConfig, caller_id: int | None = None) -> None:
+    if not tenant.is_owner(caller_id if caller_id is not None else message.from_user.id):
+        return
+
+    import json as _j
+    from aria.config import settings
+    from aria.services.booking import GoogleAdapter, _adapters, get_adapter
+
+    lines: list[str] = ["<b>🔍 Диагностика Google Calendar</b>\n"]
+
+    # 1. Calendar ID in DB
+    cal_id = tenant.google_cal_id
+    lines.append(f"google_cal_id: <code>{cal_id or '❌ НЕ ЗАДАН'}</code>")
+
+    # 2. Credentials
+    creds_json = tenant.google_cal_credentials or settings.GOOGLE_CALENDAR_CREDENTIALS
+    if creds_json:
+        try:
+            svc_email = _j.loads(creds_json).get("client_email", "?")
+            lines.append(f"Сервисный аккаунт: <code>{svc_email}</code>")
+        except Exception as exc:
+            lines.append(f"❌ Credentials невалидны: {exc}")
+            creds_json = None
     else:
-        await msg.edit_text(
-            "❌ Не удалось создать календарь. Проверьте адрес и попробуйте снова.\n\n"
-            "📱 Меню → Google Calendar → Подключить"
-        )
+        lines.append("❌ GOOGLE_CALENDAR_CREDENTIALS не задан в Railway Variables!")
 
+    if not cal_id:
+        lines.append("\n💡 Используй /set_cal и введи свой Gmail-адрес")
+        await message.answer("\n".join(lines))
+        return
 
-@router.callback_query(F.data == "gcal:test")
-async def gcal_test(callback: CallbackQuery, tenant: TenantConfig) -> None:
-    from aria.handlers.admin import _is_owner
-    from aria.services.gcal import _get_access_token, is_configured
-    if not await _is_owner(callback.from_user.id, tenant):
-        await callback.answer("Только для владельца.", show_alert=True)
+    if not creds_json:
+        await message.answer("\n".join(lines))
         return
-    await callback.answer("Проверяю...")
-    if not is_configured():
-        await callback.message.edit_text(
-            "📅 <b>Google Calendar</b>\n\n"
-            "❌ GOOGLE_CALENDAR_CREDENTIALS не задан в Railway.",
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                InlineKeyboardButton(text="← Назад", callback_data="menu:gcal"),
-            ]]),
-        )
-        return
-    token = _get_access_token()
-    if token:
-        await callback.message.edit_text(
-            "📅 <b>Google Calendar</b>\n\n"
-            "✅ Связь работает — токен получен успешно.\n"
-            "Записи должны создаваться автоматически.",
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                InlineKeyboardButton(text="← Назад", callback_data="menu:gcal"),
-            ]]),
-        )
+
+    # 3. Which adapter is actually cached?
+    cached = _adapters.get(tenant.id)
+    if cached is None:
+        lines.append("\nАдаптер: ещё не создан (будет при первом запросе)")
+        get_adapter(tenant)
+        cached = _adapters.get(tenant.id)
+
+    adapter_name = "✅ GoogleAdapter" if isinstance(cached, GoogleAdapter) else "⚠️ LocalAdapter (GCal не используется)"
+    lines.append(f"Адаптер: {adapter_name}")
+
+    # 4. Live API test
+    if isinstance(cached, GoogleAdapter):
+        lines.append("\nПроверяю подключение к GCal API...")
+        await message.answer("\n".join(lines))
+        lines = []
+        try:
+            import asyncio as _aio
+            from datetime import datetime, timezone as _tz, timedelta as _td
+            day_start = datetime.now(_tz.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+            day_end   = day_start + _td(days=30)
+            items = await _aio.to_thread(
+                cached._list_events_sync,
+                day_start.isoformat(),
+                day_end.isoformat(),
+            )
+            lines.append(f"✅ GCal API работает! Ближайших событий: {len(items)}")
+        except Exception as exc:
+            err = str(exc)
+            if "404" in err or "Not Found" in err:
+                lines.append(
+                    "❌ Ошибка 404 — календарь не найден.\n\n"
+                    "Что делать:\n"
+                    "1. Открой calendar.google.com\n"
+                    "2. Настройки → нужный календарь → «Доступ другим людям»\n"
+                    f"3. Добавь <code>{svc_email}</code> с правом «Вносить изменения»\n"
+                    "4. Скопируй «Идентификатор календаря» и отправь боту /set_cal"
+                )
+            elif "403" in err or "disabled" in err:
+                lines.append(
+                    "❌ Ошибка 403 — нет доступа или API отключён.\n\n"
+                    "Проверь: console.cloud.google.com → APIs → Google Calendar API → Enable"
+                )
+            else:
+                lines.append(f"❌ Ошибка API:\n<code>{err[:300]}</code>")
     else:
-        await callback.message.edit_text(
-            "📅 <b>Google Calendar</b>\n\n"
-            "❌ Не удалось подключиться к Google.\n\n"
-            "Проверьте что GOOGLE_CALENDAR_CREDENTIALS содержит "
-            "корректный Service Account JSON (тип: service_account).",
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                InlineKeyboardButton(text="← Назад", callback_data="menu:gcal"),
-            ]]),
+        lines.append(
+            "\n⚠️ Используется локальная БД, не GCal.\n"
+            "Это значит или credentials невалидны, или cal_id неверный.\n"
+            "Попробуй /set_cal заново."
         )
 
-
-@router.callback_query(F.data == "gcal:disconnect")
-async def gcal_disconnect(callback: CallbackQuery, tenant: TenantConfig) -> None:
-    from aria.handlers.admin import _is_owner
-    if not await _is_owner(callback.from_user.id, tenant):
-        await callback.answer("Только для владельца.", show_alert=True)
-        return
-    await repo.clear_gcal_tokens(tenant.tenant_id)
-    await callback.answer("Google Calendar отключён.", show_alert=True)
-    await callback.message.edit_text(
-        "📅 <b>Google Calendar</b>\n\n"
-        "❌ Отключён.\n\n"
-        "Записи больше не будут добавляться в Google Calendar.",
-        parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🔗 Подключить снова", callback_data="gcal:connect")],
-            [InlineKeyboardButton(text="← Назад",            callback_data="menu:back")],
-        ]),
-    )
-
-
-@router.callback_query(F.data == "menu:back")
-async def menu_back(callback: CallbackQuery) -> None:
-    await callback.answer()
-    await callback.message.edit_text(
-        "⚙️ <b>Меню</b>", parse_mode="HTML", reply_markup=_menu_kb()
-    )
+    if lines:
+        await message.answer("\n".join(lines))

@@ -1,41 +1,54 @@
-"""
-SQL schema for the Aria salon bot.
-All tables are prefixed with aria_ to avoid collisions with other bots
-that might share the same Postgres instance.
-"""
+"""SQL schema for Aria — multi-tenant salon bot platform."""
 
 SCHEMA = """
+-- ── Tenants ───────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS aria_tenants (
+    id                      SERIAL PRIMARY KEY,
+    bot_token               TEXT UNIQUE NOT NULL,
+    owner_tg_id             BIGINT,
+    salon_name              TEXT NOT NULL DEFAULT 'My Salon',
+    owner_name              TEXT NOT NULL DEFAULT 'Owner',
+    services                TEXT NOT NULL DEFAULT 'haircut, manicure',
+    hours                   TEXT NOT NULL DEFAULT 'Mon-Sat 10:00-20:00',
+    open_hour               INT  NOT NULL DEFAULT 10,
+    close_hour              INT  NOT NULL DEFAULT 20,
+    slot_minutes            INT  NOT NULL DEFAULT 60,
+    working_days            TEXT NOT NULL DEFAULT '1,2,3,4,5,6',
+    google_cal_credentials  TEXT,
+    google_cal_id           TEXT,
+    anthropic_api_key       TEXT,
+    setup_complete          BOOLEAN NOT NULL DEFAULT FALSE,
+    active                  BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ── Core tables (IF NOT EXISTS — safe for both fresh and existing DBs) ────────
 CREATE TABLE IF NOT EXISTS aria_clients (
-    user_id     BIGINT PRIMARY KEY,
-    name        TEXT,
+    tenant_id   INT     NOT NULL DEFAULT 1,
+    user_id     BIGINT  NOT NULL,
     lang        TEXT    NOT NULL DEFAULT 'en',
-    phone       TEXT,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (tenant_id, user_id)
 );
 
 CREATE TABLE IF NOT EXISTS aria_bookings (
     id                  BIGSERIAL PRIMARY KEY,
+    tenant_id           INT     NOT NULL DEFAULT 1,
     user_id             BIGINT  NOT NULL,
     client_name         TEXT    NOT NULL,
     service             TEXT    NOT NULL,
     scheduled_at        TIMESTAMPTZ NOT NULL,
     status              TEXT    NOT NULL DEFAULT 'confirmed',
-    -- confirmed | cancelled | completed | no_show
     reminder_sent       BOOLEAN NOT NULL DEFAULT FALSE,
     noshow_check_sent   BOOLEAN NOT NULL DEFAULT FALSE,
-    calendar_event_id   TEXT,
     upsell_offered      BOOLEAN NOT NULL DEFAULT FALSE,
+    calendar_event_id   TEXT,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS aria_bookings_user_idx
-    ON aria_bookings (user_id);
-CREATE INDEX IF NOT EXISTS aria_bookings_scheduled_idx
-    ON aria_bookings (scheduled_at)
-    WHERE status = 'confirmed';
-
 CREATE TABLE IF NOT EXISTS aria_waitlist (
     id          BIGSERIAL PRIMARY KEY,
+    tenant_id   INT     NOT NULL DEFAULT 1,
     user_id     BIGINT  NOT NULL,
     client_name TEXT    NOT NULL,
     service     TEXT    NOT NULL,
@@ -43,72 +56,112 @@ CREATE TABLE IF NOT EXISTS aria_waitlist (
     added_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS aria_conversations (
+    tenant_id   INT     NOT NULL DEFAULT 1,
+    user_id     BIGINT  NOT NULL,
+    history     JSONB   NOT NULL DEFAULT '[]',
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (tenant_id, user_id)
+);
+
+-- ── Migrations ────────────────────────────────────────────────────────────────
+ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS timezone TEXT NOT NULL DEFAULT 'UTC';
+ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS email_host     TEXT;
+ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS email_port     INT  NOT NULL DEFAULT 993;
+ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS email_user     TEXT;
+ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS email_password TEXT;
+ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS email_folder       TEXT NOT NULL DEFAULT 'INBOX';
+ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS email_last_uid     TEXT;
+ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS email_filter_type  TEXT NOT NULL DEFAULT 'all';
+ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS email_filter_value TEXT;
+
+-- ── Persistent FSM state (survives restarts) ──────────────────────────────────
+CREATE TABLE IF NOT EXISTS aria_fsm_states (
+    key   TEXT PRIMARY KEY,
+    state TEXT,
+    data  JSONB NOT NULL DEFAULT '{}'
+);
+
+-- Must run BEFORE any CREATE INDEX that references tenant_id.
+ALTER TABLE aria_clients      ADD COLUMN IF NOT EXISTS tenant_id INT NOT NULL DEFAULT 1;
+ALTER TABLE aria_bookings     ADD COLUMN IF NOT EXISTS tenant_id INT NOT NULL DEFAULT 1;
+ALTER TABLE aria_waitlist     ADD COLUMN IF NOT EXISTS tenant_id INT NOT NULL DEFAULT 1;
+ALTER TABLE aria_conversations ADD COLUMN IF NOT EXISTS tenant_id INT NOT NULL DEFAULT 1;
+
+-- ── Indexes (after migration so tenant_id is guaranteed to exist) ─────────────
+CREATE INDEX IF NOT EXISTS aria_bookings_tenant_idx
+    ON aria_bookings (tenant_id, scheduled_at)
+    WHERE status = 'confirmed';
+
 CREATE INDEX IF NOT EXISTS aria_waitlist_service_idx
-    ON aria_waitlist (service)
+    ON aria_waitlist (tenant_id, service)
     WHERE notified = FALSE;
 
--- Stores per-user conversation history for Claude (JSONB array of message objects)
-CREATE TABLE IF NOT EXISTS aria_conversations (
-    user_id     BIGINT PRIMARY KEY,
-    history     JSONB   NOT NULL DEFAULT '[]',
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+-- ── Re-key aria_clients: old PK was user_id, new PK is (tenant_id, user_id) ──
+DO $$
+DECLARE r TEXT;
+BEGIN
+    SELECT constraint_name INTO r FROM information_schema.table_constraints
+    WHERE table_name = 'aria_clients' AND constraint_type = 'PRIMARY KEY';
+    -- Only migrate if the PK is the old single-column one
+    IF r IS NOT NULL AND r != 'aria_clients_pkey' THEN
+        NULL; -- already composite, nothing to do
+    ELSIF r = 'aria_clients_pkey' THEN
+        -- Check if it's actually on just user_id (old schema)
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.key_column_usage
+            WHERE table_name = 'aria_clients'
+              AND constraint_name = r
+              AND column_name = 'tenant_id'
+        ) THEN
+            EXECUTE 'ALTER TABLE aria_clients DROP CONSTRAINT ' || r;
+            ALTER TABLE aria_clients ADD PRIMARY KEY (tenant_id, user_id);
+        END IF;
+    END IF;
+EXCEPTION WHEN others THEN NULL;
+END $$;
 
--- Per-tenant runtime settings (owner set on first /start; email set via /admin)
-CREATE TABLE IF NOT EXISTS aria_tenant_settings (
-    tenant_id           INTEGER PRIMARY KEY,
-    owner_telegram_id   BIGINT  NOT NULL,
-    email_address       TEXT,
-    email_password      TEXT,
-    email_imap_server   TEXT    NOT NULL DEFAULT 'imap.gmail.com',
-    email_imap_port     INTEGER NOT NULL DEFAULT 993,
-    email_allowed_senders TEXT  NOT NULL DEFAULT '',
-    email_poll_seconds  INTEGER NOT NULL DEFAULT 60,
-    email_since         TEXT,
-    gcal_access_token  TEXT,
-    gcal_refresh_token TEXT,
-    gcal_token_expiry  TIMESTAMPTZ,
-    gcal_calendar_id   TEXT NOT NULL DEFAULT 'primary',
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+-- ── Re-key aria_conversations: old PK was user_id ────────────────────────────
+DO $$
+DECLARE r TEXT;
+BEGIN
+    SELECT constraint_name INTO r FROM information_schema.table_constraints
+    WHERE table_name = 'aria_conversations' AND constraint_type = 'PRIMARY KEY';
+    IF r IS NOT NULL THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.key_column_usage
+            WHERE table_name = 'aria_conversations'
+              AND constraint_name = r
+              AND column_name = 'tenant_id'
+        ) THEN
+            EXECUTE 'ALTER TABLE aria_conversations DROP CONSTRAINT ' || r;
+            ALTER TABLE aria_conversations ADD PRIMARY KEY (tenant_id, user_id);
+        END IF;
+    END IF;
+EXCEPTION WHEN others THEN NULL;
+END $$;
 
--- Service catalogue managed by the salon owner via /admin
+-- ── CRM columns ───────────────────────────────────────────────────────────────
+ALTER TABLE aria_clients ADD COLUMN IF NOT EXISTS communication_style TEXT NOT NULL DEFAULT 'casual';
+ALTER TABLE aria_clients ADD COLUMN IF NOT EXISTS is_vip              BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE aria_clients ADD COLUMN IF NOT EXISTS vip_until           TIMESTAMPTZ;
+ALTER TABLE aria_clients ADD COLUMN IF NOT EXISTS reactivation_sent   BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE aria_clients ADD COLUMN IF NOT EXISTS notes               TEXT;
+
+-- ── Service catalogue (categories / subcategories) ────────────────────────────
 CREATE TABLE IF NOT EXISTS aria_service_categories (
     id        SERIAL PRIMARY KEY,
-    tenant_id INTEGER NOT NULL DEFAULT 1,
-    name      TEXT    NOT NULL,
-    position  INTEGER NOT NULL DEFAULT 0,
+    tenant_id INT  NOT NULL DEFAULT 1,
+    name      TEXT NOT NULL,
+    position  INT  NOT NULL DEFAULT 0,
     UNIQUE (tenant_id, name)
 );
 
 CREATE TABLE IF NOT EXISTS aria_service_items (
     id          SERIAL PRIMARY KEY,
-    category_id INTEGER NOT NULL REFERENCES aria_service_categories(id) ON DELETE CASCADE,
-    name        TEXT    NOT NULL,
-    position    INTEGER NOT NULL DEFAULT 0,
+    category_id INT  NOT NULL REFERENCES aria_service_categories(id) ON DELETE CASCADE,
+    name        TEXT NOT NULL,
+    position    INT  NOT NULL DEFAULT 0,
     UNIQUE (category_id, name)
 );
-
--- Migrations: ensure PRIMARY KEY exists on tables that may have been created
--- without it by older schema versions.
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint
-        WHERE conrelid = 'aria_clients'::regclass AND contype = 'p'
-    ) THEN
-        DELETE FROM aria_clients a USING aria_clients b
-            WHERE a.ctid < b.ctid AND a.user_id = b.user_id;
-        ALTER TABLE aria_clients ADD PRIMARY KEY (user_id);
-    END IF;
-
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint
-        WHERE conrelid = 'aria_conversations'::regclass AND contype = 'p'
-    ) THEN
-        DELETE FROM aria_conversations a USING aria_conversations b
-            WHERE a.ctid < b.ctid AND a.user_id = b.user_id;
-        ALTER TABLE aria_conversations ADD PRIMARY KEY (user_id);
-    END IF;
-END $$;
 """

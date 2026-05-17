@@ -1,357 +1,245 @@
-"""
-IMAP email monitor for Aria.
-
-Polls a mailbox for new unread messages from allowed senders, passes
-them through the AI chat service, and forwards the reply to the owner.
-
-Key design decisions that avoid common failure modes:
-  - Uses ssl.create_default_context() — no certificate warnings / MITM risk
-  - Short-lived connections — connect → fetch → logout each poll cycle.
-    Avoids the "connection gone stale" bug that haunts long-lived IMAP sessions.
-  - UID-based fetch — safe to re-run; won't re-process already-read mail.
-  - Charset-aware decode for Subject / body — handles UTF-8, KOI8-R, etc.
-  - Exponential backoff on failure — won't hammer a broken server.
-  - Runs in executor thread — imaplib is blocking; this keeps asyncio healthy.
-
-Gmail setup:
-  1. Gmail Settings → See all settings → Forwarding and POP/IMAP → Enable IMAP
-  2. Google Account → Security → 2-Step Verification (must be on)
-  3. Google Account → Security → App passwords → create one for "Mail"
-  4. Use that 16-char app password as ARIA_BOT_N_EMAIL_PASSWORD
-     (your regular Google password will NOT work)
-
-Other providers:
-  Outlook/Hotmail  imap.outlook.com : 993
-  Yahoo Mail       imap.mail.yahoo.com : 993
-  Custom / cPanel  ask your host for IMAP server + port
-"""
+"""IMAP email monitoring — polls inbox and forwards new messages to Telegram."""
 
 from __future__ import annotations
 
 import asyncio
-import email as _email_lib
+import email
 import imaplib
 import logging
-import ssl
-from email.header import decode_header as _rfc2047_decode
-from email.utils import parseaddr
-from typing import Optional
-
-from aiogram import Bot
-
-from aria.config import TenantConfig
-from aria.services.ai import chat
+from email.header import decode_header as _decode_hdr
+from typing import Any
 
 log = logging.getLogger(__name__)
 
-# Retry delays (seconds) after consecutive failures: 5s → 15s → 30s → 1m → 2m → 5m
-_RETRY_DELAYS = (5, 15, 30, 60, 120, 300)
+import aria.db.repo as repo
 
 
-# ── Email parsing helpers ──────────────────────────────────────────────────────
+# ── Header / body helpers ─────────────────────────────────────────────────────
 
-def _safe_decode(fragment: str | bytes | None, charset: str | None) -> str:
-    if fragment is None:
+def _decode_header(value: str | None) -> str:
+    if not value:
         return ""
-    if isinstance(fragment, bytes):
-        for enc in (charset, "utf-8", "latin-1"):
-            if enc:
-                try:
-                    return fragment.decode(enc, errors="replace")
-                except LookupError:
-                    continue
-        return fragment.decode("utf-8", errors="replace")
-    return fragment
+    parts = []
+    for raw, enc in _decode_hdr(value):
+        if isinstance(raw, bytes):
+            parts.append(raw.decode(enc or "utf-8", errors="replace"))
+        else:
+            parts.append(str(raw))
+    return "".join(parts)
 
 
-def _decode_header(raw: str | None) -> str:
-    """Decode RFC 2047-encoded header (Subject, From, …)."""
-    if not raw:
-        return ""
-    return "".join(
-        _safe_decode(frag, charset)
-        for frag, charset in _rfc2047_decode(raw)
-    )
-
-
-def _extract_text(msg: _email_lib.message.Message) -> str:
-    """Return the first text/plain part (handles multipart, attachments, etc.)."""
+def _get_body(msg: email.message.Message) -> str:
     if msg.is_multipart():
         for part in msg.walk():
-            if part.get_content_type() == "text/plain":
+            if part.get_content_type() == "text/plain" and "attachment" not in str(part.get("Content-Disposition", "")):
                 payload = part.get_payload(decode=True)
                 if payload:
-                    return _safe_decode(payload, part.get_content_charset())
-        return ""
-    payload = msg.get_payload(decode=True)
-    if payload:
-        return _safe_decode(payload, msg.get_content_charset())
+                    charset = part.get_content_charset() or "utf-8"
+                    return payload.decode(charset, errors="replace")
+    else:
+        payload = msg.get_payload(decode=True)
+        if payload:
+            charset = msg.get_content_charset() or "utf-8"
+            return payload.decode(charset, errors="replace")
     return ""
 
 
-# ── IMAP operations (blocking — called via run_in_executor) ───────────────────
+# ── IMAP sync helpers (run in thread) ─────────────────────────────────────────
 
-def _connect(server: str, port: int, address: str, password: str) -> imaplib.IMAP4_SSL:
-    """
-    Open a fresh SSL connection and login.
-
-    Uses ssl.create_default_context() so:
-      - Certificate chain is verified (no MITM risk)
-      - Modern TLS version is negotiated automatically
-    Raises imaplib.IMAP4.error on bad credentials (distinguishable from
-    network errors so callers can decide whether to retry).
-    """
-    ctx = ssl.create_default_context()
-    conn = imaplib.IMAP4_SSL(server, port, ssl_context=ctx)
-    conn.login(address, password)   # raises IMAP4.error on wrong password
-    return conn
-
-
-def _fetch_unseen(
-    conn: imaplib.IMAP4_SSL,
-    allowed: set[str],
-    since_str: Optional[str] = None,
-) -> list[tuple[bytes, str, str]]:
-    """
-    Search INBOX for unread messages received on or after *since_str*
-    (IMAP date format "16-May-2026"), filter by allowed senders, and
-    return [(uid_bytes, subject, body)].
-
-    `since_str` is set to today when the owner configures email, so pre-existing
-    inbox messages are never processed — only mail that arrives after setup.
-
-    Emails from disallowed senders have their \\Seen flag reverted so they
-    remain visible if the allow-list is widened later.
-    """
-    conn.select("INBOX", readonly=False)
-    criteria = f"UNSEEN SINCE {since_str}" if since_str else "UNSEEN"
-    _, data = conn.uid("search", None, criteria)
-    if not data or not data[0]:
-        return []
-
-    results: list[tuple[bytes, str, str]] = []
-
-    for uid in data[0].split():
-        # Fetch only the envelope + text parts, not full message with attachments
-        _, msg_data = conn.uid("fetch", uid, "(RFC822)")
-        if not msg_data or not isinstance(msg_data[0], tuple):
-            continue
-        raw = msg_data[0][1]
-        if not isinstance(raw, bytes):
-            continue
-
-        msg = _email_lib.message_from_bytes(raw)
-        _, sender = parseaddr(msg.get("From", ""))
-        sender = sender.lower().strip()
-
-        if allowed and sender not in allowed:
-            # Revert SEEN flag so we see it again if allow-list changes
-            conn.uid("store", uid, "-FLAGS", "(\\Seen)")
-            continue
-
-        subject = _decode_header(msg.get("Subject"))
-        body = _extract_text(msg)
-        results.append((uid, subject, body))
-
-    return results
-
-
-# ── Single poll cycle ──────────────────────────────────────────────────────────
-
-async def _poll_once(tenant: TenantConfig, bot: Bot, allowed: set[str]) -> None:
-    loop = asyncio.get_event_loop()
-
-    conn: Optional[imaplib.IMAP4_SSL] = None
+def _imap_connect(host: str, port: int, user: str, password: str) -> imaplib.IMAP4_SSL:
+    """Open IMAP SSL connection with UTF-8-safe authentication."""
+    imap = imaplib.IMAP4_SSL(host, port)
     try:
-        conn = await loop.run_in_executor(
-            None,
-            _connect,
-            tenant.email_imap_server,
-            tenant.email_imap_port,
-            tenant.email_address,
-            tenant.email_password,
-        )
-        messages = await loop.run_in_executor(None, _fetch_unseen, conn, allowed)
+        imap.login(user, password)
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        # imaplib.login() only supports ASCII; fall back to AUTHENTICATE PLAIN
+        auth_data = b"\0" + user.encode("utf-8") + b"\0" + password.encode("utf-8")
+        imap.authenticate("PLAIN", lambda _: auth_data)
+    return imap
+
+
+def _get_highest_uid(imap: imaplib.IMAP4_SSL, folder: str) -> str | None:
+    imap.select(folder, readonly=True)
+    status, data = imap.uid("SEARCH", None, "ALL")
+    uids = data[0].split() if data and data[0] else []
+    return uids[-1].decode() if uids else None
+
+
+def _fetch_since_uid(
+    host: str, port: int, user: str, password: str, folder: str, last_uid: str
+) -> list[tuple[str, str, str, str]]:
+    """Return list of (uid, sender, subject, body) for emails with UID > last_uid."""
+    imap = _imap_connect(host, port, user, password)
+    try:
+        imap.select(folder, readonly=True)
+        next_uid = int(last_uid) + 1
+        status, data = imap.uid("SEARCH", None, f"UID {next_uid}:*")
+        raw_uids = data[0].split() if data and data[0] else []
+        # Guard: IMAP may return last_uid itself when range is empty
+        raw_uids = [u for u in raw_uids if u.decode() != last_uid]
+        results = []
+        for uid_bytes in raw_uids[-10:]:  # max 10 per poll
+            status2, msg_data = imap.uid("FETCH", uid_bytes, "(RFC822)")
+            if not msg_data or not isinstance(msg_data[0], tuple):
+                continue
+            msg = email.message_from_bytes(msg_data[0][1])
+            results.append((
+                uid_bytes.decode(),
+                _decode_header(msg.get("From", "?")),
+                _decode_header(msg.get("Subject", "(без темы)")),
+                _get_body(msg)[:400].strip(),
+            ))
+        return results
     finally:
-        if conn:
-            try:
-                conn.logout()
-            except Exception:
-                pass
-
-    owner_id = await _get_owner_id(tenant)
-
-    for uid, subject, body in messages:
-        uid_str = uid.decode() if isinstance(uid, bytes) else str(uid)
-        log.info(
-            "tenant #%d: new email uid=%s from subject=%r",
-            tenant.tenant_id, uid_str, subject,
-        )
-        text = f"[Email] Тема: {subject}\n\n{body[:2000]}".strip()
         try:
-            reply, _ = await chat(
-                user_id=owner_id or tenant.tenant_id,
-                user_text=text,
-                bot=bot,
-                tenant=tenant,
-            )
-            if owner_id:
-                await bot.send_message(
-                    chat_id=owner_id,
-                    text=f"📧 <b>Новое письмо:</b> {subject}\n\n{reply}",
-                    parse_mode="HTML",
-                )
+            imap.logout()
         except Exception:
-            log.exception(
-                "tenant #%d: failed to process email uid=%s", tenant.tenant_id, uid_str
-            )
+            pass
 
 
-async def _get_owner_id(tenant: TenantConfig) -> Optional[int]:
-    """Resolve owner Telegram ID from DB or env var."""
+def _init_uid(
+    host: str, port: int, user: str, password: str, folder: str
+) -> str | None:
+    """Login and return the current highest UID without fetching messages."""
+    imap = _imap_connect(host, port, user, password)
     try:
-        import aria.db.repo as repo
-        db_owner = await repo.get_tenant_owner(tenant.tenant_id)
-        if db_owner:
-            return db_owner
-    except Exception:
-        pass
-    return tenant.owner_telegram_id or None
-
-
-# ── Main monitor loop ──────────────────────────────────────────────────────────
-
-async def _load_settings(
-    tenant: TenantConfig,
-) -> tuple[str, str, str, int, set[str], int, Optional[str]] | None:
-    """
-    Load email settings from DB first, fall back to env vars.
-    Returns (address, password, imap_server, imap_port, allowed_set, poll_seconds, since_str)
-    or None if email is not configured.
-    """
-    import aria.db.repo as repo
-    try:
-        row = await repo.get_email_settings(tenant.tenant_id)
-        if row and row["email_address"] and row["email_password"]:
-            allowed = {
-                s.strip().lower()
-                for s in (row["email_allowed_senders"] or "").split(",")
-                if s.strip()
-            }
-            since_str: Optional[str] = None
-            try:
-                since_str = row["email_since"] or None
-            except (KeyError, IndexError):
-                pass
-            return (
-                row["email_address"],
-                row["email_password"],
-                row["email_imap_server"] or "imap.gmail.com",
-                row["email_imap_port"] or 993,
-                allowed,
-                row["email_poll_seconds"] or 60,
-                since_str,
-            )
-    except Exception:
-        pass
-
-    # Fall back to env-var config (no since_str — process all unseen)
-    if tenant.email_address and tenant.email_password:
-        allowed = {
-            s.strip().lower()
-            for s in tenant.email_allowed_senders.split(",")
-            if s.strip()
-        }
-        return (
-            tenant.email_address, tenant.email_password,
-            tenant.email_imap_server, tenant.email_imap_port,
-            allowed, tenant.email_poll_seconds, None,
-        )
-    return None
-
-
-async def run_email_monitor(tenant: TenantConfig, bot: Bot) -> None:
-    """
-    Long-running coroutine started for every tenant at boot.
-    Re-reads DB settings on each cycle — picks up /admin changes within one poll interval.
-    """
-    log.info("tenant #%d: email monitor loop running (waiting for settings)", tenant.tenant_id)
-    failure_streak = 0
-
-    while True:
-        cfg = await _load_settings(tenant)
-
-        if cfg is None:
-            # Not configured yet — check again in 60 s
-            await asyncio.sleep(60)
-            continue
-
-        address, password, imap_server, imap_port, allowed, poll_seconds, since_str = cfg
-
+        return _get_highest_uid(imap, folder)
+    finally:
         try:
-            await _poll_once_with_cfg(tenant, bot, address, password,
-                                      imap_server, imap_port, allowed, since_str)
-            if failure_streak:
-                log.info("tenant #%d: email monitor recovered", tenant.tenant_id)
-            failure_streak = 0
-        except imaplib.IMAP4.error as exc:
-            log.error(
-                "tenant #%d: IMAP auth error: %s  "
-                "(Gmail needs an App Password, not your account password)",
-                tenant.tenant_id, exc,
-            )
-            failure_streak = min(failure_streak + 2, len(_RETRY_DELAYS) - 1)
-        except OSError as exc:
-            log.warning("tenant #%d: IMAP network error: %s", tenant.tenant_id, exc)
-            failure_streak = min(failure_streak + 1, len(_RETRY_DELAYS) - 1)
+            imap.logout()
+        except Exception:
+            pass
+
+
+# ── Filter ────────────────────────────────────────────────────────────────────
+
+def passes_filter(
+    filter_type: str, filter_value: str | None,
+    sender: str, subject: str, body: str,
+) -> bool:
+    if not filter_type or filter_type == "all" or not filter_value:
+        return True
+    terms = [t.strip().lower() for t in filter_value.split(",") if t.strip()]
+    if not terms:
+        return True
+    if filter_type == "keywords":
+        haystack = (subject + " " + body).lower()
+        return any(t in haystack for t in terms)
+    if filter_type == "senders":
+        sender_lower = sender.lower()
+        return any(t in sender_lower for t in terms)
+    return True
+
+
+# ── Public API ────────────────────────────────────────────────────────────────
+
+async def check_email(tenant_id: int, bot: Any) -> int:
+    """Poll inbox and forward new emails to owner. Returns count forwarded."""
+    import html as _html
+
+    row = await repo.get_tenant(tenant_id)
+    if not row:
+        return 0
+
+    host         = row.get("email_host")
+    port         = int(row.get("email_port") or 993)
+    user         = row.get("email_user")
+    password     = row.get("email_password")
+    folder       = row.get("email_folder") or "INBOX"
+    owner_id     = row.get("owner_tg_id")
+    last_uid     = row.get("email_last_uid")
+    filter_type  = row.get("email_filter_type") or "all"
+    filter_value = row.get("email_filter_value")
+
+    if not (host and user and password and owner_id):
+        return 0
+
+    # First poll: record current state, send nothing (raises on connection error)
+    if last_uid is None:
+        uid = await asyncio.to_thread(_init_uid, host, port, user, password, folder)
+        if uid:
+            await repo.update_tenant(tenant_id, email_last_uid=uid)
+        return 0
+
+    try:
+        messages = await asyncio.to_thread(
+            _fetch_since_uid, host, port, user, password, folder, last_uid
+        )
+    except Exception as exc:
+        log.warning("Email poll failed for tenant %d: %s", tenant_id, exc)
+        return 0
+
+    if not messages:
+        return 0
+
+    forwarded = 0
+    highest_uid = None
+    for uid_str, sender, subject, body in messages:
+        highest_uid = uid_str  # always advance UID pointer, even for filtered messages
+        if not passes_filter(filter_type, filter_value, sender, subject, body):
+            continue
+        text = (
+            f"📧 <b>Новое письмо</b>\n\n"
+            f"<b>От:</b> {_html.escape(sender[:120])}\n"
+            f"<b>Тема:</b> {_html.escape(subject[:200])}\n\n"
+            f"{_html.escape(body) if body else '<i>письмо без текста</i>'}"
+        )
+        try:
+            await bot.send_message(chat_id=owner_id, text=text)
+            forwarded += 1
         except Exception as exc:
-            log.exception("tenant #%d: email monitor error: %s", tenant.tenant_id, exc)
-            failure_streak = min(failure_streak + 1, len(_RETRY_DELAYS) - 1)
+            log.warning("Failed to deliver email to %d: %s", owner_id, exc)
 
-        delay = _RETRY_DELAYS[failure_streak] if failure_streak else poll_seconds
-        await asyncio.sleep(delay)
+    if highest_uid:
+        await repo.update_tenant(tenant_id, email_last_uid=highest_uid)
+
+    log.info("Polled %d email(s), forwarded %d for tenant %d", len(messages), forwarded, tenant_id)
+    return forwarded
 
 
-async def _poll_once_with_cfg(
-    tenant: TenantConfig, bot: Bot,
-    address: str, password: str,
-    imap_server: str, imap_port: int,
-    allowed: set[str],
-    since_str: Optional[str] = None,
-) -> None:
-    loop = asyncio.get_event_loop()
-    conn: Optional[imaplib.IMAP4_SSL] = None
+async def _poll_job(tenant_id: int, bot: Any) -> None:
     try:
-        conn = await loop.run_in_executor(
-            None, _connect, imap_server, imap_port, address, password
-        )
-        messages = await loop.run_in_executor(
-            None, _fetch_unseen, conn, allowed, since_str
-        )
-    finally:
-        if conn:
-            try:
-                conn.logout()
-            except Exception:
-                pass
+        await check_email(tenant_id, bot)
+    except Exception as exc:
+        log.warning("Email poll job error for tenant %d: %s", tenant_id, exc)
 
-    owner_id = await _get_owner_id(tenant)
-    for uid, subject, body in messages:
-        uid_str = uid.decode() if isinstance(uid, bytes) else str(uid)
-        log.info("tenant #%d: email uid=%s subject=%r", tenant.tenant_id, uid_str, subject)
-        text = f"[Email] Тема: {subject}\n\n{body[:2000]}".strip()
-        try:
-            reply, _ = await chat(
-                user_id=owner_id or tenant.tenant_id,
-                user_text=text,
-                bot=bot,
-                tenant=tenant,
-            )
-            if owner_id:
-                await bot.send_message(
-                    chat_id=owner_id,
-                    text=f"📧 <b>{subject}</b>\n\n{reply}",
-                    parse_mode="HTML",
-                )
-        except Exception:
-            log.exception("tenant #%d: failed to process email uid=%s", tenant.tenant_id, uid_str)
+
+def start_email_job(tenant_id: int, bot: Any) -> None:
+    from apscheduler.triggers.interval import IntervalTrigger
+    from aria.services.scheduler import get_scheduler
+    get_scheduler().add_job(
+        _poll_job,
+        trigger=IntervalTrigger(minutes=5),
+        id=f"email_{tenant_id}",
+        replace_existing=True,
+        args=[tenant_id, bot],
+    )
+    log.info("Email polling started for tenant %d (every 5 min)", tenant_id)
+
+
+def stop_email_job(tenant_id: int) -> None:
+    from aria.services.scheduler import get_scheduler
+    try:
+        get_scheduler().remove_job(f"email_{tenant_id}")
+        log.info("Email polling stopped for tenant %d", tenant_id)
+    except Exception:
+        pass
+
+
+def detect_imap_host(email_addr: str) -> str:
+    domain = email_addr.split("@")[-1].lower()
+    return {
+        "gmail.com":        "imap.gmail.com",
+        "googlemail.com":   "imap.gmail.com",
+        "yandex.ru":        "imap.yandex.ru",
+        "yandex.com":       "imap.yandex.ru",
+        "ya.ru":            "imap.yandex.ru",
+        "mail.ru":          "imap.mail.ru",
+        "bk.ru":            "imap.mail.ru",
+        "list.ru":          "imap.mail.ru",
+        "inbox.ru":         "imap.mail.ru",
+        "outlook.com":      "outlook.office365.com",
+        "hotmail.com":      "outlook.office365.com",
+        "live.com":         "outlook.office365.com",
+        "icloud.com":       "imap.mail.me.com",
+    }.get(domain, "")

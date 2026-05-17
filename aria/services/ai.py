@@ -1,129 +1,121 @@
-"""
-AI service for Aria — Claude Haiku with prompt caching and tool use.
-
-The agentic loop:
-  1. Send user message + conversation history to Claude
-  2. If Claude requests tool calls → execute them → feed results back
-  3. Repeat until Claude returns a plain text response
-  4. Save updated history and return the final text
-"""
+"""AI service for Aria — Claude with tool use, per-tenant config."""
 
 from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import datetime, timedelta, timezone
+from typing import Any, Optional, TYPE_CHECKING
 
 import anthropic
 
-from aria.config import TenantConfig, settings
 import aria.db.repo as repo
 from aria.services.booking import get_adapter, parse_datetime
 
+if TYPE_CHECKING:
+    from aria.tenant import TenantConfig
+
 log = logging.getLogger(__name__)
 
-MAX_HISTORY = 30   # messages to keep in conversation (older are trimmed)
-MAX_TOOL_ROUNDS = 5  # prevent infinite agentic loops
+MAX_HISTORY    = 40
+MAX_TOOL_ROUNDS = 5
+
+_clients: dict[str, anthropic.AsyncAnthropic] = {}
 
 
-# ── System prompt (cached) ────────────────────────────────────────────────────
-
-def _build_system_prompt(tenant: TenantConfig) -> str:
-    booking_link_line = (
-        f"Booking link: {tenant.booking_link}" if tenant.booking_link else ""
-    )
-    return f"""# IDENTITY
-You are Aria, the AI receptionist for {tenant.salon_name}. You are warm, \
-precise, and quietly efficient — like a front desk manager at a luxury \
-spa who never loses her composure. You represent the brand in every message.
-
-# LANGUAGE
-Detect the client's language automatically and respond in it.
-Supported: English, Finnish, Russian, German, French, Spanish, \
-Italian, Dutch, Swedish, Norwegian, Danish, Polish. If unsure, use English.
-
-# CORE RESPONSIBILITIES
-1. Booking: Collect client name, desired service, and preferred date/time. \
-Confirm availability. If slot is taken, immediately offer exactly 2 alternatives \
-— never just say "that's unavailable."
-2. Reminders: After every confirmed booking, ask: "Shall I send you a reminder \
-the day before?" If yes, confirm: "Done — I'll message you [date] at 9am."
-3. Rescheduling: Accept changes gracefully. Confirm the new time, update \
-the reminder automatically.
-4. No-show recovery: If a client missed an appointment, message within 2 hours: \
-"We missed you today, [name]. Life happens — want me to find you a new slot this week?"
-5. Waitlist: If fully booked, offer the waitlist: "I'll add you to our priority \
-list and message you the moment a slot opens."
-
-# TONE RULES
-- Never robotic. Never overly formal. Think: attentive, calm, professional.
-- Use the client's name once per conversation — not in every message.
-- Short sentences. No unnecessary filler. Every message has a clear next step.
-- Never say: "I'm just an AI," "I cannot," "Unfortunately," or "Please be advised."
-
-# ESCALATION
-If a client has a complaint, a question you cannot answer, or seems upset — respond: \
-"I want to make sure this is handled perfectly for you. I'm flagging this for \
-{tenant.owner_name} right now — you'll hear back within {tenant.escalation_hours} \
-hours." Then call notify_owner immediately.
-
-# UPSELL WINDOW
-After confirming a booking, add ONE natural upsell: "By the way — a lot of clients \
-pair [booked service] with [complementary service]. Want me to add 20 minutes for that?" \
-Never push more than once.
-
-# CONTEXT
-Salon name: {tenant.salon_name}
-Owner/manager name: {tenant.owner_name}
-Services offered: {tenant.salon_services}
-Working hours: {tenant.salon_hours}
-{booking_link_line}
-Today's date (UTC): {{TODAY}}
-
-# TOOL USE
-Always use the provided tools to take real actions. Never describe taking \
-an action without calling the corresponding tool."""
+def _get_client(api_key: str) -> anthropic.AsyncAnthropic:
+    if api_key not in _clients:
+        _clients[api_key] = anthropic.AsyncAnthropic(api_key=api_key)
+    return _clients[api_key]
 
 
-# ── Tool definitions ──────────────────────────────────────────────────────────
+# ── System prompt ─────────────────────────────────────────────────────────────
+
+_STYLE_LINES = {
+    "formal": "Стиль: официально, уважительно, на Вы.",
+    "terse":  "Стиль: предельно кратко — только суть, без лишних слов.",
+    "casual": "Стиль: тепло, дружелюбно, на ты.",
+}
+
+
+def _build_system_prompt(tenant: "TenantConfig", style: str = "casual") -> str:  # upgraded
+    from aria.config import settings
+    has_creds = bool(tenant.google_cal_credentials or settings.GOOGLE_CALENDAR_CREDENTIALS)
+    if has_creds and tenant.google_cal_id:
+        calendar_line = f"Календарь: Google Calendar (ID: {tenant.google_cal_id}) — синхронизирован"
+    else:
+        calendar_line = "Календарь: локальное хранение (Google Calendar не подключён)"
+
+    style_line = _STYLE_LINES.get(style, _STYLE_LINES["casual"])
+
+    return f"""Ты — Aria, персональный AI-администратор {tenant.owner_name} в {tenant.salon_name}.
+
+РОЛЬ:
+Помогаешь {tenant.owner_name} управлять записями клиентов. Она твой руководитель.
+
+ЧТО УМЕЕШЬ:
+— Показывать расписание на любую дату или диапазон
+— Вносить записи (клиенты пишут в Instagram, WhatsApp, звонят — ты фиксируешь)
+— Переносить и отменять записи
+— Проверять свободные слоты
+
+{style_line}
+
+КАК ОТВЕЧАЕШЬ:
+— Коротко и по делу — она занята
+— Расписание: маркированный список, время и имя клиента
+— Каждое действие подтверждаешь: «Готово — Катя записана на 16 мая в 14:00»
+— Если непонятно — один уточняющий вопрос, не больше
+— Не начинай с «Конечно!», «Отлично!», «Как я могу помочь?»
+— НИКОГДА не говори что запись в Google Calendar если в результате инструмента нет "google_calendar": true
+— Если ошибка "calendar_not_found" — скажи поделиться календарём с сервисным аккаунтом
+— Если ошибка "calendar_api_disabled" — скажи включить Google Calendar API в консоли
+
+ЯЗЫК:
+Отвечай ВСЕГДА на том же языке, на котором пишет {tenant.owner_name}.
+Русский → русский. Английский → английский.
+
+ДАННЫЕ САЛОНА:
+Салон: {tenant.salon_name}
+Услуги: {tenant.services}
+Часы работы: {tenant.hours}
+{calendar_line}
+Часовой пояс: {tenant.timezone}
+Сегодня: {{TODAY}}"""
+
+
+# ── Tools ─────────────────────────────────────────────────────────────────────
 
 TOOLS: list[dict] = [
     {
+        "name": "get_schedule",
+        "description": "Get appointments for a date or date range. Use 'today'/'tomorrow' as shortcuts.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "date": {"type": "string", "description": "YYYY-MM-DD, 'today', or 'tomorrow'"},
+                "date_from": {"type": "string", "description": "YYYY-MM-DD — start of range"},
+                "date_to": {"type": "string", "description": "YYYY-MM-DD — end of range"},
+            },
+            "required": [],
+        },
+    },
+    {
         "name": "check_availability",
-        "description": (
-            "Check whether a specific date/time slot is available for booking. "
-            "Returns {available: bool}."
-        ),
+        "description": "Check whether a specific date/time slot is free.",
         "input_schema": {
             "type": "object",
             "properties": {
                 "date": {"type": "string", "description": "YYYY-MM-DD"},
-                "time": {"type": "string", "description": "HH:MM (24-hour)"},
+                "time": {"type": "string", "description": "HH:MM"},
                 "service": {"type": "string"},
             },
             "required": ["date", "time", "service"],
         },
     },
     {
-        "name": "get_alternatives",
-        "description": (
-            "Get exactly 2 alternative available slots near the requested date/time. "
-            "Always call this when a requested slot is unavailable."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "date": {"type": "string", "description": "YYYY-MM-DD (reference date)"},
-                "time": {"type": "string", "description": "HH:MM (reference time)"},
-                "service": {"type": "string"},
-            },
-            "required": ["date", "time", "service"],
-        },
-    },
-    {
-        "name": "create_booking",
-        "description": "Confirm and persist a booking for the client.",
+        "name": "add_booking",
+        "description": "Add a new appointment (client booked via Instagram, WhatsApp, phone, etc.).",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -137,7 +129,7 @@ TOOLS: list[dict] = [
     },
     {
         "name": "reschedule_booking",
-        "description": "Move an existing confirmed booking to a new date/time.",
+        "description": "Move an existing booking to a new date/time.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -149,228 +141,197 @@ TOOLS: list[dict] = [
         },
     },
     {
-        "name": "schedule_reminder",
-        "description": (
-            "Schedule a reminder message to be sent to the client at 9am "
-            "the day before their appointment. Call this after the client says yes."
-        ),
+        "name": "cancel_booking",
+        "description": "Cancel an appointment by booking ID.",
         "input_schema": {
             "type": "object",
-            "properties": {
-                "booking_id": {"type": "integer"},
-            },
+            "properties": {"booking_id": {"type": "integer"}},
             "required": ["booking_id"],
         },
     },
     {
-        "name": "add_to_waitlist",
-        "description": "Add the client to the priority waitlist for a service.",
+        "name": "get_upcoming",
+        "description": "Get the next N upcoming appointments.",
         "input_schema": {
             "type": "object",
             "properties": {
-                "client_name": {"type": "string"},
-                "service": {"type": "string"},
+                "limit": {"type": "integer", "description": "How many to return (default 10)"},
             },
-            "required": ["client_name", "service"],
-        },
-    },
-    {
-        "name": "get_upcoming_booking",
-        "description": "Retrieve the client's next confirmed appointment.",
-        "input_schema": {
-            "type": "object",
-            "properties": {},
             "required": [],
-        },
-    },
-    {
-        "name": "notify_owner",
-        "description": (
-            "Send an urgent notification to the salon owner. "
-            "Use for complaints, escalations, or anything requiring human attention."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "message": {"type": "string"},
-                "urgency": {
-                    "type": "string",
-                    "enum": ["normal", "urgent"],
-                    "description": "Use 'urgent' for complaints and upset clients.",
-                },
-            },
-            "required": ["message"],
         },
     },
 ]
 
 
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _resolve_date(value: str, tz_str: str = "UTC") -> str:
+    from zoneinfo import ZoneInfo
+    v = value.lower()
+    if v in ("today", "tomorrow"):
+        from datetime import datetime as _dt
+        now_local = _dt.now(ZoneInfo(tz_str))
+        if v == "tomorrow":
+            now_local = now_local + timedelta(days=1)
+        return now_local.date().isoformat()
+    return value
+
+
+def _trim_history(history: list[dict], max_len: int) -> list[dict]:
+    """Trim history to max_len, always starting at a clean user-text message.
+
+    Never cuts between a tool_use assistant turn and its tool_result user turn,
+    which would cause an Anthropic API validation error.
+    """
+    if len(history) <= max_len:
+        return history
+    trimmed = history[-max_len:]
+    # Walk forward until we find a user message that is plain text (not tool_result)
+    for i, msg in enumerate(trimmed):
+        if msg.get("role") != "user":
+            continue
+        content = msg.get("content", "")
+        if isinstance(content, str):
+            return trimmed[i:]
+        if isinstance(content, list) and all(
+            b.get("type") != "tool_result" for b in content
+        ):
+            return trimmed[i:]
+    # Fallback: keep only the very last user message
+    for i in range(len(history) - 1, -1, -1):
+        if history[i].get("role") == "user":
+            content = history[i].get("content", "")
+            if isinstance(content, str):
+                return [history[i]]
+    return []
+
+
 # ── Tool executor ─────────────────────────────────────────────────────────────
 
-class ToolContext:
-    """Carries runtime state needed by tool handlers."""
+async def _exec_tool(
+    name: str, args: dict, tenant: "TenantConfig", owner_id: int, bot: Any
+) -> str:
+    adapter = get_adapter(tenant)
+    tz_str  = tenant.timezone or "UTC"
 
-    def __init__(self, user_id: int, bot: Any, tenant: TenantConfig) -> None:
-        self.user_id = user_id
-        self.bot = bot
-        self.owner_id = tenant.owner_telegram_id
-        self.tenant = tenant
-        self.last_booking_id: Optional[int] = None
-
-
-async def _exec_tool(name: str, args: dict, ctx: ToolContext) -> str:
-    adapter = get_adapter()
-
-    if name == "check_availability":
-        dt = parse_datetime(args["date"], args["time"])
-        if dt is None:
-            return json.dumps({"error": "invalid date/time format"})
-        available = await adapter.is_available(dt, args["service"])
-        return json.dumps({"available": available})
-
-    if name == "get_alternatives":
-        dt = parse_datetime(args["date"], args["time"])
-        if dt is None:
-            return json.dumps({"error": "invalid date/time format"})
-        alts = await adapter.get_alternatives(dt, args["service"])
+    if name == "get_schedule":
+        from zoneinfo import ZoneInfo
+        tz = ZoneInfo(tz_str)
+        if args.get("date_from") and args.get("date_to"):
+            from_str = _resolve_date(args["date_from"], tz_str)
+            to_str   = _resolve_date(args["date_to"],   tz_str)
+            dt_from  = datetime.strptime(from_str, "%Y-%m-%d").replace(hour=0,  minute=0,  tzinfo=tz).astimezone(timezone.utc)
+            dt_to    = datetime.strptime(to_str,   "%Y-%m-%d").replace(hour=23, minute=59, tzinfo=tz).astimezone(timezone.utc)
+        else:
+            target  = _resolve_date(args.get("date") or "today", tz_str)
+            dt_from = datetime.strptime(target, "%Y-%m-%d").replace(hour=0,  minute=0,  tzinfo=tz).astimezone(timezone.utc)
+            dt_to   = datetime.strptime(target, "%Y-%m-%d").replace(hour=23, minute=59, tzinfo=tz).astimezone(timezone.utc)
+        events = await adapter.get_events(dt_from, dt_to)
         return json.dumps({
-            "alternatives": [
-                {"date": a.strftime("%Y-%m-%d"), "time": a.strftime("%H:%M")}
-                for a in alts
-            ]
+            "date_from": _resolve_date(args.get("date_from") or args.get("date") or "today", tz_str),
+            "date_to":   _resolve_date(args.get("date_to")   or args.get("date") or "today", tz_str),
+            "count": len(events), "bookings": events,
         })
 
-    if name == "create_booking":
-        dt = parse_datetime(args["date"], args["time"])
+    if name == "check_availability":
+        dt = parse_datetime(args["date"], args["time"], tz_str)
         if dt is None:
-            return json.dumps({"error": "invalid date/time format"})
-        booking_id, cal_id = await adapter.create_event(
-            ctx.user_id, args["client_name"], args["service"], dt
-        )
-        ctx.last_booking_id = booking_id
+            return json.dumps({"error": "invalid date/time"})
         return json.dumps({
-            "booking_id": booking_id,
-            "confirmed_date": args["date"],
-            "confirmed_time": args["time"],
-            "service": args["service"],
+            "available": await adapter.is_available(dt, args["service"]),
+            "date": args["date"], "time": args["time"],
+        })
+
+    if name == "add_booking":
+        dt = parse_datetime(args["date"], args["time"], tz_str)
+        if dt is None:
+            return json.dumps({"error": "invalid date/time"})
+        bid, cal_id = await adapter.create_event(
+            owner_id, args["client_name"], args["service"], dt
+        )
+        # Schedule reminder (day before at 09:00 local) and no-show check (2h after)
+        from aria.services.scheduler import schedule_reminder_job, schedule_noshow_job
+        schedule_reminder_job(bid, dt, owner_id, bot, tenant)
+        schedule_noshow_job(bid, dt, owner_id, bot, tenant)
+        return json.dumps({
+            "booking_id": bid, "client": args["client_name"],
+            "service": args["service"], "date": args["date"],
+            "time": args["time"], "confirmed": True,
+            "google_calendar": cal_id is not None,
         })
 
     if name == "reschedule_booking":
-        new_dt = parse_datetime(args["new_date"], args["new_time"])
+        new_dt = parse_datetime(args["new_date"], args["new_time"], tz_str)
         if new_dt is None:
-            return json.dumps({"error": "invalid date/time format"})
+            return json.dumps({"error": "invalid date/time"})
         booking = await repo.get_booking(args["booking_id"])
         if not booking:
             return json.dumps({"error": "booking not found"})
-        await adapter.update_event(
-            args["booking_id"], booking.get("calendar_event_id"), new_dt
-        )
-        return json.dumps({"rescheduled": True, "new_date": args["new_date"],
-                           "new_time": args["new_time"]})
-
-    if name == "schedule_reminder":
-        booking_id = args.get("booking_id") or ctx.last_booking_id
-        if booking_id is None:
-            return json.dumps({"error": "no booking_id provided"})
-        booking = await repo.get_booking(booking_id)
-        if not booking:
-            return json.dumps({"error": "booking not found"})
-        from aria.services.scheduler import schedule_reminder_job
-        schedule_reminder_job(booking_id, booking["scheduled_at"], ctx.user_id, ctx.bot)
-        return json.dumps({"reminder_scheduled": True, "booking_id": booking_id})
-
-    if name == "add_to_waitlist":
-        wl_id = await repo.add_to_waitlist(
-            ctx.user_id, args["client_name"], args["service"]
-        )
-        return json.dumps({"waitlist_id": wl_id, "added": True})
-
-    if name == "get_upcoming_booking":
-        booking = await repo.get_upcoming_booking(ctx.user_id)
-        if not booking:
-            return json.dumps({"booking": None})
+        await adapter.update_event(args["booking_id"], booking.get("calendar_event_id"), new_dt)
+        # Reschedule reminder and no-show jobs with new time
+        from aria.services.scheduler import schedule_reminder_job, schedule_noshow_job
+        schedule_reminder_job(args["booking_id"], new_dt, owner_id, bot, tenant)
+        schedule_noshow_job(args["booking_id"], new_dt, owner_id, bot, tenant)
         return json.dumps({
-            "booking": {
-                "id": booking["id"],
-                "service": booking["service"],
-                "date": booking["scheduled_at"].strftime("%Y-%m-%d"),
-                "time": booking["scheduled_at"].strftime("%H:%M"),
-                "client_name": booking["client_name"],
-                "status": booking["status"],
-            }
+            "rescheduled": True, "booking_id": args["booking_id"],
+            "new_date": args["new_date"], "new_time": args["new_time"],
         })
 
-    if name == "notify_owner":
-        if ctx.owner_id:
-            try:
-                urgency = args.get("urgency", "normal")
-                prefix = "URGENT — " if urgency == "urgent" else ""
-                await ctx.bot.send_message(
-                    chat_id=ctx.owner_id,
-                    text=f"{prefix}Aria alert (user {ctx.user_id}):\n{args['message']}",
-                )
-            except Exception as exc:
-                log.warning("Failed to notify owner: %s", exc)
-        return json.dumps({"notified": True})
+    if name == "cancel_booking":
+        booking = await repo.get_booking(args["booking_id"])
+        if not booking:
+            return json.dumps({"error": "booking not found"})
+        await repo.update_booking_status(args["booking_id"], "cancelled")
+        try:
+            await adapter.delete_event(args["booking_id"], booking.get("calendar_event_id"))
+        except Exception as exc:
+            log.warning("GCal delete skipped for booking %d: %s", args["booking_id"], exc)
+        from aria.services.scheduler import cancel_booking_jobs
+        cancel_booking_jobs(args["booking_id"])
+        return json.dumps({"cancelled": True, "booking_id": args["booking_id"]})
+
+    if name == "get_upcoming":
+        limit = int(args.get("limit") or 10)
+        events = await adapter.get_events(
+            datetime.now(timezone.utc),
+            datetime.now(timezone.utc) + timedelta(days=90),
+        )
+        return json.dumps({"bookings": events[:limit]})
 
     return json.dumps({"error": f"unknown tool: {name}"})
 
 
-# ── Main AI call ──────────────────────────────────────────────────────────────
-
+# ── Main entry point ──────────────────────────────────────────────────────────
 
 async def chat(
-    user_id: int,
-    user_text: str,
-    bot: Any,
-    tenant: Optional[TenantConfig] = None,
-) -> tuple[str, bool]:
-    """
-    Main entry point: run the agentic loop and return
-    (reply_text, booking_just_confirmed).
-    """
-    if tenant is None:
-        # Backwards-compat: build a TenantConfig from legacy settings
-        from aria.config import load_tenants
-        tenants = load_tenants()
-        tenant = tenants[0] if tenants else TenantConfig(bot_token="", tenant_id=1)
+    user_id: int, user_text: str, bot: Any, tenant: "TenantConfig", style: str = "casual"
+) -> str:
+    client = _get_client(tenant.effective_api_key)
 
-    client = anthropic.AsyncAnthropic(api_key=tenant.anthropic_api_key)
-    ctx = ToolContext(user_id=user_id, bot=bot, tenant=tenant)
-    had_booking_before = ctx.last_booking_id
-
-    # Load history
-    history = await repo.load_history(user_id)
+    history = await repo.load_history(tenant.id, user_id)
     history.append({"role": "user", "content": user_text})
+    history = _trim_history(history, MAX_HISTORY)
 
-    # Trim to last MAX_HISTORY messages
-    if len(history) > MAX_HISTORY:
-        history = history[-MAX_HISTORY:]
-
-    system_prompt = _build_system_prompt(tenant).replace(
-        "{TODAY}", datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    from zoneinfo import ZoneInfo
+    tenant_tz = ZoneInfo(tenant.timezone or "UTC")
+    system_prompt = _build_system_prompt(tenant, style=style).replace(
+        "{TODAY}", datetime.now(tenant_tz).strftime("%Y-%m-%d %A")
     )
 
-    # Agentic loop
     for _ in range(MAX_TOOL_ROUNDS):
         response = await client.messages.create(
-            model=tenant.claude_model,
+            model="claude-haiku-4-5-20251001",
             max_tokens=1024,
-            system=[
-                {
-                    "type": "text",
-                    "text": system_prompt,
-                    "cache_control": {"type": "ephemeral"},  # cache the large prompt
-                }
-            ],
+            system=[{"type": "text", "text": system_prompt,
+                     "cache_control": {"type": "ephemeral"}}],
             tools=TOOLS,
             messages=history,
+            extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"},
         )
 
-        # Collect assistant content block(s)
         assistant_content: list[dict] = []
         text_reply = ""
-        tool_calls: list[dict] = []
+        tool_calls: list = []
 
         for block in response.content:
             if block.type == "text":
@@ -378,41 +339,33 @@ async def chat(
                 assistant_content.append({"type": "text", "text": block.text})
             elif block.type == "tool_use":
                 tool_calls.append(block)
-                assistant_content.append({
-                    "type": "tool_use",
-                    "id": block.id,
-                    "name": block.name,
-                    "input": block.input,
-                })
+                assistant_content.append({"type": "tool_use", "id": block.id,
+                                          "name": block.name, "input": block.input})
 
         history.append({"role": "assistant", "content": assistant_content})
 
         if not tool_calls:
-            # No more tool calls — we have the final answer
             break
 
-        # Execute tools and collect results
         tool_results: list[dict] = []
         for tc in tool_calls:
             try:
-                result = await _exec_tool(tc.name, tc.input, ctx)
+                result = await _exec_tool(tc.name, tc.input, tenant,
+                                          owner_id=user_id, bot=bot)
             except Exception as exc:
                 log.exception("Tool %s failed", tc.name)
-                result = json.dumps({"error": str(exc)})
-            tool_results.append({
-                "type": "tool_result",
-                "tool_use_id": tc.id,
-                "content": result,
-            })
-
+                if "404" in str(exc) or "Not Found" in str(exc):
+                    result = json.dumps({"error": "calendar_not_found",
+                                         "hint": "Share the calendar with the service account email (Editor role)."})
+                elif "403" in str(exc) or "disabled" in str(exc):
+                    result = json.dumps({"error": "calendar_api_disabled",
+                                         "hint": "Enable Google Calendar API in Google Cloud Console."})
+                else:
+                    result = json.dumps({"error": str(exc)})
+            tool_results.append({"type": "tool_result", "tool_use_id": tc.id, "content": result})
         history.append({"role": "user", "content": tool_results})
-
     else:
-        # Fallback if loop exhausted without a text reply
-        text_reply = "Let me check on that and get back to you shortly."
+        text_reply = "Что-то пошло не так, попробуй ещё раз."
 
-    booking_just_confirmed = (
-        ctx.last_booking_id is not None and had_booking_before is None
-    )
-    await repo.save_history(user_id, history)
-    return text_reply, booking_just_confirmed
+    await repo.save_history(tenant.id, user_id, history)
+    return text_reply

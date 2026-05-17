@@ -1,285 +1,173 @@
-"""Main message handler — routes text through the AI service."""
+"""Catch-all message handler — routes to AI service.
+
+Rule-based bypass fires first for simple schedule queries (no tokens spent).
+The bypass uses the same adapter as keyboard buttons, so GCal sync is preserved:
+events from external booking services (Yclients, Dikidi, etc.) appear correctly.
+"""
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import time
 
-from aiogram import Bot, F, Router
+from aiogram import Bot, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import (
-    CallbackQuery,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-    Message,
-    URLInputFile,
-)
+from aiogram.types import Message
 
 import aria.db.repo as repo
-from aria.config import TenantConfig
-from aria.handlers.booking import start_booking
 from aria.services.ai import chat
+from aria.tenant import TenantConfig
 
 log = logging.getLogger(__name__)
 router = Router()
 
-_BOOKING_TRIGGER  = {"➕ Новая запись", "+ Новая запись", "новая запись"}
-_TODAY_TRIGGER    = {"📅 Сегодня"}
-_TOMORROW_TRIGGER = {"📅 Завтра"}
-_NEAREST_TRIGGER  = {"📋 Ближайшие"}
-_MAIL_TRIGGER     = {"📧 Почта"}
-_SKIP_TRIGGERS    = {"📱 Меню"}  # handled in start.py
+# in-memory rate limit: user_id → timestamps of last 60 s
+_rate_windows: dict[int, list[float]] = {}
+_RATE_LIMIT = 20  # messages per minute
 
 
-# ── Keyboards ─────────────────────────────────────────────────────────────────
+# ── Rule-based bypass ─────────────────────────────────────────────────────────
 
-def _flat_kb(services: list[str], limit: int) -> InlineKeyboardMarkup:
-    capped = services[:limit]
-    rows = [
-        [InlineKeyboardButton(text=s, callback_data=f"svc:{i}")]
-        for i, s in enumerate(capped)
-    ]
-    if len(services) > limit:
-        rows.append([InlineKeyboardButton(
-            text=f"… ещё {len(services) - limit} скрыто",
-            callback_data="svc:overflow",
-        )])
-    return InlineKeyboardMarkup(inline_keyboard=rows)
+# Words that mean the user wants to ADD/CHANGE a booking — must go to AI
+_BOOKING_VERBS = [
+    "запис", "добавь", "добавить", "перенес", "отмен",
+    "свободн", "проверь", "убери", "удали",
+]
 
+# Trigger patterns → (days_offset for _show_schedule)
+_DAY_PATTERNS: list[tuple[list[str], int]] = [
+    (["сегодня", "сёгодня", "today"], 0),
+    (["завтра",  "tomorrow"],         1),
+]
 
-def _category_kb(tree: dict[str, list[str]]) -> InlineKeyboardMarkup:
-    rows = [
-        [InlineKeyboardButton(text=cat, callback_data=f"cat:{i}")]
-        for i, cat in enumerate(list(tree.keys()))
-    ]
-    return InlineKeyboardMarkup(inline_keyboard=rows)
+_UPCOMING_TRIGGERS  = ["ближайш", "upcoming", "следующ запис"]
+_THIS_WEEK_TRIGGERS = ["эта неделя", "эту неделю", "на неделе", "на этой нед", "неделя"]
+_NEXT_WEEK_TRIGGERS = ["следующая неделя", "следующую неделю", "след неделя", "на следующей"]
 
 
-def _subcategory_kb(cat_idx: int, subs: list[str]) -> InlineKeyboardMarkup:
-    rows = [
-        [InlineKeyboardButton(text=s, callback_data=f"sub:{cat_idx}:{i}")]
-        for i, s in enumerate(subs)
-    ]
-    rows.append([InlineKeyboardButton(text="← Назад", callback_data="cat:back")])
-    return InlineKeyboardMarkup(inline_keyboard=rows)
+def _has_booking_verb(text: str) -> bool:
+    return any(kw in text for kw in _BOOKING_VERBS)
+
+
+async def _schedule_bypass(message: Message, tenant: TenantConfig) -> bool:
+    """
+    Try to handle message without calling AI.
+    Returns True if handled; caller should return immediately.
+
+    Uses get_adapter(tenant) → GoogleAdapter when configured, so events from
+    external booking services synced via GCal are included in the results.
+    """
+    text  = message.text.strip().lower()
+    words = text.split()
+
+    # Never bypass when the owner wants to mutate bookings
+    if _has_booking_verb(text):
+        return False
+
+    # "сегодня" / "завтра" — short queries only (avoid "запиши на завтра в 14:00")
+    if len(words) <= 6:
+        for patterns, offset in _DAY_PATTERNS:
+            if any(p in text for p in patterns):
+                from aria.handlers.quick import _show_schedule
+                await _show_schedule(message, tenant, offset)
+                return True
+
+    # "ближайшие" — any length (it's unambiguous)
+    if any(p in text for p in _UPCOMING_TRIGGERS):
+        from aria.handlers.quick import quick_upcoming
+        await quick_upcoming(message, tenant)
+        return True
+
+    # "следующая неделя" before "эта неделя" (longer match first)
+    if any(p in text for p in _NEXT_WEEK_TRIGGERS):
+        from aria.handlers.menu import _show_week
+        await _show_week(message, tenant, 1)
+        return True
+
+    if any(p in text for p in _THIS_WEEK_TRIGGERS):
+        from aria.handlers.menu import _show_week
+        await _show_week(message, tenant, 0)
+        return True
+
+    return False
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _parse_services(tenant: TenantConfig) -> list[str]:
-    return [s.strip() for s in tenant.salon_services.split(",") if s.strip()]
+def _check_rate_limit(user_id: int) -> bool:
+    now = time.monotonic()
+    window = _rate_windows.setdefault(user_id, [])
+    window[:] = [t for t in window if now - t < 60]
+    if len(window) >= _RATE_LIMIT:
+        return False
+    window.append(now)
+    return True
 
 
-async def _load_tree(tenant: TenantConfig) -> dict[str, list[str]]:
-    db_tree = await repo.get_services_tree(tenant.tenant_id)
-    return db_tree if db_tree else tenant.services_tree_dict
+def _detect_style(text: str) -> str:
+    lower = text.lower()
+    if any(w in lower for w in [" вы ", " вас ", " вам ", "пожалуйста", "будьте добры"]):
+        return "formal"
+    if len(text.split()) < 5:
+        return "terse"
+    return "casual"
 
 
-async def _warn_owner(bot: Bot, tenant: TenantConfig, total: int) -> None:
-    if not tenant.owner_telegram_id:
-        return
-    try:
-        await bot.send_message(
-            chat_id=tenant.owner_telegram_id,
-            text=(
-                f"⚠️ <b>Лимит процедур достигнут</b>\n\n"
-                f"Настроено <b>{total}</b> услуг, "
-                f"показывается только <b>{tenant.max_services}</b>.\n\n"
-                f"Уберите лишние или увеличьте ARIA_BOT_{tenant.tenant_id}_MAX_SERVICES."
-            ),
-            parse_mode="HTML",
-        )
-    except Exception:
-        log.warning("tenant #%d: could not notify owner", tenant.tenant_id)
-
-
-async def _send_avatar_reply(message: Message, tenant: TenantConfig, text: str) -> None:
-    url = tenant.salon_avatar_url.strip()
-    if not url:
-        await message.answer(text)
-        return
-    try:
-        photo = URLInputFile(url) if url.startswith("http") else url
-        await message.answer_photo(photo=photo, caption=text)
-    except Exception:
-        await message.answer(text)
-
-
-# ── Quick-action button handlers ─────────────────────────────────────────────
-
-@router.message(F.text.in_(_TODAY_TRIGGER))
-async def handle_today(message: Message, bot: Bot, tenant: TenantConfig) -> None:
-    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
-    reply, _ = await _ai(message.from_user.id, "что у меня сегодня?", bot, tenant)
-    await message.answer(reply)
-
-
-@router.message(F.text.in_(_TOMORROW_TRIGGER))
-async def handle_tomorrow(message: Message, bot: Bot, tenant: TenantConfig) -> None:
-    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
-    reply, _ = await _ai(message.from_user.id, "что у меня завтра?", bot, tenant)
-    await message.answer(reply)
-
-
-@router.message(F.text.in_(_NEAREST_TRIGGER))
-async def handle_nearest(message: Message, bot: Bot, tenant: TenantConfig) -> None:
-    from aria.handlers.booking import show_bookings_list
-    await show_bookings_list(message, message.from_user.id, tenant)
-
-
-@router.callback_query(F.data == "new:booking")
-async def new_booking_callback(
-    callback: CallbackQuery, state: FSMContext, bot: Bot, tenant: TenantConfig
-) -> None:
-    await callback.answer()
-    tree = await _load_tree(tenant)
-    if tree:
-        await callback.message.edit_text(
-            "Выберите категорию:", reply_markup=_category_kb(tree)
-        )
-        return
-    services = _parse_services(tenant)
-    if not services:
-        await callback.message.answer("Напишите название услуги — я помогу записать.")
-        return
-    if len(services) > tenant.max_services:
-        await _warn_owner(bot, tenant, len(services))
-    await callback.message.edit_text(
-        "Выберите услугу:", reply_markup=_flat_kb(services, tenant.max_services)
-    )
-
-
-@router.message(F.text.in_(_MAIL_TRIGGER))
-async def handle_mail_button(message: Message, tenant: TenantConfig) -> None:
-    row = await repo.get_email_settings(tenant.tenant_id)
-    has_email = row and row["email_address"]
-    if has_email:
-        senders = row["email_allowed_senders"] or "все"
-        text = (
-            f"📧 <b>Email мониторинг активен</b>\n\n"
-            f"Адрес: <code>{row['email_address']}</code>\n"
-            f"Отправители: {senders}\n\n"
-            "Управление: /admin → Email мониторинг"
-        )
-    else:
-        text = (
-            "📧 <b>Email мониторинг не настроен</b>\n\n"
-            "Нажмите /admin → Email мониторинг чтобы подключить."
-        )
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-    kb = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="⚙️ Настроить", callback_data="adm:email")
-    ]])
-    await message.answer(text, parse_mode="HTML", reply_markup=kb)
-
-
-async def _ai(user_id: int, text: str, bot: Bot, tenant: TenantConfig) -> tuple[str, bool]:
-    try:
-        return await chat(user_id=user_id, user_text=text, bot=bot, tenant=tenant)
-    except Exception:
-        log.exception("AI error (tenant #%d)", tenant.tenant_id)
-        return "Что-то пошло не так. Попробуйте ещё раз.", False
-
-
-# ── New booking flow ──────────────────────────────────────────────────────────
-
-@router.message(F.text.casefold().in_({t.casefold() for t in _BOOKING_TRIGGER}))
-async def handle_new_booking(message: Message, state: FSMContext, bot: Bot, tenant: TenantConfig) -> None:
-    tree = await _load_tree(tenant)
-    if tree:
-        await message.answer("Выберите категорию:", reply_markup=_category_kb(tree))
-        return
-
-    services = _parse_services(tenant)
-    if not services:
-        await message.answer("Напишите название услуги — я помогу записать.")
-        return
-    if len(services) > tenant.max_services:
-        await _warn_owner(bot, tenant, len(services))
-    await message.answer("Выберите услугу:", reply_markup=_flat_kb(services, tenant.max_services))
-
-
-@router.callback_query(F.data.startswith("cat:"))
-async def handle_category(callback: CallbackQuery, tenant: TenantConfig) -> None:
-    await callback.answer()
-    raw = callback.data.split(":", 1)[1]
-    tree = await _load_tree(tenant)
-
-    if raw == "back":
-        await callback.message.edit_text("Выберите категорию:", reply_markup=_category_kb(tree))
-        return
-
-    try:
-        idx = int(raw)
-        cats = list(tree.keys())
-        cat_name = cats[idx]
-        subs = tree[cat_name]
-    except (ValueError, IndexError, KeyError):
-        await callback.message.answer("Категория не найдена. Попробуйте снова.")
-        return
-
-    await callback.message.edit_text(
-        f"<b>{cat_name}</b> — выберите услугу:",
-        parse_mode="HTML",
-        reply_markup=_subcategory_kb(idx, subs),
-    )
-
-
-@router.callback_query(F.data.startswith("sub:"))
-async def handle_subcategory(
-    callback: CallbackQuery, state: FSMContext, bot: Bot, tenant: TenantConfig
-) -> None:
-    await callback.answer()
-    parts = callback.data.split(":")
-    try:
-        tree = await _load_tree(tenant)
-        cats = list(tree.keys())
-        cat_name = cats[int(parts[1])]
-        service = f"{cat_name} — {tree[cat_name][int(parts[2])]}"
-    except (IndexError, ValueError, KeyError):
-        await callback.message.answer("Не удалось определить услугу. Попробуйте снова.")
-        return
-
-    await start_booking(callback, state, tenant, service)
-
-
-@router.callback_query(F.data.startswith("svc:"))
-async def handle_service_flat(
-    callback: CallbackQuery, state: FSMContext, bot: Bot, tenant: TenantConfig
-) -> None:
-    await callback.answer()
-    raw = callback.data.split(":", 1)[1]
-    if raw == "overflow":
-        await callback.message.answer(
-            "Напишите название нужной услуги текстом — я найду её."
-        )
-        return
-    try:
-        service = _parse_services(tenant)[int(raw)]
-    except (ValueError, IndexError):
-        await callback.message.answer("Не удалось определить услугу. Попробуйте снова.")
-        return
-    await start_booking(callback, state, tenant, service)
-
-
-# ── Generic message handler ───────────────────────────────────────────────────
+# ── Main handler ──────────────────────────────────────────────────────────────
 
 @router.message()
-async def handle_message(message: Message, bot: Bot, tenant: TenantConfig) -> None:
-    if not message.text or message.text in _SKIP_TRIGGERS:
+async def handle_message(message: Message, bot: Bot, tenant: TenantConfig, state: FSMContext) -> None:
+    if not message.text or not tenant or not tenant.setup_complete:
         return
-    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+
     try:
-        reply, confirmed = await chat(
-            user_id=message.from_user.id,
+        current_state = await state.get_state()
+    except Exception:
+        current_state = None
+
+    if current_state is not None:
+        log.info(
+            "FSM state active (%s) but no handler matched — message: %r",
+            current_state, message.text[:40] if message.text else "",
+        )
+        return
+
+    user_id = message.from_user.id
+
+    if not _check_rate_limit(user_id):
+        await message.answer("Слишком много сообщений подряд. Подожди минуту.")
+        return
+
+    # ── Rule-based bypass: no tokens for simple schedule queries ──────────────
+    if await _schedule_bypass(message, tenant):
+        log.debug("Bypass handled: %r", message.text[:40])
+        return
+
+    # ── AI path ───────────────────────────────────────────────────────────────
+    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+
+    style = "casual"
+    try:
+        profile = await repo.get_client_profile(tenant.id, user_id)
+        stored_style = (profile["communication_style"] if profile else None) or "casual"
+        new_style = _detect_style(message.text)
+        style = new_style
+        if new_style != stored_style:
+            asyncio.create_task(repo.update_client_style(tenant.id, user_id, new_style))
+    except Exception:
+        pass
+
+    try:
+        reply = await chat(
+            user_id=user_id,
             user_text=message.text,
             bot=bot,
             tenant=tenant,
+            style=style,
         )
-    except Exception:
-        log.exception("AI error (tenant #%d)", tenant.tenant_id)
-        reply, confirmed = "Что-то пошло не так. Попробуйте ещё раз.", False
+    except Exception as exc:
+        log.exception("AI error for tenant %d user %d: %s", tenant.id, user_id, exc)
+        reply = "Что-то пошло не так. Попробуй ещё раз."
 
-    if confirmed:
-        await _send_avatar_reply(message, tenant, reply)
-    else:
-        await message.answer(reply)
+    await message.answer(reply)
