@@ -47,11 +47,7 @@ class Settings:
         self.DATABASE_URL = (
             _str("ARIA_DATABASE_URL") or _str("DATABASE_URL", "postgresql://localhost/aria_salon")
         )
-        self.ANTHROPIC_API_KEY = (
-            _str("ANTHROPIC_API_KEY") or _str("CLAUDE_API_KEY")
-        )
-        if not self.ANTHROPIC_API_KEY:
-            raise RuntimeError("Required env var 'ANTHROPIC_API_KEY' is not set")
+        self.ANTHROPIC_API_KEY = _str("ANTHROPIC_API_KEY") or _str("CLAUDE_API_KEY", "")
 
         self.ADMIN_TELEGRAM_ID = (
             _int("ARIA_OWNER_TELEGRAM_ID", 0) or _int("OWNER_ID", 0)
@@ -59,11 +55,7 @@ class Settings:
         self.MANAGEMENT_BOT_TOKEN = _str("MANAGEMENT_BOT_TOKEN", "")
 
         # Accept both ARIA_BOT_TOKEN (new) and BOT_TOKEN (legacy) naming
-        self.BOT_TOKEN = (
-            _str("ARIA_BOT_TOKEN") or _str("BOT_TOKEN")
-        )
-        if not self.BOT_TOKEN:
-            raise RuntimeError("Required env var 'ARIA_BOT_TOKEN' (or 'BOT_TOKEN') is not set")
+        self.BOT_TOKEN = _str("ARIA_BOT_TOKEN") or _str("BOT_TOKEN", "")
 
         self.OWNER_TELEGRAM_ID = (
             _int("ARIA_OWNER_TELEGRAM_ID", 0) or _int("OWNER_ID", 0)

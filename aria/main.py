@@ -184,6 +184,26 @@ async def _ensure_initial_tenant() -> None:
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 async def main() -> None:
+    if not settings.BOT_TOKEN:
+        log.critical(
+            "\n\n"
+            "═══════════════════════════════════════════════════════\n"
+            "  ARIA не может запуститься: токен бота не задан.\n"
+            "\n"
+            "  Добавь переменную в Railway → Variables:\n"
+            "    ARIA_BOT_TOKEN = <токен от @BotFather>\n"
+            "\n"
+            "  Также нужны:\n"
+            "    ANTHROPIC_API_KEY = <ключ Anthropic>\n"
+            "    DATABASE_URL      = <postgres connection string>\n"
+            "═══════════════════════════════════════════════════════\n"
+        )
+        return
+
+    if not settings.ANTHROPIC_API_KEY:
+        log.critical("ANTHROPIC_API_KEY не задан в Railway Variables — AI не будет работать")
+        return
+
     await init_db(settings.DATABASE_URL)
     await _ensure_initial_tenant()
     get_scheduler().start()
