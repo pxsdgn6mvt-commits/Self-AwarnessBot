@@ -299,66 +299,6 @@ class GoogleAdapter(BookingAdapter):
             else:
                 raise
 
-    async def delete_event(
-        self, booking_id: Optional[int], calendar_event_id: Optional[str]
-    ) -> None:
-        if booking_id is not None:
-            await repo.update_booking_status(booking_id, "cancelled")
-        if not calendar_event_id:
-            return
-
-        def _del_sync() -> None:
-            self._service.events().delete(
-                calendarId=self._calendar_id, eventId=calendar_event_id
-            ).execute()
-
-        try:
-            await asyncio.to_thread(_del_sync)
-        except Exception as exc:
-            if "404" in str(exc) or "410" in str(exc):
-                pass  # already deleted — fine
-            else:
-                raise
-
-    async def get_events(self, date_from: date, date_to: date) -> list[dict]:
-        time_min = datetime(date_from.year, date_from.month, date_from.day,
-                            tzinfo=timezone.utc).isoformat()
-        time_max = (datetime(date_to.year, date_to.month, date_to.day,
-                             tzinfo=timezone.utc) + timedelta(days=1)).isoformat()
-
-        def _list_sync() -> list:
-            result = self._service.events().list(
-                calendarId=self._calendar_id,
-                timeMin=time_min,
-                timeMax=time_max,
-                singleEvents=True,
-                orderBy="startTime",
-            ).execute()
-            return result.get("items", [])
-
-        gcal_items = await asyncio.to_thread(_list_sync)
-        gcal_ids = [e["id"] for e in gcal_items]
-        cal_to_db = await repo.get_bookings_by_gcal_ids(gcal_ids)
-
-        events: list[dict] = []
-        for e in gcal_items:
-            gcal_id = e["id"]
-            start_info = e.get("start", {})
-            raw_start = start_info.get("dateTime") or start_info.get("date", "")
-            try:
-                dt = datetime.fromisoformat(raw_start.replace("Z", "+00:00"))
-            except (ValueError, AttributeError):
-                continue
-            events.append({
-                "id": cal_to_db.get(gcal_id, gcal_id),  # int if in DB, else str gcal id
-                "gcal_event_id": gcal_id,
-                "service": e.get("summary", ""),
-                "date": dt.strftime("%Y-%m-%d"),
-                "time": dt.strftime("%H:%M"),
-                "client_name": "",
-            })
-        return events
-
 
 # ── Factory ───────────────────────────────────────────────────────────────────
 

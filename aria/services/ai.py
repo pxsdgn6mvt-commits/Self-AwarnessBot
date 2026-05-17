@@ -291,27 +291,6 @@ async def _exec_tool(
         })
 
     if name == "cancel_booking":
-        booking = await repo.get_booking(args["booking_id"])
-        if not booking:
-            return json.dumps({"error": "booking not found"})
-        await repo.update_booking_status(args["booking_id"], "cancelled")
-        try:
-            await adapter.delete_event(args["booking_id"], booking.get("calendar_event_id"))
-        except Exception as exc:
-            log.warning("GCal delete skipped for booking %d: %s", args["booking_id"], exc)
-        from aria.services.scheduler import cancel_booking_jobs
-        cancel_booking_jobs(args["booking_id"])
-        return json.dumps({"cancelled": True, "booking_id": args["booking_id"]})
-
-    if name == "get_upcoming":
-        limit = int(args.get("limit") or 10)
-        events = await adapter.get_events(
-            datetime.now(timezone.utc),
-            datetime.now(timezone.utc) + timedelta(days=90),
-        )
-        return json.dumps({"bookings": events[:limit]})
-
-    if name == "cancel_booking":
         raw = args.get("booking_id", "")
         booking = None
         bid: Optional[int] = None
@@ -322,7 +301,6 @@ async def _exec_tool(
             pass
 
         if booking:
-            # Normal path: found in DB
             await repo.update_booking_status(bid, "cancelled")
             try:
                 await adapter.delete_event(bid, booking.get("calendar_event_id"))
@@ -332,7 +310,7 @@ async def _exec_tool(
             cancel_booking_jobs(bid)
             return json.dumps({"cancelled": True, "booking_id": bid})
 
-        # Not in DB — treat raw value as a GCal event ID string
+        # booking_id is a GCal string event ID (not in DB)
         gcal_id = str(raw)
         try:
             await adapter.delete_event(None, gcal_id)
@@ -341,42 +319,13 @@ async def _exec_tool(
             log.warning("Direct GCal delete failed for %s: %s", gcal_id, exc)
             return json.dumps({"error": f"not found in DB and GCal delete failed: {exc}"})
 
-    if name == "cancel_bookings_in_range":
-        try:
-            d_from = date.fromisoformat(args["date_from"])
-            d_to   = date.fromisoformat(args["date_to"])
-        except (ValueError, KeyError):
-            return json.dumps({"error": "invalid date format — use YYYY-MM-DD"})
-
-        from aria.services.scheduler import cancel_booking_jobs
-        events = await adapter.get_events(d_from, d_to)
-        cancelled = 0
-        for ev in events:
-            raw_id = ev["id"]
-            gcal_event_id = ev.get("gcal_event_id")
-            try:
-                ev_bid: Optional[int] = int(raw_id)
-                ev_booking = await repo.get_booking(ev_bid)
-            except (ValueError, TypeError):
-                ev_bid = None
-                ev_booking = None
-
-            try:
-                if ev_booking:
-                    cal_id = ev_booking.get("calendar_event_id") or gcal_event_id
-                    await adapter.delete_event(ev_bid, cal_id)
-                    cancel_booking_jobs(ev_bid)
-                else:
-                    await adapter.delete_event(None, gcal_event_id or str(raw_id))
-                cancelled += 1
-            except Exception as exc:
-                log.warning("Failed to cancel event %s: %s", raw_id, exc)
-
-        return json.dumps({
-            "cancelled": cancelled,
-            "date_from": args["date_from"],
-            "date_to": args["date_to"],
-        })
+    if name == "get_upcoming":
+        limit = int(args.get("limit") or 10)
+        events = await adapter.get_events(
+            datetime.now(timezone.utc),
+            datetime.now(timezone.utc) + timedelta(days=90),
+        )
+        return json.dumps({"bookings": events[:limit]})
 
     return json.dumps({"error": f"unknown tool: {name}"})
 
