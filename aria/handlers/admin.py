@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from aiogram import F, Router
-from aiogram.filters import Command
+from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
@@ -294,7 +294,7 @@ async def cmd_add_bot(message: Message, state: FSMContext, tenant: TenantConfig)
     )
 
 
-@router.message(AddBot.waiting_token)
+@router.message(AddBot.waiting_token, ~Command())
 async def process_new_token(message: Message, state: FSMContext) -> None:
     token = message.text.strip()
 
@@ -402,7 +402,7 @@ async def cmd_deactivate_bot(message: Message, tenant: TenantConfig) -> None:
 
 # ── /cancel (clears any FSM state) ───────────────────────────────────────────
 
-@router.message(Command("cancel"))
+@router.message(StateFilter("*"), Command("cancel"))
 async def cmd_cancel(message: Message, state: FSMContext) -> None:
     current = await state.get_state()
     await state.clear()
