@@ -320,7 +320,7 @@ async def quick_dashboard(message: Message, tenant: TenantConfig) -> None:
     day_label  = f"{day_names[now_local.weekday()]}, {now_local.strftime('%-d %B')}"
 
     stats = await repo.get_today_stats(tenant.id, date_str)
-    week_count = await repo.get_week_booking_count(tenant.id)
+    week_count = await repo.get_week_booking_count(tenant.id, tenant.timezone or "UTC")
 
     # ближайшая запись сегодня
     bookings_today = await repo.get_bookings_for_date(tenant.id, date_str)
@@ -349,9 +349,14 @@ async def quick_dashboard(message: Message, tenant: TenantConfig) -> None:
     lines.append(f"📋 Записей сегодня: <b>{stats['total']}</b>")
 
     if next_booking:
-        t_str = next_booking["scheduled_at"].astimezone(tz).strftime("%H:%M")
-        diff  = int((next_booking["scheduled_at"].astimezone(tz) - now_local).total_seconds() / 60)
-        lines.append(f"⏰ Следующий: <b>{next_booking['client_name']}</b> в {t_str} (через {diff} мин)")
+        t_str     = next_booking["scheduled_at"].astimezone(tz).strftime("%H:%M")
+        total_min = int((next_booking["scheduled_at"].astimezone(tz) - now_local).total_seconds() / 60)
+        if total_min >= 60:
+            h_d, m_d = divmod(total_min, 60)
+            diff_str = f"{h_d}ч {m_d}мин" if m_d else f"{h_d}ч"
+        else:
+            diff_str = f"{total_min} мин"
+        lines.append(f"⏰ Следующий: <b>{next_booking['client_name']}</b> в {t_str} (через {diff_str})")
     else:
         lines.append("⏰ Записей до конца дня нет")
 
@@ -366,7 +371,10 @@ async def quick_dashboard(message: Message, tenant: TenantConfig) -> None:
     else:
         lines.append("\n🔴 Свободных окон сегодня нет")
 
-    lines.append(f"\n📈 Эта неделя: <b>{week_count}</b> записей")
+    _mod = week_count % 10
+    _word = "запись" if _mod == 1 and week_count % 100 != 11 else \
+            "записи" if 2 <= _mod <= 4 and week_count % 100 not in (12, 13, 14) else "записей"
+    lines.append(f"\n📈 Эта неделя: <b>{week_count}</b> {_word}")
 
     await _delete_old_info(message.bot, message.chat.id)
     sent = await message.answer("\n".join(lines), parse_mode="HTML")

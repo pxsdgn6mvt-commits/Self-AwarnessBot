@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import date as _date, datetime, timezone
+from datetime import date as _date, datetime, timedelta, timezone
 from typing import Any, Optional
 
 import asyncpg
@@ -374,17 +374,24 @@ async def get_today_stats(tenant_id: int, date_str: str) -> dict:
         return dict(row) if row else {"total": 0, "paid_count": 0, "expected": 0, "received": 0}
 
 
-async def get_week_booking_count(tenant_id: int) -> int:
+async def get_week_booking_count(tenant_id: int, tz_str: str = "UTC") -> int:
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo(tz_str)
+    now_local = datetime.now(tz)
+    monday     = now_local.date() - timedelta(days=now_local.weekday())
+    next_monday = monday + timedelta(days=7)
+    week_start = datetime(monday.year,      monday.month,      monday.day,      tzinfo=tz).astimezone(timezone.utc)
+    week_end   = datetime(next_monday.year, next_monday.month, next_monday.day, tzinfo=tz).astimezone(timezone.utc)
     async with _p().acquire() as conn:
         row = await conn.fetchrow(
             """
             SELECT COUNT(*) FROM aria_bookings
             WHERE tenant_id=$1
               AND status IN ('confirmed','pending')
-              AND scheduled_at >= date_trunc('week', NOW())
-              AND scheduled_at <  date_trunc('week', NOW()) + INTERVAL '7 days'
+              AND scheduled_at >= $2
+              AND scheduled_at <  $3
             """,
-            tenant_id,
+            tenant_id, week_start, week_end,
         )
         return row[0] if row else 0
 
