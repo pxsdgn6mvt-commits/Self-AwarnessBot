@@ -1,4 +1,4 @@
-"""Structured booking FSM — owner creates appointments for clients."""
+"""Structured booking FSM — multilingual, timezone-aware."""
 
 from __future__ import annotations
 
@@ -33,6 +33,169 @@ class BookingSG(StatesGroup):
     confirm     = State()
 
 
+# ── Language helpers ──────────────────────────────────────────────────────────
+
+_SUPPORTED = {"ru","en","uk","fi","de","fr","es","it","pl","sv","nl","no","da","tr","he","ar"}
+
+def _normalize_lang(code: str) -> str:
+    if not code:
+        return "en"
+    base = code.split("-")[0].lower()
+    return base if base in _SUPPORTED else "en"
+
+# All user-facing strings keyed by message key then language code
+_T: dict[str, dict[str, str]] = {
+    "new_booking": {
+        "ru":"📋 <b>Новая запись</b>","en":"📋 <b>New booking</b>",
+        "uk":"📋 <b>Новий запис</b>","fi":"📋 <b>Uusi varaus</b>",
+        "de":"📋 <b>Neue Buchung</b>","fr":"📋 <b>Nouveau rendez-vous</b>",
+        "es":"📋 <b>Nueva reserva</b>","it":"📋 <b>Nuova prenotazione</b>",
+        "pl":"📋 <b>Nowa rezerwacja</b>","sv":"📋 <b>Ny bokning</b>",
+        "nl":"📋 <b>Nieuwe boeking</b>","no":"📋 <b>Ny bestilling</b>",
+        "da":"📋 <b>Ny booking</b>","tr":"📋 <b>Yeni rezervasyon</b>",
+    },
+    "service_label": {
+        "ru":"💅 Услуга:","en":"💅 Service:","uk":"💅 Послуга:",
+        "fi":"💅 Palvelu:","de":"💅 Dienst:","fr":"💅 Service :",
+        "es":"💅 Servicio:","it":"💅 Servizio:","pl":"💅 Usługa:",
+        "sv":"💅 Tjänst:","nl":"💅 Dienst:","no":"💅 Tjeneste:",
+        "da":"💅 Ydelse:","tr":"💅 Hizmet:",
+    },
+    "enter_name": {
+        "ru":"👤 Введите имя клиента:","en":"👤 Enter client name:",
+        "uk":"👤 Введіть ім'я клієнта:","fi":"👤 Syötä asiakkaan nimi:",
+        "de":"👤 Kundenname eingeben:","fr":"👤 Nom du client :",
+        "es":"👤 Nombre del cliente:","it":"👤 Nome del cliente:",
+        "pl":"👤 Imię klienta:","sv":"👤 Ange kundens namn:",
+        "nl":"👤 Naam klant:","no":"👤 Kundens navn:","da":"👤 Kundenavn:",
+        "tr":"👤 Müşteri adı:",
+    },
+    "select_date": {
+        "ru":"📅 Выберите дату:","en":"📅 Select date:",
+        "uk":"📅 Оберіть дату:","fi":"📅 Valitse päivä:",
+        "de":"📅 Datum wählen:","fr":"📅 Choisissez la date :",
+        "es":"📅 Seleccione fecha:","it":"📅 Seleziona data:",
+        "pl":"📅 Wybierz datę:","sv":"📅 Välj datum:",
+        "nl":"📅 Selecteer datum:","no":"📅 Velg dato:","da":"📅 Vælg dato:",
+        "tr":"📅 Tarih seçin:",
+    },
+    "select_time": {
+        "ru":"⏰ {date} — выберите время:","en":"⏰ {date} — select time:",
+        "uk":"⏰ {date} — оберіть час:","fi":"⏰ {date} — valitse aika:",
+        "de":"⏰ {date} — Uhrzeit wählen:","fr":"⏰ {date} — choisissez l'heure :",
+        "es":"⏰ {date} — seleccione hora:","it":"⏰ {date} — seleziona orario:",
+        "pl":"⏰ {date} — wybierz godzinę:","sv":"⏰ {date} — välj tid:",
+        "nl":"⏰ {date} — selecteer tijd:","no":"⏰ {date} — velg tid:",
+        "da":"⏰ {date} — vælg tid:","tr":"⏰ {date} — saat seçin:",
+    },
+    "review": {
+        "ru":"📋 <b>Проверьте запись:</b>","en":"📋 <b>Review booking:</b>",
+        "uk":"📋 <b>Перевірте запис:</b>","fi":"📋 <b>Tarkista varaus:</b>",
+        "de":"📋 <b>Buchung prüfen:</b>","fr":"📋 <b>Vérifiez le rendez-vous :</b>",
+        "es":"📋 <b>Revisar reserva:</b>","it":"📋 <b>Controlla prenotazione:</b>",
+        "pl":"📋 <b>Sprawdź rezerwację:</b>","sv":"📋 <b>Granska bokning:</b>",
+        "nl":"📋 <b>Boeking controleren:</b>","no":"📋 <b>Sjekk bestilling:</b>",
+        "da":"📋 <b>Gennemse booking:</b>","tr":"📋 <b>Rezervasyonu kontrol edin:</b>",
+    },
+    "client_label": {
+        "ru":"👤 Клиент:","en":"👤 Client:","uk":"👤 Клієнт:","fi":"👤 Asiakas:",
+        "de":"👤 Kunde:","fr":"👤 Client :","es":"👤 Cliente:","it":"👤 Cliente:",
+        "pl":"👤 Klient:","sv":"👤 Kund:","nl":"👤 Klant:","no":"👤 Kunde:",
+        "da":"👤 Kunde:","tr":"👤 Müşteri:",
+    },
+    "confirmed": {
+        "ru":"✅ <b>Запись создана!</b>","en":"✅ <b>Booking confirmed!</b>",
+        "uk":"✅ <b>Запис підтверджено!</b>","fi":"✅ <b>Varaus vahvistettu!</b>",
+        "de":"✅ <b>Buchung bestätigt!</b>","fr":"✅ <b>Rendez-vous confirmé !</b>",
+        "es":"✅ <b>¡Reserva confirmada!</b>","it":"✅ <b>Prenotazione confermata!</b>",
+        "pl":"✅ <b>Rezerwacja potwierdzona!</b>","sv":"✅ <b>Bokning bekräftad!</b>",
+        "nl":"✅ <b>Boeking bevestigd!</b>","no":"✅ <b>Bestilling bekreftet!</b>",
+        "da":"✅ <b>Booking bekræftet!</b>","tr":"✅ <b>Rezervasyon onaylandı!</b>",
+    },
+    "gcal_added": {
+        "ru":"\n📆 Добавлено в Google Calendar","en":"\n📆 Added to Google Calendar",
+        "uk":"\n📆 Додано до Google Calendar","fi":"\n📆 Lisätty Google Kalenteriin",
+        "de":"\n📆 Zu Google Kalender hinzugefügt","fr":"\n📆 Ajouté à Google Agenda",
+        "es":"\n📆 Añadido a Google Calendar","it":"\n📆 Aggiunto a Google Calendar",
+        "pl":"\n📆 Dodano do Kalendarza Google","sv":"\n📆 Tillagd i Google Kalender",
+        "nl":"\n📆 Toegevoegd aan Google Agenda",
+    },
+    "btn_confirm": {
+        "ru":"✅ Создать запись","en":"✅ Confirm booking","uk":"✅ Підтвердити запис",
+        "fi":"✅ Vahvista varaus","de":"✅ Buchung bestätigen","fr":"✅ Confirmer",
+        "es":"✅ Confirmar","it":"✅ Conferma","pl":"✅ Potwierdź",
+        "sv":"✅ Bekräfta","nl":"✅ Bevestigen","no":"✅ Bekreft","da":"✅ Bekræft",
+        "tr":"✅ Onayla",
+    },
+    "btn_cancel": {
+        "ru":"❌ Отмена","en":"❌ Cancel","uk":"❌ Скасувати","fi":"❌ Peruuta",
+        "de":"❌ Abbrechen","fr":"❌ Annuler","es":"❌ Cancelar","it":"❌ Annulla",
+        "pl":"❌ Anuluj","sv":"❌ Avbryt","nl":"❌ Annuleren","no":"❌ Avbryt",
+        "da":"❌ Annuller","tr":"❌ İptal",
+    },
+    "btn_back_date": {
+        "ru":"← Назад к дате","en":"← Back to date","uk":"← Назад до дати",
+        "fi":"← Takaisin","de":"← Zurück","fr":"← Retour","es":"← Volver",
+        "it":"← Indietro","pl":"← Wróć","sv":"← Tillbaka","nl":"← Terug",
+        "no":"← Tilbake","da":"← Tilbage","tr":"← Geri",
+    },
+    "btn_other_day": {
+        "ru":"📝 Другой день...","en":"📝 Other day...","uk":"📝 Інший день...",
+        "fi":"📝 Muu päivä...","de":"📝 Anderer Tag...","fr":"📝 Autre jour...",
+        "es":"📝 Otro día...","it":"📝 Altro giorno...","pl":"📝 Inny dzień...",
+        "sv":"📝 Annan dag...","nl":"📝 Andere dag...","no":"📝 Annen dag...",
+        "da":"📝 Anden dag...","tr":"📝 Başka gün...",
+    },
+    "other_day_prompt": {
+        "ru":"📅 Введите дату:\n<i>Например: завтра · 23 мая · 23.05</i>",
+        "en":"📅 Enter date:\n<i>E.g.: tomorrow · 23 May · 23.05</i>",
+        "uk":"📅 Введіть дату:\n<i>Наприклад: завтра · 23 травня · 23.05</i>",
+        "fi":"📅 Syötä päivämäärä:\n<i>Esim.: huomenna · 23 toukokuuta · 23.05</i>",
+        "de":"📅 Datum eingeben:\n<i>Z.B.: morgen · 23. Mai · 23.05</i>",
+        "fr":"📅 Entrez la date :\n<i>Ex. : demain · 23 mai · 23.05</i>",
+        "es":"📅 Ingrese fecha:\n<i>Ej.: mañana · 23 mayo · 23.05</i>",
+        "it":"📅 Inserisci data:\n<i>Es.: domani · 23 maggio · 23.05</i>",
+        "pl":"📅 Wpisz datę:\n<i>Np.: jutro · 23 maja · 23.05</i>",
+        "sv":"📅 Ange datum:\n<i>T.ex.: imorgon · 23 maj · 23.05</i>",
+        "nl":"📅 Voer datum in:\n<i>Bijv.: morgen · 23 mei · 23.05</i>",
+    },
+    "date_error": {
+        "ru":"Не могу распознать дату. Попробуйте:\n• <i>завтра</i>\n• <i>23 мая</i>\n• <i>23.05</i>",
+        "en":"Can't parse that date. Try:\n• <i>tomorrow</i>\n• <i>23 May</i>\n• <i>23.05</i>",
+        "uk":"Не можу розпізнати дату:\n• <i>завтра</i>\n• <i>23 травня</i>\n• <i>23.05</i>",
+        "fi":"En tunnista päivämäärää:\n• <i>huomenna</i>\n• <i>23 toukokuuta</i>\n• <i>23.05</i>",
+        "de":"Datum nicht erkannt:\n• <i>morgen</i>\n• <i>23. Mai</i>\n• <i>23.05</i>",
+        "fr":"Date non reconnue :\n• <i>demain</i>\n• <i>23 mai</i>\n• <i>23.05</i>",
+        "es":"No reconozco la fecha:\n• <i>mañana</i>\n• <i>23 mayo</i>\n• <i>23.05</i>",
+        "it":"Data non riconosciuta:\n• <i>domani</i>\n• <i>23 maggio</i>\n• <i>23.05</i>",
+        "pl":"Nie rozumiem daty:\n• <i>jutro</i>\n• <i>23 maja</i>\n• <i>23.05</i>",
+        "sv":"Kunde inte läsa datumet:\n• <i>imorgon</i>\n• <i>23 maj</i>\n• <i>23.05</i>",
+    },
+    "cancelled": {
+        "ru":"Запись отменена.","en":"Booking cancelled.","uk":"Запис скасовано.",
+        "fi":"Varaus peruttu.","de":"Buchung storniert.","fr":"Rendez-vous annulé.",
+        "es":"Reserva cancelada.","it":"Prenotazione annullata.","pl":"Rezerwacja anulowana.",
+        "sv":"Bokning avbokad.","nl":"Boeking geannuleerd.","no":"Bestilling avlyst.",
+        "da":"Booking annulleret.","tr":"Rezervasyon iptal edildi.",
+    },
+    "stale_session": {
+        "ru":"Сессия устарела — начните новую запись.",
+        "en":"Session expired — please start a new booking.",
+        "fi":"Istunto vanhentunut — aloita uusi varaus.",
+        "de":"Sitzung abgelaufen — neue Buchung starten.",
+        "fr":"Session expirée — recommencez.",
+        "uk":"Сесія застаріла — почніть новий запис.",
+    },
+}
+
+
+def _t(key: str, lang: str) -> str:
+    d = _T.get(key, {})
+    return d.get(lang) or d.get("en") or key
+
+
+# ── Date/time helpers ─────────────────────────────────────────────────────────
+
 _MONTHS_RU = {
     "января": 1, "февраля": 2, "марта": 3, "апреля": 4,
     "мая": 5, "июня": 6, "июля": 7, "августа": 8,
@@ -62,14 +225,13 @@ def _parse_date(text: str) -> date | None:
     text = text.strip().lower()
     today = date.today()
 
-    if "послезавтра" in text:
+    if "послезавтра" in text or "day after tomorrow" in text:
         return today + timedelta(days=2)
-    if "завтра" in text:
+    if "завтра" in text or "tomorrow" in text or "huomenna" in text or "morgen" in text:
         return today + timedelta(days=1)
-    if "сегодня" in text:
+    if "сегодня" in text or "today" in text or "heute" in text or "aujourd" in text:
         return today
 
-    # DD.MM or DD.MM.YYYY
     m = re.search(r"\b(\d{1,2})[./](\d{1,2})(?:[./](\d{2,4}))?\b", text)
     if m:
         day, mon = int(m.group(1)), int(m.group(2))
@@ -82,7 +244,6 @@ def _parse_date(text: str) -> date | None:
         except ValueError:
             return None
 
-    # DD monthname
     for name, mon in _MONTHS_RU.items():
         m2 = re.search(rf"\b(\d{{1,2}})\s+{name}\b", text)
         if m2:
@@ -96,22 +257,23 @@ def _parse_date(text: str) -> date | None:
     return None
 
 
-def _date_kb(tz_name: str = "Europe/Moscow") -> InlineKeyboardMarkup:
+# ── Keyboards ─────────────────────────────────────────────────────────────────
+
+def _date_kb(tz_name: str, lang: str) -> InlineKeyboardMarkup:
     today = _today_in_tz(tz_name)
     rows = []
     for i in range(5):
         d = today + timedelta(days=i)
-        prefix = "Сегодня, " if i == 0 else ("Завтра, " if i == 1 else "")
         rows.append([InlineKeyboardButton(
-            text=f"{prefix}{_fmt_date(d)}",
+            text=f"{_fmt_date(d)}",
             callback_data=f"book:d:{d.isoformat()}",
         )])
-    rows.append([InlineKeyboardButton(text="📝 Другой день...", callback_data="book:d:other")])
-    rows.append([InlineKeyboardButton(text="❌ Отмена", callback_data="book:cancel")])
+    rows.append([InlineKeyboardButton(text=_t("btn_other_day", lang), callback_data="book:d:other")])
+    rows.append([InlineKeyboardButton(text=_t("btn_cancel", lang),    callback_data="book:cancel")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def _time_kb(tenant: TenantConfig) -> InlineKeyboardMarkup:
+def _time_kb(tenant: TenantConfig, lang: str) -> InlineKeyboardMarkup:
     step = max(tenant.salon_slot_minutes, 30)
     slots: list[str] = []
     minutes = tenant.salon_open_hour * 60
@@ -130,17 +292,19 @@ def _time_kb(tenant: TenantConfig) -> InlineKeyboardMarkup:
             row = []
     if row:
         rows.append(row)
-    rows.append([InlineKeyboardButton(text="← Назад к дате", callback_data="book:back:date")])
-    rows.append([InlineKeyboardButton(text="❌ Отмена", callback_data="book:cancel")])
+    rows.append([InlineKeyboardButton(text=_t("btn_back_date", lang), callback_data="book:back:date")])
+    rows.append([InlineKeyboardButton(text=_t("btn_cancel", lang),    callback_data="book:cancel")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def _confirm_kb() -> InlineKeyboardMarkup:
+def _confirm_kb(lang: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="✅ Создать запись", callback_data="book:confirm"),
-        InlineKeyboardButton(text="❌ Отмена",         callback_data="book:cancel"),
+        InlineKeyboardButton(text=_t("btn_confirm", lang), callback_data="book:confirm"),
+        InlineKeyboardButton(text=_t("btn_cancel",  lang), callback_data="book:cancel"),
     ]])
 
+
+# ── Entry point ───────────────────────────────────────────────────────────────
 
 async def start_booking(
     event: Union[Message, CallbackQuery],
@@ -148,14 +312,25 @@ async def start_booking(
     tenant: TenantConfig,
     service: str,
 ) -> None:
-    """Entry point — called after a service is selected via inline keyboard."""
+    """Called after a service is selected. Detects user language and tz."""
+    user = event.from_user
+    lang = _normalize_lang(user.language_code or "")
     tz_name = await repo.get_tenant_timezone(tenant.tenant_id)
+
+    # Persist language so it survives across sessions
+    await repo.set_client_lang(user.id, lang)
+
     await state.set_state(BookingSG.client_name)
-    await state.update_data(service=service, tenant_id=tenant.tenant_id, tz_name=tz_name)
+    await state.update_data(
+        service=service,
+        tenant_id=tenant.tenant_id,
+        tz_name=tz_name,
+        lang=lang,
+    )
     text = (
-        f"📋 <b>Новая запись</b>\n"
-        f"💅 Услуга: <b>{service}</b>\n\n"
-        f"👤 Введите имя клиента:"
+        f"{_t('new_booking', lang)}\n"
+        f"{_t('service_label', lang)} <b>{service}</b>\n\n"
+        f"{_t('enter_name', lang)}"
     )
     if isinstance(event, CallbackQuery):
         await event.message.edit_text(text, parse_mode="HTML")
@@ -167,15 +342,17 @@ async def start_booking(
 
 @router.message(BookingSG.client_name)
 async def got_client_name(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
-    name = message.text.strip()
+    name = (message.text or "").strip()
     if not name:
-        await message.answer("Введите имя клиента:")
+        data = await state.get_data()
+        await message.answer(_t("enter_name", data.get("lang", "en")))
         return
+    data = await state.get_data()
+    lang    = data.get("lang", "en")
+    tz_name = data.get("tz_name", tenant.salon_timezone)
     await state.update_data(client_name=name)
     await state.set_state(BookingSG.pick_date)
-    data = await state.get_data()
-    tz_name = data.get("tz_name", tenant.salon_timezone)
-    await message.answer("📅 Выберите дату:", reply_markup=_date_kb(tz_name))
+    await message.answer(_t("select_date", lang), reply_markup=_date_kb(tz_name, lang))
 
 
 # ── Date selection ────────────────────────────────────────────────────────────
@@ -184,12 +361,13 @@ async def got_client_name(message: Message, state: FSMContext, tenant: TenantCon
 async def got_date_button(
     callback: CallbackQuery, state: FSMContext, tenant: TenantConfig
 ) -> None:
-    raw = callback.data[len("book:d:"):]
+    data = await state.get_data()
+    lang = data.get("lang", "en")
+    raw  = callback.data[len("book:d:"):]
+
     if raw == "other":
         await callback.message.edit_text(
-            "📅 Введите дату:\n"
-            "<i>Например: завтра · 23 мая · 23.05</i>",
-            parse_mode="HTML",
+            _t("other_day_prompt", lang), parse_mode="HTML"
         )
         await callback.answer()
         return
@@ -197,35 +375,33 @@ async def got_date_button(
     try:
         d = date.fromisoformat(raw)
     except ValueError:
-        await callback.answer("Неверная дата.")
+        await callback.answer("?")
         return
 
     await state.update_data(chosen_date=raw)
     await state.set_state(BookingSG.pick_time)
     await callback.message.edit_text(
-        f"⏰ <b>{_fmt_date(d)}</b> — выберите время:",
+        _t("select_time", lang).format(date=_fmt_date(d)),
         parse_mode="HTML",
-        reply_markup=_time_kb(tenant),
+        reply_markup=_time_kb(tenant, lang),
     )
     await callback.answer()
 
 
 @router.message(BookingSG.pick_date)
 async def got_date_text(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
-    d = _parse_date(message.text)
+    data = await state.get_data()
+    lang = data.get("lang", "en")
+    d = _parse_date(message.text or "")
     if not d:
-        await message.answer(
-            "Не могу распознать дату. Попробуйте:\n"
-            "• <i>завтра</i>\n• <i>23 мая</i>\n• <i>23.05</i>",
-            parse_mode="HTML",
-        )
+        await message.answer(_t("date_error", lang), parse_mode="HTML")
         return
     await state.update_data(chosen_date=d.isoformat())
     await state.set_state(BookingSG.pick_time)
     await message.answer(
-        f"⏰ <b>{_fmt_date(d)}</b> — выберите время:",
+        _t("select_time", lang).format(date=_fmt_date(d)),
         parse_mode="HTML",
-        reply_markup=_time_kb(tenant),
+        reply_markup=_time_kb(tenant, lang),
     )
 
 
@@ -233,10 +409,13 @@ async def got_date_text(message: Message, state: FSMContext, tenant: TenantConfi
 
 @router.callback_query(BookingSG.pick_time, F.data == "book:back:date")
 async def back_to_date(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
-    await state.set_state(BookingSG.pick_date)
     data = await state.get_data()
+    lang    = data.get("lang", "en")
     tz_name = data.get("tz_name", tenant.salon_timezone)
-    await callback.message.edit_text("📅 Выберите дату:", reply_markup=_date_kb(tz_name))
+    await state.set_state(BookingSG.pick_date)
+    await callback.message.edit_text(
+        _t("select_date", lang), reply_markup=_date_kb(tz_name, lang)
+    )
     await callback.answer()
 
 
@@ -244,21 +423,22 @@ async def back_to_date(callback: CallbackQuery, state: FSMContext, tenant: Tenan
 async def got_time(
     callback: CallbackQuery, state: FSMContext, tenant: TenantConfig
 ) -> None:
-    time_str = callback.data[len("book:t:"):]
     data = await state.get_data()
-    d = date.fromisoformat(data["chosen_date"])
-    dt_display = f"{_fmt_date(d)} в {time_str}"
+    lang     = data.get("lang", "en")
+    time_str = callback.data[len("book:t:"):]
+    d        = date.fromisoformat(data["chosen_date"])
+    dt_display = f"{_fmt_date(d)} {time_str}"
 
     await state.update_data(chosen_time=time_str, dt_display=dt_display)
     await state.set_state(BookingSG.confirm)
 
     await callback.message.edit_text(
-        f"📋 <b>Проверьте запись:</b>\n\n"
-        f"👤 Клиент: <b>{data['client_name']}</b>\n"
-        f"💅 Услуга: <b>{data['service']}</b>\n"
+        f"{_t('review', lang)}\n\n"
+        f"{_t('client_label', lang)} <b>{data['client_name']}</b>\n"
+        f"{_t('service_label', lang)} <b>{data['service']}</b>\n"
         f"📅 {dt_display}",
         parse_mode="HTML",
-        reply_markup=_confirm_kb(),
+        reply_markup=_confirm_kb(lang),
     )
     await callback.answer()
 
@@ -270,6 +450,7 @@ async def confirm_booking(
     callback: CallbackQuery, state: FSMContext, tenant: TenantConfig
 ) -> None:
     data = await state.get_data()
+    lang = data.get("lang", "en")
     await state.clear()
 
     try:
@@ -278,8 +459,8 @@ async def confirm_booking(
         tz_name = data.get("tz_name", tenant.salon_timezone)
         tz = _get_tz(tz_name)
         scheduled_at = datetime.combine(d, time(h, m)).replace(tzinfo=tz)
-        client_name = data["client_name"]
-        service     = data["service"]
+        client_name  = data["client_name"]
+        service      = data["service"]
 
         booking_id = await repo.create_booking(
             user_id=callback.from_user.id,
@@ -289,10 +470,13 @@ async def confirm_booking(
         )
     except Exception:
         log.exception("Booking creation failed (tenant #%d)", tenant.tenant_id)
-        await callback.answer("❌ Не удалось создать запись. Попробуйте снова.", show_alert=True)
+        await callback.answer(
+            _t("stale_session", lang) if "chosen_date" not in data
+            else "❌ Error creating booking. Please try again.",
+            show_alert=True,
+        )
         return
 
-    # Try GCal sync; errors are logged but never break booking creation
     gcal_event_url = ""
     try:
         if await gcal.is_connected(tenant.tenant_id):
@@ -312,25 +496,24 @@ async def confirm_booking(
 
     if gcal_event_url:
         kb = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="📅 Открыть в Google Calendar", url=gcal_event_url),
+            InlineKeyboardButton(text="📅 Google Calendar", url=gcal_event_url),
         ]])
-        gcal_note = "\n📆 Добавлено в Google Calendar"
+        gcal_note = _t("gcal_added", lang)
     else:
         fallback_url = gcal.add_to_calendar_url(
             title=f"{service} — {client_name}",
             start=scheduled_at,
             duration_minutes=tenant.salon_slot_minutes,
-            details=f"Клиент: {client_name}\nУслуга: {service}",
         )
         kb = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="📅 Открыть Google Calendar", url=fallback_url),
+            InlineKeyboardButton(text="📅 Google Calendar", url=fallback_url),
         ]])
         gcal_note = ""
 
     await callback.message.edit_text(
-        f"✅ <b>Запись создана!</b>\n\n"
-        f"👤 {client_name}\n"
-        f"💅 {service}\n"
+        f"{_t('confirmed', lang)}\n\n"
+        f"{_t('client_label', lang)} {client_name}\n"
+        f"{_t('service_label', lang)} {service}\n"
         f"📅 {data['dt_display']}"
         f"{gcal_note}",
         parse_mode="HTML",
@@ -341,14 +524,15 @@ async def confirm_booking(
 
 @router.callback_query(F.data == "book:confirm")
 async def confirm_booking_stale(callback: CallbackQuery) -> None:
-    """Catches book:confirm when FSM state is gone (e.g. after bot restart)."""
-    await callback.answer("Сессия устарела — начните новую запись.", show_alert=True)
+    await callback.answer("Session expired — start a new booking.", show_alert=True)
 
 
 @router.callback_query(F.data == "book:cancel")
 async def cancel_booking(callback: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    lang = data.get("lang", "en")
     await state.clear()
-    await callback.message.edit_text("Запись отменена.")
+    await callback.message.edit_text(_t("cancelled", lang))
     await callback.answer()
 
 
@@ -410,20 +594,20 @@ async def ask_cancel_booking(callback: CallbackQuery) -> None:
     booking_id = int(callback.data.split(":")[-1])
     booking = await repo.get_booking(booking_id)
     if not booking:
-        await callback.answer("Запись не найдена.", show_alert=True)
+        await callback.answer("Not found.", show_alert=True)
         return
     dt: datetime = booking["scheduled_at"]
     if dt.tzinfo:
         dt = dt.astimezone()
     await callback.message.edit_text(
-        f"Отменить запись?\n\n"
-        f"📅 <b>{_fmt_date(dt.date())}</b> в {dt.strftime('%H:%M')}\n"
+        f"❓ Cancel booking?\n\n"
+        f"📅 <b>{_fmt_date(dt.date())}</b> {dt.strftime('%H:%M')}\n"
         f"👤 {booking['client_name']}\n"
         f"💅 {booking['service']}",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="✅ Отменить", callback_data=f"book:del_yes:{booking_id}"),
-            InlineKeyboardButton(text="← Назад",    callback_data="book:list"),
+            InlineKeyboardButton(text="✅ Yes, cancel", callback_data=f"book:del_yes:{booking_id}"),
+            InlineKeyboardButton(text="← Back",        callback_data="book:list"),
         ]]),
     )
 
@@ -433,7 +617,7 @@ async def do_cancel_booking(callback: CallbackQuery, tenant: TenantConfig) -> No
     booking_id = int(callback.data.split(":")[-1])
     booking = await repo.get_booking(booking_id)
     if not booking:
-        await callback.answer("Запись уже удалена.", show_alert=True)
+        await callback.answer("Already deleted.", show_alert=True)
         return
     await repo.update_booking_status(booking_id, "cancelled")
     if booking["calendar_event_id"]:
@@ -441,23 +625,22 @@ async def do_cancel_booking(callback: CallbackQuery, tenant: TenantConfig) -> No
             await gcal.delete_event(tenant.tenant_id, booking["calendar_event_id"])
         except Exception:
             log.exception("GCal event deletion failed for booking #%d", booking_id)
-    await callback.answer("Запись отменена.", show_alert=True)
+    await callback.answer("Cancelled.", show_alert=True)
     await show_bookings_list(callback, callback.from_user.id, tenant)
 
 
 # ── Delete all on date ────────────────────────────────────────────────────────
 
-def _del_date_kb(tz_name: str = "Europe/Moscow") -> InlineKeyboardMarkup:
+def _del_date_kb(tz_name: str) -> InlineKeyboardMarkup:
     today = _today_in_tz(tz_name)
     rows = []
     for i in range(7):
         d = today + timedelta(days=i)
-        prefix = "Сегодня, " if i == 0 else ("Завтра, " if i == 1 else "")
         rows.append([InlineKeyboardButton(
-            text=f"{prefix}{_fmt_date(d)}",
+            text=_fmt_date(d),
             callback_data=f"book:del_date:{d.isoformat()}",
         )])
-    rows.append([InlineKeyboardButton(text="← Назад", callback_data="book:list")])
+    rows.append([InlineKeyboardButton(text="← Back", callback_data="book:list")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -466,7 +649,7 @@ async def pick_date_for_bulk_delete(callback: CallbackQuery, tenant: TenantConfi
     await callback.answer()
     tz_name = await repo.get_tenant_timezone(tenant.tenant_id)
     await callback.message.edit_text(
-        "🗑 <b>Удалить все записи на дату</b>\n\nВыберите дату:",
+        "🗑 <b>Delete all bookings on date</b>\n\nSelect date:",
         parse_mode="HTML",
         reply_markup=_del_date_kb(tz_name),
     )
@@ -480,26 +663,25 @@ async def confirm_bulk_delete(callback: CallbackQuery, tenant: TenantConfig) -> 
         d = date.fromisoformat(raw)
     except ValueError:
         return
-    tz_name = await repo.get_tenant_timezone(tenant.tenant_id)
+    tz_name  = await repo.get_tenant_timezone(tenant.tenant_id)
     bookings = await repo.get_bookings_on_date(callback.from_user.id, d, tz_name)
     if not bookings:
         await callback.message.edit_text(
-            f"На <b>{_fmt_date(d)}</b> нет записей.",
+            f"No bookings on <b>{_fmt_date(d)}</b>.",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                InlineKeyboardButton(text="← Назад", callback_data="book:list"),
+                InlineKeyboardButton(text="← Back", callback_data="book:list"),
             ]]),
         )
         return
     names = ", ".join(b["client_name"] for b in bookings)
     await callback.message.edit_text(
-        f"🗑 Удалить <b>все {len(bookings)} записи</b> на <b>{_fmt_date(d)}</b>?\n\n"
-        f"👤 {names}",
+        f"🗑 Delete <b>all {len(bookings)}</b> bookings on <b>{_fmt_date(d)}</b>?\n\n👤 {names}",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text=f"✅ Удалить все ({len(bookings)})",
+            InlineKeyboardButton(text=f"✅ Delete all ({len(bookings)})",
                                  callback_data=f"book:del_date_yes:{raw}"),
-            InlineKeyboardButton(text="← Назад", callback_data="book:list"),
+            InlineKeyboardButton(text="← Back", callback_data="book:list"),
         ]]),
     )
 
@@ -511,7 +693,7 @@ async def do_bulk_delete(callback: CallbackQuery, tenant: TenantConfig) -> None:
         d = date.fromisoformat(raw)
     except ValueError:
         return
-    tz_name = await repo.get_tenant_timezone(tenant.tenant_id)
+    tz_name   = await repo.get_tenant_timezone(tenant.tenant_id)
     cancelled = await repo.cancel_bookings_on_date(callback.from_user.id, d, tz_name)
     for b in cancelled:
         if b["calendar_event_id"]:
@@ -519,5 +701,5 @@ async def do_bulk_delete(callback: CallbackQuery, tenant: TenantConfig) -> None:
                 await gcal.delete_event(tenant.tenant_id, b["calendar_event_id"])
             except Exception:
                 log.exception("GCal bulk delete failed for booking #%d", b["id"])
-    await callback.answer(f"Удалено {len(cancelled)} записей.", show_alert=True)
+    await callback.answer(f"Deleted {len(cancelled)}.", show_alert=True)
     await show_bookings_list(callback, callback.from_user.id, tenant)

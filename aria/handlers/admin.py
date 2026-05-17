@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import zoneinfo
+from typing import Optional
 
 from aiogram import F, Router
 from aiogram.filters import Command
@@ -24,8 +26,9 @@ router = Router()
 
 
 class AdminSG(StatesGroup):
-    add_category = State()
-    add_item     = State()
+    add_category   = State()
+    add_item       = State()
+    timezone_input = State()
 
 
 async def _is_owner(user_id: int, tenant: TenantConfig) -> bool:
@@ -202,9 +205,180 @@ _TIMEZONES = [
     ("Алматы (UTC+5)",      "Asia/Almaty"),
     ("Ташкент (UTC+5)",     "Asia/Tashkent"),
     ("Берлин (UTC+1/2)",    "Europe/Berlin"),
+    ("Хельсинки (UTC+2/3)", "Europe/Helsinki"),
     ("Лондон (UTC+0/1)",    "Europe/London"),
     ("UTC+0",               "UTC"),
 ]
+
+# city/country keyword → IANA timezone (lowercase keys)
+_CITY_TZ: dict[str, str] = {
+    # Russia
+    "moscow": "Europe/Moscow",          "москва": "Europe/Moscow",
+    "saint petersburg": "Europe/Moscow","st petersburg": "Europe/Moscow",
+    "petersburg": "Europe/Moscow",      "питер": "Europe/Moscow",
+    "санкт-петербург": "Europe/Moscow", "spb": "Europe/Moscow",
+    "yekaterinburg": "Asia/Yekaterinburg", "екатеринбург": "Asia/Yekaterinburg",
+    "novosibirsk": "Asia/Novosibirsk",  "новосибирск": "Asia/Novosibirsk",
+    "omsk": "Asia/Omsk",                "омск": "Asia/Omsk",
+    "krasnoyarsk": "Asia/Krasnoyarsk",  "красноярск": "Asia/Krasnoyarsk",
+    "irkutsk": "Asia/Irkutsk",          "иркутск": "Asia/Irkutsk",
+    "vladivostok": "Asia/Vladivostok",  "владивосток": "Asia/Vladivostok",
+    "samara": "Europe/Samara",          "самара": "Europe/Samara",
+    "russia": "Europe/Moscow",          "россия": "Europe/Moscow",
+    # Ukraine
+    "kyiv": "Europe/Kiev",  "kiev": "Europe/Kiev",
+    "київ": "Europe/Kiev",  "киев": "Europe/Kiev",
+    "ukraine": "Europe/Kiev", "украина": "Europe/Kiev",
+    "odessa": "Europe/Kiev",  "kharkiv": "Europe/Kiev",
+    # Belarus
+    "minsk": "Europe/Minsk",    "минск": "Europe/Minsk",
+    "belarus": "Europe/Minsk",  "белоруссия": "Europe/Minsk",
+    # Kazakhstan
+    "almaty": "Asia/Almaty",    "алматы": "Asia/Almaty",
+    "astana": "Asia/Almaty",    "нур-султан": "Asia/Almaty",
+    "nur-sultan": "Asia/Almaty","kazakhstan": "Asia/Almaty",
+    # Uzbekistan
+    "tashkent": "Asia/Tashkent","ташкент": "Asia/Tashkent",
+    "uzbekistan": "Asia/Tashkent",
+    # Georgia
+    "tbilisi": "Asia/Tbilisi",  "тбилиси": "Asia/Tbilisi",
+    "georgia": "Asia/Tbilisi",  "грузия": "Asia/Tbilisi",
+    # Armenia
+    "yerevan": "Asia/Yerevan",  "ереван": "Asia/Yerevan",
+    "armenia": "Asia/Yerevan",  "армения": "Asia/Yerevan",
+    # Azerbaijan
+    "baku": "Asia/Baku",        "баку": "Asia/Baku",
+    "azerbaijan": "Asia/Baku",  "азербайджан": "Asia/Baku",
+    # Finland
+    "helsinki": "Europe/Helsinki", "хельсинки": "Europe/Helsinki",
+    "finland": "Europe/Helsinki",  "финляндия": "Europe/Helsinki",
+    "suomi": "Europe/Helsinki",    "tampere": "Europe/Helsinki",
+    "turku": "Europe/Helsinki",    "oulu": "Europe/Helsinki",
+    # Baltic
+    "tallinn": "Europe/Tallinn",   "riga": "Europe/Riga",
+    "vilnius": "Europe/Vilnius",   "estonia": "Europe/Tallinn",
+    "latvia": "Europe/Riga",       "lithuania": "Europe/Vilnius",
+    # Germany
+    "berlin": "Europe/Berlin",     "берлин": "Europe/Berlin",
+    "munich": "Europe/Berlin",     "münchen": "Europe/Berlin",
+    "hamburg": "Europe/Berlin",    "germany": "Europe/Berlin",
+    "германия": "Europe/Berlin",   "frankfurt": "Europe/Berlin",
+    "cologne": "Europe/Berlin",    "düsseldorf": "Europe/Berlin",
+    # France
+    "paris": "Europe/Paris",       "париж": "Europe/Paris",
+    "france": "Europe/Paris",      "франция": "Europe/Paris",
+    "lyon": "Europe/Paris",        "marseille": "Europe/Paris",
+    # UK
+    "london": "Europe/London",     "лондон": "Europe/London",
+    "uk": "Europe/London",         "england": "Europe/London",
+    "britain": "Europe/London",    "manchester": "Europe/London",
+    "edinburgh": "Europe/London",  "birmingham": "Europe/London",
+    # Netherlands
+    "amsterdam": "Europe/Amsterdam","netherlands": "Europe/Amsterdam",
+    "rotterdam": "Europe/Amsterdam","голландия": "Europe/Amsterdam",
+    # Sweden
+    "stockholm": "Europe/Stockholm","sweden": "Europe/Stockholm",
+    "швеция": "Europe/Stockholm",   "gothenburg": "Europe/Stockholm",
+    # Norway
+    "oslo": "Europe/Oslo",          "norway": "Europe/Oslo",
+    "норвегия": "Europe/Oslo",
+    # Denmark
+    "copenhagen": "Europe/Copenhagen","denmark": "Europe/Copenhagen",
+    "дания": "Europe/Copenhagen",
+    # Poland
+    "warsaw": "Europe/Warsaw",      "poland": "Europe/Warsaw",
+    "польша": "Europe/Warsaw",      "krakow": "Europe/Warsaw",
+    # Switzerland
+    "zurich": "Europe/Zurich",      "bern": "Europe/Zurich",
+    "switzerland": "Europe/Zurich", "geneva": "Europe/Zurich",
+    # Austria
+    "vienna": "Europe/Vienna",      "austria": "Europe/Vienna",
+    "wien": "Europe/Vienna",
+    # Spain
+    "madrid": "Europe/Madrid",      "barcelona": "Europe/Madrid",
+    "spain": "Europe/Madrid",       "испания": "Europe/Madrid",
+    # Italy
+    "rome": "Europe/Rome",          "milan": "Europe/Rome",
+    "italy": "Europe/Rome",         "италия": "Europe/Rome",
+    "roma": "Europe/Rome",          "milano": "Europe/Rome",
+    # Portugal
+    "lisbon": "Europe/Lisbon",      "portugal": "Europe/Lisbon",
+    # Turkey
+    "istanbul": "Europe/Istanbul",  "анкара": "Europe/Istanbul",
+    "turkey": "Europe/Istanbul",    "турция": "Europe/Istanbul",
+    "ankara": "Europe/Istanbul",
+    # Israel
+    "tel aviv": "Asia/Jerusalem",   "jerusalem": "Asia/Jerusalem",
+    "israel": "Asia/Jerusalem",
+    # UAE
+    "dubai": "Asia/Dubai",          "дубай": "Asia/Dubai",
+    "uae": "Asia/Dubai",            "abu dhabi": "Asia/Dubai",
+    # India
+    "delhi": "Asia/Kolkata",        "mumbai": "Asia/Kolkata",
+    "india": "Asia/Kolkata",        "bangalore": "Asia/Kolkata",
+    # China
+    "beijing": "Asia/Shanghai",     "shanghai": "Asia/Shanghai",
+    "china": "Asia/Shanghai",       "shenzhen": "Asia/Shanghai",
+    # Japan
+    "tokyo": "Asia/Tokyo",          "japan": "Asia/Tokyo",
+    "япония": "Asia/Tokyo",         "osaka": "Asia/Tokyo",
+    # South Korea
+    "seoul": "Asia/Seoul",          "korea": "Asia/Seoul",
+    # Singapore
+    "singapore": "Asia/Singapore",
+    # Thailand
+    "bangkok": "Asia/Bangkok",      "thailand": "Asia/Bangkok",
+    # Australia
+    "sydney": "Australia/Sydney",   "melbourne": "Australia/Melbourne",
+    "brisbane": "Australia/Brisbane","perth": "Australia/Perth",
+    "australia": "Australia/Sydney",
+    # USA
+    "new york": "America/New_York", "nyc": "America/New_York",
+    "нью-йорк": "America/New_York", "washington": "America/New_York",
+    "boston": "America/New_York",   "miami": "America/New_York",
+    "chicago": "America/Chicago",   "dallas": "America/Chicago",
+    "houston": "America/Chicago",   "denver": "America/Denver",
+    "phoenix": "America/Phoenix",   "los angeles": "America/Los_Angeles",
+    "la": "America/Los_Angeles",    "san francisco": "America/Los_Angeles",
+    "seattle": "America/Los_Angeles","las vegas": "America/Los_Angeles",
+    # Canada
+    "toronto": "America/Toronto",   "montreal": "America/Toronto",
+    "vancouver": "America/Vancouver","calgary": "America/Edmonton",
+    # Mexico
+    "mexico city": "America/Mexico_City","mexico": "America/Mexico_City",
+    # Brazil
+    "sao paulo": "America/Sao_Paulo","rio": "America/Sao_Paulo",
+    "brazil": "America/Sao_Paulo",
+    # Argentina
+    "buenos aires": "America/Argentina/Buenos_Aires",
+    "argentina": "America/Argentina/Buenos_Aires",
+    "utc": "UTC", "gmt": "UTC",
+}
+
+
+def _parse_tz_text(text: str) -> Optional[str]:
+    """Parse free-form city/country/IANA input → IANA timezone or None."""
+    text = text.strip()
+    # 1. Direct IANA name (e.g. "Europe/Helsinki")
+    try:
+        zoneinfo.ZoneInfo(text)
+        return text
+    except Exception:
+        pass
+    lower = text.lower()
+    # 2. Exact lookup
+    if lower in _CITY_TZ:
+        return _CITY_TZ[lower]
+    # 3. Word-by-word (e.g. "Finland Helsinki" → try "helsinki" first, then "finland")
+    words = lower.split()
+    for word in reversed(words):           # last word (city) first
+        if word in _CITY_TZ:
+            return _CITY_TZ[word]
+    # 4. Substring match
+    for key, tz in _CITY_TZ.items():
+        if key in lower:
+            return tz
+    return None
 
 
 def _main_admin_kb() -> InlineKeyboardMarkup:
@@ -377,6 +551,12 @@ async def email_got_senders(message: Message, state: FSMContext) -> None:
 
 # ── Timezone settings ──────────────────────────────────────────────────────────
 
+_TZ_HEADER = (
+    "⏰ <b>Часовой пояс</b>\n\n"
+    "Выберите из списка или нажмите «✏️ Другой» и введите название города."
+)
+
+
 def _tz_kb(current_tz: str) -> InlineKeyboardMarkup:
     rows = [
         [InlineKeyboardButton(
@@ -385,6 +565,7 @@ def _tz_kb(current_tz: str) -> InlineKeyboardMarkup:
         )]
         for label, tz in _TIMEZONES
     ]
+    rows.append([InlineKeyboardButton(text="✏️ Другой город / пояс...", callback_data="adm:tz:custom")])
     rows.append([InlineKeyboardButton(text="← Назад", callback_data="adm:main")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -396,13 +577,45 @@ async def show_timezone_menu(callback: CallbackQuery, tenant: TenantConfig) -> N
         return
     current_tz = await repo.get_tenant_timezone(tenant.tenant_id)
     await callback.message.edit_text(
-        "⏰ <b>Часовой пояс</b>\n\n"
-        "Выберите часовой пояс вашего салона.\n"
-        "Он используется для правильного отображения времени записей.",
-        parse_mode="HTML",
-        reply_markup=_tz_kb(current_tz),
+        _TZ_HEADER, parse_mode="HTML", reply_markup=_tz_kb(current_tz)
     )
     await callback.answer()
+
+
+@router.callback_query(F.data == "adm:tz:custom")
+async def prompt_tz_text(
+    callback: CallbackQuery, state: FSMContext, tenant: TenantConfig
+) -> None:
+    if not await _is_owner(callback.from_user.id, tenant):
+        await callback.answer()
+        return
+    await state.set_state(AdminSG.timezone_input)
+    await state.update_data(tenant_id=tenant.tenant_id)
+    await callback.answer()
+    await callback.message.answer(
+        "⏰ Введите название города или часовой пояс:\n\n"
+        "<i>Примеры: Helsinki · Paris · New York · Токио · Europe/Helsinki</i>",
+        parse_mode="HTML",
+    )
+
+
+@router.message(AdminSG.timezone_input)
+async def got_tz_text(message: Message, state: FSMContext) -> None:
+    tz = _parse_tz_text(message.text or "")
+    if not tz:
+        await message.answer(
+            "❌ Не нашёл такой часовой пояс. Попробуйте иначе:\n"
+            "<i>Helsinki · Paris · New York · Europe/Helsinki</i>",
+            parse_mode="HTML",
+        )
+        return   # stay in state — let user retry
+    data = await state.get_data()
+    tenant_id = data.get("tenant_id", 1)
+    await state.clear()
+    await repo.save_tenant_timezone(tenant_id, tz)
+    label = next((l for l, t in _TIMEZONES if t == tz), tz)
+    await message.answer(f"✅ Часовой пояс установлен: <b>{label}</b> (<code>{tz}</code>)",
+                         parse_mode="HTML")
 
 
 @router.callback_query(F.data.startswith("adm:tz:"))
@@ -413,11 +626,7 @@ async def set_timezone(callback: CallbackQuery, tenant: TenantConfig) -> None:
     tz_name = callback.data[len("adm:tz:"):]
     await repo.save_tenant_timezone(tenant.tenant_id, tz_name)
     label = next((l for l, t in _TIMEZONES if t == tz_name), tz_name)
-    await callback.answer(f"✅ Часовой пояс: {label}", show_alert=True)
+    await callback.answer(f"✅ {label}", show_alert=True)
     await callback.message.edit_text(
-        "⏰ <b>Часовой пояс</b>\n\n"
-        "Выберите часовой пояс вашего салона.\n"
-        "Он используется для правильного отображения времени записей.",
-        parse_mode="HTML",
-        reply_markup=_tz_kb(tz_name),
+        _TZ_HEADER, parse_mode="HTML", reply_markup=_tz_kb(tz_name)
     )
