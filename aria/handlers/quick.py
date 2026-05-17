@@ -16,7 +16,7 @@ from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
 from aiogram import Bot, F, Router
-from aiogram.filters import Command
+from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
@@ -218,18 +218,23 @@ async def _show_schedule(message: Message, tenant: TenantConfig, days_offset: in
     _last_info_msg[message.chat.id] = sent.message_id
 
 
-@router.message(F.text == "📅 Сегодня", SetupDone())
-async def quick_today(message: Message, tenant: TenantConfig) -> None:
+@router.message(F.text == "📅 Сегодня", SetupDone(), StateFilter("*"))
+async def quick_today(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
+    await state.clear()
     await _show_schedule(message, tenant, 0)
 
 
-@router.message(F.text == "📅 Завтра", SetupDone())
-async def quick_tomorrow(message: Message, tenant: TenantConfig) -> None:
+@router.message(F.text == "📅 Завтра", SetupDone(), StateFilter("*"))
+async def quick_tomorrow(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
+    await state.clear()
     await _show_schedule(message, tenant, 1)
 
 
-@router.message(F.text == "📋 Ближайшие", SetupDone())
-async def quick_upcoming(message: Message, tenant: TenantConfig) -> None:
+@router.message(F.text == "📋 Ближайшие", SetupDone(), StateFilter("*"))
+async def quick_upcoming(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
+    await state.clear()
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo(tenant.timezone or "UTC")
     adapter = get_adapter(tenant)
     events  = await adapter.get_events(
         datetime.now(timezone.utc),
@@ -241,25 +246,41 @@ async def quick_upcoming(message: Message, tenant: TenantConfig) -> None:
         _last_info_msg[message.chat.id] = sent.message_id
         return
 
+    _MON = ["янв","фев","мар","апр","май","июн","июл","авг","сен","окт","ноя","дек"]
+    _DAYS = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"]
+
     lines = ["📋 <b>Ближайшие записи</b>\n"]
-    cancel_btns: list[InlineKeyboardButton] = []
-    for e in events[:15]:
-        bid = e.get("id")
-        lines.append(f"• {e['date']} {e['time']} — {e['client']}, {e['service']}")
-        if isinstance(bid, int):
-            cancel_btns.append(
-                InlineKeyboardButton(
-                    text=f"❌ {e['client']} {e['date']}",
-                    callback_data=f"del_booking:{bid}",
-                )
+    sel_btns: list[InlineKeyboardButton] = []
+    prev_date = ""
+    for e in events[:20]:
+        bid       = e.get("id")
+        date_str  = e.get("date", "")
+        paid_mark = " ✅" if e.get("paid") else ""
+
+        if date_str != prev_date:
+            from datetime import date as _d
+            try:
+                d = _d.fromisoformat(date_str)
+                day_hdr = f"{_DAYS[d.weekday()]} {d.day} {_MON[d.month - 1]}"
+            except ValueError:
+                day_hdr = date_str
+            lines.append(f"\n📅 <b>{day_hdr}</b>")
+            prev_date = date_str
+
+        lines.append(f"• {e['time']} — {e['client']}, {e['service']}{paid_mark}")
+
+        if isinstance(bid, int) and date_str:
+            label = f"{e['time']} {e['client']}{paid_mark}"
+            sel_btns.append(
+                InlineKeyboardButton(text=label, callback_data=f"bk_card:{bid}|{date_str}")
             )
 
-    rows = [cancel_btns[i:i+2] for i in range(0, len(cancel_btns), 2)]
+    rows = [sel_btns[i:i+2] for i in range(0, len(sel_btns), 2)]
     rows.append([InlineKeyboardButton(text="➕ Добавить запись", callback_data="qb_start")])
     kb = InlineKeyboardMarkup(inline_keyboard=rows)
 
     await _delete_old_info(message.bot, message.chat.id)
-    sent = await message.answer("\n".join(lines), reply_markup=kb)
+    sent = await message.answer("\n".join(lines), reply_markup=kb, parse_mode="HTML")
     _last_info_msg[message.chat.id] = sent.message_id
 
 
@@ -308,84 +329,170 @@ async def cb_cancel_booking(callback: CallbackQuery, tenant: TenantConfig) -> No
         pass
 
 
-# ── Dashboard ────────────────────────────────────────────────────────────────
+# ── Dashboard helpers ─────────────────────────────────────────────────────────
 
-@router.message(F.text == "📊 Дашборд", SetupDone())
-async def quick_dashboard(message: Message, tenant: TenantConfig) -> None:
+_MON_RU   = ["января","февраля","марта","апреля","мая","июня",
+              "июля","августа","сентября","октября","ноября","декабря"]
+_DAY_SHORT = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"]
+_DAY_FULL  = ["Понедельник","Вторник","Среда","Четверг","Пятница","Суббота","Воскресенье"]
+
+
+def _income_block(tenant: TenantConfig, expected: float, received: float) -> list[str]:
+    lines: list[str] = []
+    if expected > 0:
+        lines.append(f"💰 Ожидается: <b>{int(expected)}€</b>")
+    if received > 0:
+        lines.append(f"✅ Оплачено: <b>{int(received)}€</b>")
+        if tenant.master_percent is not None:
+            cut = received * tenant.master_percent / 100
+            lines.append(f"   👤 Доля ({int(tenant.master_percent)}%): <b>{cut:.0f}€</b>")
+            if tenant.tax_percent is not None:
+                net = cut * (1 - tenant.tax_percent / 100)
+                lines.append(f"   🧾 Чистыми ({int(tenant.tax_percent)}%): <b>{net:.0f}€</b>")
+    return lines
+
+
+def _dashboard_kb(active: str) -> InlineKeyboardMarkup:
+    periods = [("day", "📅 День"), ("week", "📆 Неделя"), ("month", "🗓 Месяц")]
+    btns = [
+        InlineKeyboardButton(
+            text=f"{lbl} ✓" if p == active else lbl,
+            callback_data=f"dash:{p}",
+        )
+        for p, lbl in periods
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=[btns])
+
+
+async def _day_dashboard(tenant: TenantConfig) -> str:
     from zoneinfo import ZoneInfo
     tz = ZoneInfo(tenant.timezone or "UTC")
     now_local = datetime.now(tz)
-    date_str   = now_local.strftime("%Y-%m-%d")
-    day_names  = ["Понедельник","Вторник","Среда","Четверг","Пятница","Суббота","Воскресенье"]
-    day_label  = f"{day_names[now_local.weekday()]}, {now_local.strftime('%-d %B')}"
+    date_str  = now_local.strftime("%Y-%m-%d")
+    day_label = f"{_DAY_FULL[now_local.weekday()]}, {now_local.day} {_MON_RU[now_local.month - 1]}"
 
-    stats = await repo.get_today_stats(tenant.id, date_str)
-    week_count = await repo.get_week_booking_count(tenant.id, tenant.timezone or "UTC")
-
-    # ближайшая запись сегодня
+    stats          = await repo.get_today_stats(tenant.id, date_str)
     bookings_today = await repo.get_bookings_for_date(tenant.id, date_str)
-    next_booking = None
-    for b in bookings_today:
-        if b["scheduled_at"].astimezone(tz) > now_local:
-            next_booking = b
-            break
+    next_b = next((b for b in bookings_today if b["scheduled_at"].astimezone(tz) > now_local), None)
 
-    # свободные окна сегодня
-    booked_slots = {
-        dt.astimezone(tz).strftime("%H:%M")
-        for dt in await repo.get_slots_on_date(tenant.id, date_str)
-    }
-    free_slots = []
+    booked_slots = {dt.astimezone(tz).strftime("%H:%M")
+                    for dt in await repo.get_slots_on_date(tenant.id, date_str)}
+    free_slots: list[str] = []
     h, m = tenant.open_hour, 0
     while h < tenant.close_hour:
         slot = f"{h:02d}:{m:02d}"
         if slot not in booked_slots:
             free_slots.append(slot)
-        total = h * 60 + m + tenant.slot_minutes
-        h, m = divmod(total, 60)
+        tot = h * 60 + m + tenant.slot_minutes
+        h, m = divmod(tot, 60)
 
-    lines = [f"📊 <b>Дашборд — {day_label}</b>\n"]
+    lines = [f"📅 <b>{day_label}</b>\n"]
+    lines.append(f"📋 Записей: <b>{stats['total']}</b>")
 
-    lines.append(f"📋 Записей сегодня: <b>{stats['total']}</b>")
-
-    if next_booking:
-        t_str     = next_booking["scheduled_at"].astimezone(tz).strftime("%H:%M")
-        total_min = int((next_booking["scheduled_at"].astimezone(tz) - now_local).total_seconds() / 60)
-        if total_min >= 60:
-            h_d, m_d = divmod(total_min, 60)
-            diff_str = f"{h_d}ч {m_d}мин" if m_d else f"{h_d}ч"
+    if next_b:
+        t_str = next_b["scheduled_at"].astimezone(tz).strftime("%H:%M")
+        mins  = int((next_b["scheduled_at"].astimezone(tz) - now_local).total_seconds() / 60)
+        if mins >= 60:
+            h_d, m_d = divmod(mins, 60)
+            diff = f"{h_d}ч {m_d}мин" if m_d else f"{h_d}ч"
         else:
-            diff_str = f"{total_min} мин"
-        lines.append(f"⏰ Следующий: <b>{next_booking['client_name']}</b> в {t_str} (через {diff_str})")
+            diff = f"{mins} мин"
+        lines.append(f"⏰ Следующий: <b>{next_b['client_name']}</b> в {t_str} (через {diff})")
     else:
         lines.append("⏰ Записей до конца дня нет")
 
-    if stats["expected"] > 0:
-        lines.append(f"💰 Ожидаемый доход: <b>{int(stats['expected'])}€</b>")
-        received = float(stats["received"])
-        lines.append(f"✅ Уже оплачено: <b>{int(received)}€</b>")
-        if tenant.master_percent is not None and received > 0:
-            master_cut = received * tenant.master_percent / 100
-            lines.append(f"   👤 Доля ({int(tenant.master_percent)}%): <b>{master_cut:.2f}€</b>")
-            if tenant.tax_percent is not None:
-                after_tax = master_cut * (1 - tenant.tax_percent / 100)
-                lines.append(f"   🧾 После налога ({int(tenant.tax_percent)}%): <b>{after_tax:.2f}€</b>")
+    lines += _income_block(tenant, float(stats["expected"]), float(stats["received"]))
 
     if free_slots:
-        slots_str = "  ".join(free_slots[:6])
-        more = f" +{len(free_slots)-6}" if len(free_slots) > 6 else ""
-        lines.append(f"\n🕐 Свободно сегодня: {slots_str}{more}")
+        slots_str = "  ".join(free_slots[:6]) + (f" +{len(free_slots)-6}" if len(free_slots) > 6 else "")
+        lines.append(f"\n🕐 Свободно: {slots_str}")
     else:
-        lines.append("\n🔴 Свободных окон сегодня нет")
+        lines.append("\n🔴 Свободных окон нет")
 
-    _mod = week_count % 10
-    _word = "запись" if _mod == 1 and week_count % 100 != 11 else \
-            "записи" if 2 <= _mod <= 4 and week_count % 100 not in (12, 13, 14) else "записей"
-    lines.append(f"\n📈 Эта неделя: <b>{week_count}</b> {_word}")
+    return "\n".join(lines)
 
+
+async def _week_dashboard(tenant: TenantConfig) -> str:
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo(tenant.timezone or "UTC")
+    now_local = datetime.now(tz)
+    monday    = now_local.date() - timedelta(days=now_local.weekday())
+    sunday    = monday + timedelta(days=6)
+    dt_from   = datetime(monday.year, monday.month, monday.day,  0,  0, tzinfo=tz).astimezone(timezone.utc)
+    dt_to     = datetime(sunday.year, sunday.month, sunday.day, 23, 59, tzinfo=tz).astimezone(timezone.utc)
+
+    stats  = await repo.get_period_stats(tenant.id, dt_from, dt_to)
+    events = await get_adapter(tenant).get_events(dt_from, dt_to)
+    by_day: dict[str, int] = {}
+    for e in events:
+        d = e.get("date", "")
+        by_day[d] = by_day.get(d, 0) + 1
+
+    date_range = f"{monday.day}–{sunday.day} {_MON_RU[monday.month - 1]}"
+    lines = [f"📆 <b>Неделя — {date_range}</b>\n"]
+    lines.append(f"📋 Записей: <b>{stats['total']}</b>")
+    lines += _income_block(tenant, float(stats["expected"]), float(stats["received"]))
+
+    day_parts = [f"{_DAY_SHORT[i]} {by_day.get((monday + timedelta(days=i)).isoformat(), 0)}"
+                 for i in range(7)]
+    lines.append("\n" + "  ·  ".join(day_parts))
+    return "\n".join(lines)
+
+
+async def _month_dashboard(tenant: TenantConfig) -> str:
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo(tenant.timezone or "UTC")
+    now_local  = datetime.now(tz)
+    first      = now_local.date().replace(day=1)
+    if first.month == 12:
+        last = first.replace(year=first.year + 1, month=1) - timedelta(days=1)
+    else:
+        last = first.replace(month=first.month + 1) - timedelta(days=1)
+    dt_from = datetime(first.year, first.month, first.day,  0,  0, tzinfo=tz).astimezone(timezone.utc)
+    dt_to   = datetime(last.year,  last.month,  last.day,  23, 59, tzinfo=tz).astimezone(timezone.utc)
+
+    stats = await repo.get_period_stats(tenant.id, dt_from, dt_to)
+    total  = int(stats["total"])
+    weeks  = round(last.day / 7, 1)
+
+    _MON_FULL = ["Январь","Февраль","Март","Апрель","Май","Июнь",
+                 "Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"]
+    lines = [f"🗓 <b>{_MON_FULL[now_local.month - 1]} {now_local.year}</b>\n"]
+    lines.append(f"📋 Записей: <b>{total}</b>")
+    if total > 0 and weeks > 0:
+        lines.append(f"   ≈ {round(total / weeks)} в неделю")
+    lines += _income_block(tenant, float(stats["expected"]), float(stats["received"]))
+    return "\n".join(lines)
+
+
+async def _build_dashboard(tenant: TenantConfig, period: str) -> str:
+    if period == "week":
+        return await _week_dashboard(tenant)
+    if period == "month":
+        return await _month_dashboard(tenant)
+    return await _day_dashboard(tenant)
+
+
+# ── Dashboard handlers ────────────────────────────────────────────────────────
+
+@router.message(F.text == "📊 Дашборд", SetupDone(), StateFilter("*"))
+async def quick_dashboard(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
+    await state.clear()
+    text = await _build_dashboard(tenant, "day")
     await _delete_old_info(message.bot, message.chat.id)
-    sent = await message.answer("\n".join(lines), parse_mode="HTML")
+    sent = await message.answer(text, reply_markup=_dashboard_kb("day"), parse_mode="HTML")
     _last_info_msg[message.chat.id] = sent.message_id
+
+
+@router.callback_query(F.data.startswith("dash:"), SetupDone())
+async def cb_dashboard_period(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    period = callback.data[len("dash:"):]
+    if period not in ("day", "week", "month"):
+        await callback.answer()
+        return
+    text = await _build_dashboard(tenant, period)
+    await callback.message.edit_text(text, reply_markup=_dashboard_kb(period), parse_mode="HTML")
+    await callback.answer()
 
 
 # ── Booking card (Variant C: tap booking → card → back to list) ──────────────
@@ -569,10 +676,11 @@ async def _start_booking(message_or_query, state: FSMContext, tenant: TenantConf
     await state.update_data(wizard_msg_id=sent.message_id)
 
 
-@router.message(F.text == "➕ Новая запись", SetupDone())
+@router.message(F.text == "➕ Новая запись", SetupDone(), StateFilter("*"))
 async def quick_new(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
     if not tenant.is_owner(message.from_user.id):
         return
+    await state.clear()
     await _start_booking(message, state, tenant)
 
 

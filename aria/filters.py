@@ -3,18 +3,17 @@
 from __future__ import annotations
 
 from aiogram.filters import BaseFilter
-from aiogram.types import Message
 
 
 class SetupRequired(BaseFilter):
     """Passes only when the tenant's setup wizard is not yet complete."""
-    async def __call__(self, message: Message, **kwargs) -> bool:
+    async def __call__(self, **kwargs) -> bool:
         tenant = kwargs.get("tenant")
         return tenant is not None and not tenant.setup_complete
 
 
 class SetupDone(BaseFilter):
     """Passes only when the tenant is fully configured."""
-    async def __call__(self, message: Message, **kwargs) -> bool:
+    async def __call__(self, **kwargs) -> bool:
         tenant = kwargs.get("tenant")
         return tenant is not None and tenant.setup_complete

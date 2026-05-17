@@ -396,6 +396,31 @@ async def get_week_booking_count(tenant_id: int, tz_str: str = "UTC") -> int:
         return row[0] if row else 0
 
 
+async def get_period_stats(tenant_id: int, dt_from: datetime, dt_to: datetime) -> dict:
+    """General booking stats for any time range."""
+    async with _p().acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT
+                COUNT(*) FILTER (WHERE b.status IN ('confirmed','pending'))                   AS total,
+                COUNT(*) FILTER (WHERE b.paid = TRUE)                                         AS paid_count,
+                COALESCE(SUM(si.price) FILTER (WHERE b.status IN ('confirmed','pending')), 0) AS expected,
+                COALESCE(SUM(si.price) FILTER (WHERE b.paid = TRUE), 0)                      AS received
+            FROM aria_bookings b
+            LEFT JOIN aria_service_items si
+                ON LOWER(si.name) = LOWER(b.service)
+               AND si.category_id IN (
+                       SELECT id FROM aria_service_categories WHERE tenant_id = $1
+                   )
+            WHERE b.tenant_id = $1
+              AND b.scheduled_at >= $2
+              AND b.scheduled_at <= $3
+            """,
+            tenant_id, dt_from, dt_to,
+        )
+        return dict(row) if row else {"total": 0, "paid_count": 0, "expected": 0, "received": 0}
+
+
 async def get_client_stats(tenant_id: int, limit: int = 50) -> list[asyncpg.Record]:
     """Returns clients sorted by visit count with basic stats."""
     async with _p().acquire() as conn:
