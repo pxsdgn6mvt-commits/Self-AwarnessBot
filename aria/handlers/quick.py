@@ -16,7 +16,7 @@ from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
 from aiogram import Bot, F, Router
-from aiogram.filters import Command
+from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
@@ -218,18 +218,23 @@ async def _show_schedule(message: Message, tenant: TenantConfig, days_offset: in
     _last_info_msg[message.chat.id] = sent.message_id
 
 
-@router.message(F.text == "📅 Сегодня", SetupDone())
-async def quick_today(message: Message, tenant: TenantConfig) -> None:
+@router.message(F.text == "📅 Сегодня", SetupDone(), StateFilter("*"))
+async def quick_today(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
+    await state.clear()
     await _show_schedule(message, tenant, 0)
 
 
-@router.message(F.text == "📅 Завтра", SetupDone())
-async def quick_tomorrow(message: Message, tenant: TenantConfig) -> None:
+@router.message(F.text == "📅 Завтра", SetupDone(), StateFilter("*"))
+async def quick_tomorrow(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
+    await state.clear()
     await _show_schedule(message, tenant, 1)
 
 
-@router.message(F.text == "📋 Ближайшие", SetupDone())
-async def quick_upcoming(message: Message, tenant: TenantConfig) -> None:
+@router.message(F.text == "📋 Ближайшие", SetupDone(), StateFilter("*"))
+async def quick_upcoming(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
+    await state.clear()
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo(tenant.timezone or "UTC")
     adapter = get_adapter(tenant)
     events  = await adapter.get_events(
         datetime.now(timezone.utc),
@@ -241,25 +246,41 @@ async def quick_upcoming(message: Message, tenant: TenantConfig) -> None:
         _last_info_msg[message.chat.id] = sent.message_id
         return
 
+    _MON = ["янв","фев","мар","апр","май","июн","июл","авг","сен","окт","ноя","дек"]
+    _DAYS = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"]
+
     lines = ["📋 <b>Ближайшие записи</b>\n"]
-    cancel_btns: list[InlineKeyboardButton] = []
-    for e in events[:15]:
-        bid = e.get("id")
-        lines.append(f"• {e['date']} {e['time']} — {e['client']}, {e['service']}")
-        if isinstance(bid, int):
-            cancel_btns.append(
-                InlineKeyboardButton(
-                    text=f"❌ {e['client']} {e['date']}",
-                    callback_data=f"del_booking:{bid}",
-                )
+    sel_btns: list[InlineKeyboardButton] = []
+    prev_date = ""
+    for e in events[:20]:
+        bid       = e.get("id")
+        date_str  = e.get("date", "")
+        paid_mark = " ✅" if e.get("paid") else ""
+
+        if date_str != prev_date:
+            from datetime import date as _d
+            try:
+                d = _d.fromisoformat(date_str)
+                day_hdr = f"{_DAYS[d.weekday()]} {d.day} {_MON[d.month - 1]}"
+            except ValueError:
+                day_hdr = date_str
+            lines.append(f"\n📅 <b>{day_hdr}</b>")
+            prev_date = date_str
+
+        lines.append(f"• {e['time']} — {e['client']}, {e['service']}{paid_mark}")
+
+        if isinstance(bid, int) and date_str:
+            label = f"{e['time']} {e['client']}{paid_mark}"
+            sel_btns.append(
+                InlineKeyboardButton(text=label, callback_data=f"bk_card:{bid}|{date_str}")
             )
 
-    rows = [cancel_btns[i:i+2] for i in range(0, len(cancel_btns), 2)]
+    rows = [sel_btns[i:i+2] for i in range(0, len(sel_btns), 2)]
     rows.append([InlineKeyboardButton(text="➕ Добавить запись", callback_data="qb_start")])
     kb = InlineKeyboardMarkup(inline_keyboard=rows)
 
     await _delete_old_info(message.bot, message.chat.id)
-    sent = await message.answer("\n".join(lines), reply_markup=kb)
+    sent = await message.answer("\n".join(lines), reply_markup=kb, parse_mode="HTML")
     _last_info_msg[message.chat.id] = sent.message_id
 
 
@@ -454,8 +475,9 @@ async def _build_dashboard(tenant: TenantConfig, period: str) -> str:
 
 # ── Dashboard handlers ────────────────────────────────────────────────────────
 
-@router.message(F.text == "📊 Дашборд", SetupDone())
-async def quick_dashboard(message: Message, tenant: TenantConfig) -> None:
+@router.message(F.text == "📊 Дашборд", SetupDone(), StateFilter("*"))
+async def quick_dashboard(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
+    await state.clear()
     text = await _build_dashboard(tenant, "day")
     await _delete_old_info(message.bot, message.chat.id)
     sent = await message.answer(text, reply_markup=_dashboard_kb("day"), parse_mode="HTML")
@@ -654,10 +676,11 @@ async def _start_booking(message_or_query, state: FSMContext, tenant: TenantConf
     await state.update_data(wizard_msg_id=sent.message_id)
 
 
-@router.message(F.text == "➕ Новая запись", SetupDone())
+@router.message(F.text == "➕ Новая запись", SetupDone(), StateFilter("*"))
 async def quick_new(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
     if not tenant.is_owner(message.from_user.id):
         return
+    await state.clear()
     await _start_booking(message, state, tenant)
 
 
