@@ -1295,6 +1295,15 @@ async def post_init(application: Application):
         BotCommand("language",  "🌐 Language / Язык"),
         BotCommand("admin",     "📊 Панель администратора"),
     ])
+    scheduler = AsyncIOScheduler(timezone="UTC")
+    scheduler.add_job(
+        auto_backup_job,
+        trigger="cron",
+        day_of_week="sun",
+        hour=10, minute=0,
+        args=[application.bot],
+    )
+    scheduler.start()
 
 
 def main():
@@ -1344,17 +1353,6 @@ def main():
     # Telegram Stars
     app.add_handler(PreCheckoutQueryHandler(pay.precheckout_handler))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, pay.successful_payment_handler))
-
-    # Автобэкап каждое воскресенье 10:00 UTC
-    scheduler = AsyncIOScheduler(timezone="UTC")
-    scheduler.add_job(
-        auto_backup_job,
-        trigger="cron",
-        day_of_week="sun",
-        hour=10, minute=0,
-        args=[app.bot],
-    )
-    scheduler.start()
 
     logger.info("Vault Bot starting...")
     app.run_polling(drop_pending_updates=True)
