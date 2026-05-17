@@ -41,6 +41,8 @@ class TenantConfig:
     anthropic_api_key: str = ""
     database_url: str = ""
 
+    salon_timezone: str = "Europe/Moscow"
+
     # Email monitoring (IMAP)
     # Gmail: enable IMAP + create App Password at myaccount.google.com/apppasswords
     email_address: str = ""
@@ -114,6 +116,7 @@ def _build_tenant(n: int, prefix: str) -> TenantConfig:
         email_imap_port=pi("EMAIL_IMAP_PORT", "ARIA_EMAIL_IMAP_PORT", 993),
         email_allowed_senders=p("EMAIL_ALLOWED_SENDERS", "ARIA_EMAIL_ALLOWED_SENDERS", ""),
         email_poll_seconds=pi("EMAIL_POLL_SECONDS", "ARIA_EMAIL_POLL_SECONDS", 60),
+        salon_timezone=p("TIMEZONE", "SALON_TIMEZONE", "Europe/Moscow"),
     )
 
 

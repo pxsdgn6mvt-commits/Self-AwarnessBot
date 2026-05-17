@@ -90,6 +90,7 @@ async def init_db(dsn: str) -> None:
             ("gcal_refresh_token", "TEXT"),
             ("gcal_token_expiry",  "TIMESTAMPTZ"),
             ("gcal_calendar_id",   "TEXT NOT NULL DEFAULT 'primary'"),
+            ("timezone",           "TEXT NOT NULL DEFAULT 'Europe/Moscow'"),
         ]:
             if col not in existing_cols:
                 try:
@@ -194,23 +195,22 @@ async def get_upcoming_bookings(user_id: int, limit: int = 10) -> list:
         )
 
 
-async def get_bookings_on_date(user_id: int, target_date: "date") -> list:
-    from datetime import date as _date
+async def get_bookings_on_date(user_id: int, target_date: "date", tz: str = "UTC") -> list:
     async with _p().acquire() as conn:  # type: ignore[union-attr]
         return await conn.fetch(
             """
             SELECT * FROM aria_bookings
             WHERE user_id=$1 AND status='confirmed'
-              AND scheduled_at::date = $2
+              AND (scheduled_at AT TIME ZONE $3)::date = $2
             ORDER BY scheduled_at ASC
             """,
-            user_id, target_date,
+            user_id, target_date, tz,
         )
 
 
-async def cancel_bookings_on_date(user_id: int, target_date: "date") -> list:
+async def cancel_bookings_on_date(user_id: int, target_date: "date", tz: str = "UTC") -> list:
     """Cancel all confirmed bookings on given date; return cancelled rows."""
-    rows = await get_bookings_on_date(user_id, target_date)
+    rows = await get_bookings_on_date(user_id, target_date, tz)
     if not rows:
         return []
     ids = [r["id"] for r in rows]
@@ -220,6 +220,22 @@ async def cancel_bookings_on_date(user_id: int, target_date: "date") -> list:
             ids,
         )
     return list(rows)
+
+
+async def get_tenant_timezone(tenant_id: int) -> str:
+    async with _p().acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT timezone FROM aria_tenant_settings WHERE tenant_id=$1", tenant_id
+        )
+        return (row["timezone"] if row else None) or "Europe/Moscow"
+
+
+async def save_tenant_timezone(tenant_id: int, tz: str) -> None:
+    async with _p().acquire() as conn:
+        await conn.execute(
+            "UPDATE aria_tenant_settings SET timezone=$2 WHERE tenant_id=$1",
+            tenant_id, tz,
+        )
 
 
 async def update_booking_time(booking_id: int, new_time: datetime) -> None:

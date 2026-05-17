@@ -192,10 +192,26 @@ class EmailSG(StatesGroup):
     senders  = State()
 
 
+_TIMEZONES = [
+    ("Москва (UTC+3)",      "Europe/Moscow"),
+    ("Киев (UTC+3)",        "Europe/Kiev"),
+    ("Минск (UTC+3)",       "Europe/Minsk"),
+    ("Тбилиси (UTC+4)",    "Asia/Tbilisi"),
+    ("Баку (UTC+4)",        "Asia/Baku"),
+    ("Ереван (UTC+4)",      "Asia/Yerevan"),
+    ("Алматы (UTC+5)",      "Asia/Almaty"),
+    ("Ташкент (UTC+5)",     "Asia/Tashkent"),
+    ("Берлин (UTC+1/2)",    "Europe/Berlin"),
+    ("Лондон (UTC+0/1)",    "Europe/London"),
+    ("UTC+0",               "UTC"),
+]
+
+
 def _main_admin_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📋 Услуги и категории", callback_data="adm:services")],
         [InlineKeyboardButton(text="📧 Email мониторинг",   callback_data="adm:email")],
+        [InlineKeyboardButton(text="⏰ Часовой пояс",       callback_data="adm:timezone")],
     ])
 
 
@@ -356,4 +372,52 @@ async def email_got_senders(message: Message, state: FSMContext) -> None:
         f"Отправители: {senders_display}\n\n"
         f"Бот начнёт проверять почту в течение минуты.",
         parse_mode="HTML",
+    )
+
+
+# ── Timezone settings ──────────────────────────────────────────────────────────
+
+def _tz_kb(current_tz: str) -> InlineKeyboardMarkup:
+    rows = [
+        [InlineKeyboardButton(
+            text=("✅ " if tz == current_tz else "") + label,
+            callback_data=f"adm:tz:{tz}",
+        )]
+        for label, tz in _TIMEZONES
+    ]
+    rows.append([InlineKeyboardButton(text="← Назад", callback_data="adm:main")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+@router.callback_query(F.data == "adm:timezone")
+async def show_timezone_menu(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    if not await _is_owner(callback.from_user.id, tenant):
+        await callback.answer()
+        return
+    current_tz = await repo.get_tenant_timezone(tenant.tenant_id)
+    await callback.message.edit_text(
+        "⏰ <b>Часовой пояс</b>\n\n"
+        "Выберите часовой пояс вашего салона.\n"
+        "Он используется для правильного отображения времени записей.",
+        parse_mode="HTML",
+        reply_markup=_tz_kb(current_tz),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("adm:tz:"))
+async def set_timezone(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    if not await _is_owner(callback.from_user.id, tenant):
+        await callback.answer()
+        return
+    tz_name = callback.data[len("adm:tz:"):]
+    await repo.save_tenant_timezone(tenant.tenant_id, tz_name)
+    label = next((l for l, t in _TIMEZONES if t == tz_name), tz_name)
+    await callback.answer(f"✅ Часовой пояс: {label}", show_alert=True)
+    await callback.message.edit_text(
+        "⏰ <b>Часовой пояс</b>\n\n"
+        "Выберите часовой пояс вашего салона.\n"
+        "Он используется для правильного отображения времени записей.",
+        parse_mode="HTML",
+        reply_markup=_tz_kb(tz_name),
     )

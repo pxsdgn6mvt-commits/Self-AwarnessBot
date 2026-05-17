@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+import zoneinfo
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Union
 
@@ -46,6 +47,17 @@ def _fmt_date(d: date) -> str:
     return f"{d.day} {_MONTHS_SHORT[d.month - 1]} ({_DAYS_SHORT[d.weekday()]})"
 
 
+def _get_tz(tz_name: str) -> zoneinfo.ZoneInfo:
+    try:
+        return zoneinfo.ZoneInfo(tz_name)
+    except Exception:
+        return zoneinfo.ZoneInfo("Europe/Moscow")
+
+
+def _today_in_tz(tz_name: str) -> date:
+    return datetime.now(_get_tz(tz_name)).date()
+
+
 def _parse_date(text: str) -> date | None:
     text = text.strip().lower()
     today = date.today()
@@ -84,8 +96,8 @@ def _parse_date(text: str) -> date | None:
     return None
 
 
-def _date_kb() -> InlineKeyboardMarkup:
-    today = date.today()
+def _date_kb(tz_name: str = "Europe/Moscow") -> InlineKeyboardMarkup:
+    today = _today_in_tz(tz_name)
     rows = []
     for i in range(5):
         d = today + timedelta(days=i)
@@ -137,8 +149,9 @@ async def start_booking(
     service: str,
 ) -> None:
     """Entry point — called after a service is selected via inline keyboard."""
+    tz_name = await repo.get_tenant_timezone(tenant.tenant_id)
     await state.set_state(BookingSG.client_name)
-    await state.update_data(service=service, tenant_id=tenant.tenant_id)
+    await state.update_data(service=service, tenant_id=tenant.tenant_id, tz_name=tz_name)
     text = (
         f"📋 <b>Новая запись</b>\n"
         f"💅 Услуга: <b>{service}</b>\n\n"
@@ -160,7 +173,9 @@ async def got_client_name(message: Message, state: FSMContext, tenant: TenantCon
         return
     await state.update_data(client_name=name)
     await state.set_state(BookingSG.pick_date)
-    await message.answer("📅 Выберите дату:", reply_markup=_date_kb())
+    data = await state.get_data()
+    tz_name = data.get("tz_name", tenant.salon_timezone)
+    await message.answer("📅 Выберите дату:", reply_markup=_date_kb(tz_name))
 
 
 # ── Date selection ────────────────────────────────────────────────────────────
@@ -217,9 +232,11 @@ async def got_date_text(message: Message, state: FSMContext, tenant: TenantConfi
 # ── Time selection ────────────────────────────────────────────────────────────
 
 @router.callback_query(BookingSG.pick_time, F.data == "book:back:date")
-async def back_to_date(callback: CallbackQuery, state: FSMContext) -> None:
+async def back_to_date(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
     await state.set_state(BookingSG.pick_date)
-    await callback.message.edit_text("📅 Выберите дату:", reply_markup=_date_kb())
+    data = await state.get_data()
+    tz_name = data.get("tz_name", tenant.salon_timezone)
+    await callback.message.edit_text("📅 Выберите дату:", reply_markup=_date_kb(tz_name))
     await callback.answer()
 
 
@@ -258,8 +275,9 @@ async def confirm_booking(
     try:
         d = date.fromisoformat(data["chosen_date"])
         h, m = map(int, data["chosen_time"].split(":"))
-        # Store as UTC-aware so asyncpg accepts it for TIMESTAMPTZ
-        scheduled_at = datetime.combine(d, time(h, m)).replace(tzinfo=timezone.utc)
+        tz_name = data.get("tz_name", tenant.salon_timezone)
+        tz = _get_tz(tz_name)
+        scheduled_at = datetime.combine(d, time(h, m)).replace(tzinfo=tz)
         client_name = data["client_name"]
         service     = data["service"]
 
@@ -274,7 +292,7 @@ async def confirm_booking(
         await callback.answer("❌ Не удалось создать запись. Попробуйте снова.", show_alert=True)
         return
 
-    # Try automatic GCal sync if connected; fall back to manual "Add" link
+    # Try GCal sync; errors are logged but never break booking creation
     gcal_event_url = ""
     try:
         if await gcal.is_connected(tenant.tenant_id):
@@ -284,6 +302,7 @@ async def confirm_booking(
                 service=service,
                 scheduled_at=scheduled_at,
                 duration_minutes=tenant.salon_slot_minutes,
+                tz=tz_name,
             )
             if result:
                 event_id, gcal_event_url = result
@@ -338,7 +357,10 @@ async def cancel_booking(callback: CallbackQuery, state: FSMContext) -> None:
 async def show_bookings_list(
     target: Union[Message, CallbackQuery],
     user_id: int,
+    tenant: TenantConfig,
 ) -> None:
+    tz_name = await repo.get_tenant_timezone(tenant.tenant_id)
+    tz = _get_tz(tz_name)
     bookings = await repo.get_upcoming_bookings(user_id, limit=10)
     new_btn = InlineKeyboardButton(text="➕ Новая запись", callback_data="new:booking")
 
@@ -351,8 +373,7 @@ async def show_bookings_list(
     lines, rows = [], []
     for b in bookings:
         dt: datetime = b["scheduled_at"]
-        if dt.tzinfo:
-            dt = dt.astimezone()
+        dt = dt.astimezone(tz)
         d = dt.date()
         label = f"❌ {dt.strftime('%d.%m')} {dt.strftime('%H:%M')} — {b['client_name']}"
         rows.append([InlineKeyboardButton(text=label, callback_data=f"book:del:{b['id']}")])
@@ -378,9 +399,9 @@ async def _send(
 
 
 @router.callback_query(F.data == "book:list")
-async def back_to_list(callback: CallbackQuery) -> None:
+async def back_to_list(callback: CallbackQuery, tenant: TenantConfig) -> None:
     await callback.answer()
-    await show_bookings_list(callback, callback.from_user.id)
+    await show_bookings_list(callback, callback.from_user.id, tenant)
 
 
 @router.callback_query(F.data.startswith("book:del:"))
@@ -417,18 +438,17 @@ async def do_cancel_booking(callback: CallbackQuery, tenant: TenantConfig) -> No
     await repo.update_booking_status(booking_id, "cancelled")
     if booking["calendar_event_id"]:
         try:
-            from aria.services import gcal
             await gcal.delete_event(tenant.tenant_id, booking["calendar_event_id"])
         except Exception:
             log.exception("GCal event deletion failed for booking #%d", booking_id)
     await callback.answer("Запись отменена.", show_alert=True)
-    await show_bookings_list(callback, callback.from_user.id)
+    await show_bookings_list(callback, callback.from_user.id, tenant)
 
 
 # ── Delete all on date ────────────────────────────────────────────────────────
 
-def _del_date_kb() -> InlineKeyboardMarkup:
-    today = date.today()
+def _del_date_kb(tz_name: str = "Europe/Moscow") -> InlineKeyboardMarkup:
+    today = _today_in_tz(tz_name)
     rows = []
     for i in range(7):
         d = today + timedelta(days=i)
@@ -442,24 +462,26 @@ def _del_date_kb() -> InlineKeyboardMarkup:
 
 
 @router.callback_query(F.data == "book:del_date")
-async def pick_date_for_bulk_delete(callback: CallbackQuery) -> None:
+async def pick_date_for_bulk_delete(callback: CallbackQuery, tenant: TenantConfig) -> None:
     await callback.answer()
+    tz_name = await repo.get_tenant_timezone(tenant.tenant_id)
     await callback.message.edit_text(
         "🗑 <b>Удалить все записи на дату</b>\n\nВыберите дату:",
         parse_mode="HTML",
-        reply_markup=_del_date_kb(),
+        reply_markup=_del_date_kb(tz_name),
     )
 
 
 @router.callback_query(F.data.startswith("book:del_date:"))
-async def confirm_bulk_delete(callback: CallbackQuery) -> None:
+async def confirm_bulk_delete(callback: CallbackQuery, tenant: TenantConfig) -> None:
     await callback.answer()
     raw = callback.data[len("book:del_date:"):]
     try:
         d = date.fromisoformat(raw)
     except ValueError:
         return
-    bookings = await repo.get_bookings_on_date(callback.from_user.id, d)
+    tz_name = await repo.get_tenant_timezone(tenant.tenant_id)
+    bookings = await repo.get_bookings_on_date(callback.from_user.id, d, tz_name)
     if not bookings:
         await callback.message.edit_text(
             f"На <b>{_fmt_date(d)}</b> нет записей.",
@@ -489,8 +511,8 @@ async def do_bulk_delete(callback: CallbackQuery, tenant: TenantConfig) -> None:
         d = date.fromisoformat(raw)
     except ValueError:
         return
-    cancelled = await repo.cancel_bookings_on_date(callback.from_user.id, d)
-    from aria.services import gcal
+    tz_name = await repo.get_tenant_timezone(tenant.tenant_id)
+    cancelled = await repo.cancel_bookings_on_date(callback.from_user.id, d, tz_name)
     for b in cancelled:
         if b["calendar_event_id"]:
             try:
@@ -498,4 +520,4 @@ async def do_bulk_delete(callback: CallbackQuery, tenant: TenantConfig) -> None:
             except Exception:
                 log.exception("GCal bulk delete failed for booking #%d", b["id"])
     await callback.answer(f"Удалено {len(cancelled)} записей.", show_alert=True)
-    await show_bookings_list(callback, callback.from_user.id)
+    await show_bookings_list(callback, callback.from_user.id, tenant)

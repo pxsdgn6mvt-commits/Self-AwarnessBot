@@ -123,7 +123,7 @@ async def handle_tomorrow(message: Message, bot: Bot, tenant: TenantConfig) -> N
 @router.message(F.text.in_(_NEAREST_TRIGGER))
 async def handle_nearest(message: Message, bot: Bot, tenant: TenantConfig) -> None:
     from aria.handlers.booking import show_bookings_list
-    await show_bookings_list(message, message.from_user.id)
+    await show_bookings_list(message, message.from_user.id, tenant)
 
 
 @router.callback_query(F.data == "new:booking")
