@@ -72,9 +72,14 @@ class QuickEdit(StatesGroup):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _services_kb(tenant: TenantConfig) -> InlineKeyboardMarkup:
-    items = [s.strip() for s in tenant.services.split(",") if s.strip()]
-    rows = [[InlineKeyboardButton(text=s, callback_data=f"qb_svc:{s}")] for s in items]
+async def _services_kb(tenant: TenantConfig) -> InlineKeyboardMarkup:
+    catalogue = await repo.get_all_service_items(tenant.id)
+    if catalogue:
+        rows = [[InlineKeyboardButton(text=it["name"], callback_data=f"qb_svc:{it['name']}")] for it in catalogue]
+    else:
+        # fallback: old flat services field
+        names = [s.strip() for s in tenant.services.split(",") if s.strip()]
+        rows = [[InlineKeyboardButton(text=s, callback_data=f"qb_svc:{s}")] for s in names]
     rows.append([InlineKeyboardButton(text="❌ Отмена", callback_data="qb_cancel")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -441,7 +446,7 @@ async def cb_reschedule_save(message: Message, state: FSMContext, tenant: Tenant
 async def _start_booking(message_or_query, state: FSMContext, tenant: TenantConfig) -> None:
     await state.set_state(QuickBook.service)
     text = "➕ <b>Новая запись</b>\n\nВыбери услугу:"
-    kb   = _services_kb(tenant)
+    kb   = await _services_kb(tenant)
     if isinstance(message_or_query, Message):
         sent = await message_or_query.answer(text, reply_markup=kb)
     else:
