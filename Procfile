@@ -1,2 +1,3 @@
 web: gunicorn server:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
 worker: python -m aria.main
+vault: python bot.py
