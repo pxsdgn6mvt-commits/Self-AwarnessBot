@@ -17,7 +17,7 @@ from typing import Any, Optional
 
 import anthropic
 
-from aria.config import settings
+from aria.config import TenantConfig, settings
 import aria.db.repo as repo
 from aria.services.booking import get_adapter, parse_datetime
 
@@ -29,12 +29,12 @@ MAX_TOOL_ROUNDS = 5  # prevent infinite agentic loops
 
 # ── System prompt (cached) ────────────────────────────────────────────────────
 
-def _build_system_prompt() -> str:
+def _build_system_prompt(tenant: TenantConfig) -> str:
     booking_link_line = (
-        f"Booking link: {settings.BOOKING_LINK}" if settings.BOOKING_LINK else ""
+        f"Booking link: {tenant.booking_link}" if tenant.booking_link else ""
     )
     return f"""# IDENTITY
-You are Aria, the AI receptionist for {settings.SALON_NAME}. You are warm, \
+You are Aria, the AI receptionist for {tenant.salon_name}. You are warm, \
 precise, and quietly efficient — like a front desk manager at a luxury \
 spa who never loses her composure. You represent the brand in every message.
 
@@ -65,7 +65,7 @@ list and message you the moment a slot opens."
 # ESCALATION
 If a client has a complaint, a question you cannot answer, or seems upset — respond: \
 "I want to make sure this is handled perfectly for you. I'm flagging this for \
-{settings.OWNER_NAME} right now — you'll hear back within {settings.ESCALATION_HOURS} \
+{tenant.owner_name} right now — you'll hear back within {tenant.escalation_hours} \
 hours." Then call notify_owner immediately.
 
 # UPSELL WINDOW
@@ -74,10 +74,10 @@ pair [booked service] with [complementary service]. Want me to add 20 minutes fo
 Never push more than once.
 
 # CONTEXT
-Salon name: {settings.SALON_NAME}
-Owner/manager name: {settings.OWNER_NAME}
-Services offered: {settings.SALON_SERVICES}
-Working hours: {settings.SALON_HOURS}
+Salon name: {tenant.salon_name}
+Owner/manager name: {tenant.owner_name}
+Services offered: {tenant.salon_services}
+Working hours: {tenant.salon_hours}
 {booking_link_line}
 Today's date (UTC): {{TODAY}}
 
@@ -210,11 +210,11 @@ TOOLS: list[dict] = [
 class ToolContext:
     """Carries runtime state needed by tool handlers."""
 
-    def __init__(self, user_id: int, bot: Any, owner_id: int) -> None:
+    def __init__(self, user_id: int, bot: Any, tenant: TenantConfig) -> None:
         self.user_id = user_id
         self.bot = bot
-        self.owner_id = owner_id
-        # Filled in after create_booking so schedule_reminder knows the id
+        self.owner_id = tenant.owner_telegram_id
+        self.tenant = tenant
         self.last_booking_id: Optional[int] = None
 
 
@@ -318,25 +318,26 @@ async def _exec_tool(name: str, args: dict, ctx: ToolContext) -> str:
 
 # ── Main AI call ──────────────────────────────────────────────────────────────
 
-_client: Optional[anthropic.AsyncAnthropic] = None
 
-
-def _get_client() -> anthropic.AsyncAnthropic:
-    global _client
-    if _client is None:
-        _client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
-    return _client
-
-
-async def chat(user_id: int, user_text: str, bot: Any) -> tuple[str, bool]:
+async def chat(
+    user_id: int,
+    user_text: str,
+    bot: Any,
+    tenant: Optional[TenantConfig] = None,
+) -> tuple[str, bool]:
     """
     Main entry point: run the agentic loop and return
     (reply_text, booking_just_confirmed).
-    booking_just_confirmed is True when create_booking succeeded this turn.
     """
-    client = _get_client()
-    ctx = ToolContext(user_id=user_id, bot=bot, owner_id=settings.OWNER_TELEGRAM_ID)
-    had_booking_before = ctx.last_booking_id  # always None at start
+    if tenant is None:
+        # Backwards-compat: build a TenantConfig from legacy settings
+        from aria.config import load_tenants
+        tenants = load_tenants()
+        tenant = tenants[0] if tenants else TenantConfig(bot_token="", tenant_id=1)
+
+    client = anthropic.AsyncAnthropic(api_key=tenant.anthropic_api_key)
+    ctx = ToolContext(user_id=user_id, bot=bot, tenant=tenant)
+    had_booking_before = ctx.last_booking_id
 
     # Load history
     history = await repo.load_history(user_id)
@@ -346,14 +347,14 @@ async def chat(user_id: int, user_text: str, bot: Any) -> tuple[str, bool]:
     if len(history) > MAX_HISTORY:
         history = history[-MAX_HISTORY:]
 
-    system_prompt = _build_system_prompt().replace(
+    system_prompt = _build_system_prompt(tenant).replace(
         "{TODAY}", datetime.now(timezone.utc).strftime("%Y-%m-%d")
     )
 
     # Agentic loop
     for _ in range(MAX_TOOL_ROUNDS):
         response = await client.messages.create(
-            model=settings.CLAUDE_MODEL,
+            model=tenant.claude_model,
             max_tokens=1024,
             system=[
                 {

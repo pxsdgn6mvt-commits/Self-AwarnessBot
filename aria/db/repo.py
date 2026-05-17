@@ -67,9 +67,10 @@ async def init_db(dsn: str) -> None:
             except Exception:
                 pass  # Constraint already exists
         except Exception:
-            pass  # Column already existed
+            pass
+
         # Migration: add email columns to aria_tenant_settings if missing.
-        # Query information_schema first so we avoid IF NOT EXISTS surprises.
+        # Use information_schema so we add only truly absent columns.
         existing_cols = {
             r["column_name"]
             for r in await conn.fetch(
@@ -84,6 +85,11 @@ async def init_db(dsn: str) -> None:
             ("email_imap_port",       "INTEGER NOT NULL DEFAULT 993"),
             ("email_allowed_senders", "TEXT NOT NULL DEFAULT ''"),
             ("email_poll_seconds",    "INTEGER NOT NULL DEFAULT 60"),
+            ("email_since",           "TEXT"),
+            ("gcal_access_token",  "TEXT"),
+            ("gcal_refresh_token", "TEXT"),
+            ("gcal_token_expiry",  "TIMESTAMPTZ"),
+            ("gcal_calendar_id",   "TEXT NOT NULL DEFAULT 'primary'"),
         ]:
             if col not in existing_cols:
                 try:
@@ -174,6 +180,48 @@ async def get_upcoming_booking(user_id: int) -> Optional[asyncpg.Record]:
         )
 
 
+async def get_upcoming_bookings(user_id: int, limit: int = 10) -> list:
+    now = datetime.now(timezone.utc)
+    async with _p().acquire() as conn:  # type: ignore[union-attr]
+        return await conn.fetch(
+            """
+            SELECT * FROM aria_bookings
+            WHERE user_id=$1 AND status='confirmed' AND scheduled_at > $2
+            ORDER BY scheduled_at ASC
+            LIMIT $3
+            """,
+            user_id, now, limit,
+        )
+
+
+async def get_bookings_on_date(user_id: int, target_date: "date") -> list:
+    from datetime import date as _date
+    async with _p().acquire() as conn:  # type: ignore[union-attr]
+        return await conn.fetch(
+            """
+            SELECT * FROM aria_bookings
+            WHERE user_id=$1 AND status='confirmed'
+              AND scheduled_at::date = $2
+            ORDER BY scheduled_at ASC
+            """,
+            user_id, target_date,
+        )
+
+
+async def cancel_bookings_on_date(user_id: int, target_date: "date") -> list:
+    """Cancel all confirmed bookings on given date; return cancelled rows."""
+    rows = await get_bookings_on_date(user_id, target_date)
+    if not rows:
+        return []
+    ids = [r["id"] for r in rows]
+    async with _p().acquire() as conn:  # type: ignore[union-attr]
+        await conn.execute(
+            "UPDATE aria_bookings SET status='cancelled' WHERE id=ANY($1::int[])",
+            ids,
+        )
+    return list(rows)
+
+
 async def update_booking_time(booking_id: int, new_time: datetime) -> None:
     async with _p().acquire() as conn:  # type: ignore[union-attr]
         await conn.execute(
@@ -191,6 +239,14 @@ async def update_booking_status(booking_id: int, status: str) -> None:
         await conn.execute(
             "UPDATE aria_bookings SET status=$1 WHERE id=$2",
             status, booking_id,
+        )
+
+
+async def update_booking_gcal_event(booking_id: int, event_id: str) -> None:
+    async with _p().acquire() as conn:
+        await conn.execute(
+            "UPDATE aria_bookings SET calendar_event_id=$1 WHERE id=$2",
+            event_id, booking_id,
         )
 
 
@@ -349,8 +405,67 @@ async def get_email_settings(tenant_id: int) -> Optional[asyncpg.Record]:
         )
 
 
+async def get_gcal_tokens(tenant_id: int) -> Optional[asyncpg.Record]:
+    async with _p().acquire() as conn:
+        return await conn.fetchrow(
+            "SELECT gcal_access_token, gcal_refresh_token, gcal_token_expiry, gcal_calendar_id"
+            " FROM aria_tenant_settings WHERE tenant_id=$1",
+            tenant_id,
+        )
+
+
+async def save_gcal_tokens(
+    tenant_id: int,
+    access_token: str,
+    refresh_token: str,
+    token_expiry: datetime,
+    calendar_id: str = "primary",
+) -> None:
+    async with _p().acquire() as conn:
+        await conn.execute(
+            """
+            UPDATE aria_tenant_settings SET
+                gcal_access_token=$2, gcal_refresh_token=$3,
+                gcal_token_expiry=$4, gcal_calendar_id=$5
+            WHERE tenant_id=$1
+            """,
+            tenant_id, access_token, refresh_token, token_expiry, calendar_id,
+        )
+
+
+async def update_gcal_access_token(
+    tenant_id: int, access_token: str, expiry: datetime
+) -> None:
+    async with _p().acquire() as conn:
+        await conn.execute(
+            "UPDATE aria_tenant_settings SET gcal_access_token=$2, gcal_token_expiry=$3"
+            " WHERE tenant_id=$1",
+            tenant_id, access_token, expiry,
+        )
+
+
+async def save_gcal_calendar_id(tenant_id: int, calendar_id: str) -> None:
+    async with _p().acquire() as conn:
+        await conn.execute(
+            "UPDATE aria_tenant_settings SET gcal_calendar_id=$2 WHERE tenant_id=$1",
+            tenant_id, calendar_id,
+        )
+
+
+async def clear_gcal_tokens(tenant_id: int) -> None:
+    async with _p().acquire() as conn:
+        await conn.execute(
+            """
+            UPDATE aria_tenant_settings SET
+                gcal_access_token=NULL, gcal_refresh_token=NULL,
+                gcal_token_expiry=NULL, gcal_calendar_id='primary'
+            WHERE tenant_id=$1
+            """,
+            tenant_id,
+        )
+
+
 async def _ensure_email_cols(conn: asyncpg.Connection) -> None:
-    """Add missing email columns to aria_tenant_settings (idempotent)."""
     existing = {
         r["column_name"]
         for r in await conn.fetch(
@@ -365,10 +480,21 @@ async def _ensure_email_cols(conn: asyncpg.Connection) -> None:
         ("email_imap_port",       "INTEGER NOT NULL DEFAULT 993"),
         ("email_allowed_senders", "TEXT NOT NULL DEFAULT ''"),
         ("email_poll_seconds",    "INTEGER NOT NULL DEFAULT 60"),
+        ("email_since",           "TEXT"),
     ]:
         if col not in existing:
             await conn.execute(f"ALTER TABLE aria_tenant_settings ADD COLUMN {col} {defn}")
             log.info("save_email_settings: added missing column %s", col)
+
+
+_UPDATE_EMAIL_SQL = """
+    UPDATE aria_tenant_settings SET
+        email_address=$2, email_password=$3,
+        email_imap_server=$4, email_imap_port=$5,
+        email_allowed_senders=$6, email_poll_seconds=$7,
+        email_since=$8
+    WHERE tenant_id=$1
+"""
 
 
 async def save_email_settings(
@@ -381,35 +507,23 @@ async def save_email_settings(
     email_allowed_senders: str = "",
     email_poll_seconds: int = 60,
 ) -> None:
+    from datetime import date as _date
+    dt = _date.today()
+    months = ("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec")
+    email_since = f"{dt.day}-{months[dt.month - 1]}-{dt.year}"
+    args = (
+        tenant_id, email_address, email_password,
+        email_imap_server, email_imap_port,
+        email_allowed_senders, email_poll_seconds,
+        email_since,
+    )
     async with _p().acquire() as conn:
         try:
-            await conn.execute(
-                """
-                UPDATE aria_tenant_settings SET
-                    email_address=$2, email_password=$3,
-                    email_imap_server=$4, email_imap_port=$5,
-                    email_allowed_senders=$6, email_poll_seconds=$7
-                WHERE tenant_id=$1
-                """,
-                tenant_id, email_address, email_password,
-                email_imap_server, email_imap_port,
-                email_allowed_senders, email_poll_seconds,
-            )
+            await conn.execute(_UPDATE_EMAIL_SQL, *args)
         except asyncpg.exceptions.UndefinedColumnError:
-            log.warning("save_email_settings: columns missing, running inline migration")
+            log.warning("save_email_settings: email columns missing, migrating now")
             await _ensure_email_cols(conn)
-            await conn.execute(
-                """
-                UPDATE aria_tenant_settings SET
-                    email_address=$2, email_password=$3,
-                    email_imap_server=$4, email_imap_port=$5,
-                    email_allowed_senders=$6, email_poll_seconds=$7
-                WHERE tenant_id=$1
-                """,
-                tenant_id, email_address, email_password,
-                email_imap_server, email_imap_port,
-                email_allowed_senders, email_poll_seconds,
-            )
+            await conn.execute(_UPDATE_EMAIL_SQL, *args)
 
 
 async def clear_email_settings(tenant_id: int) -> None:

@@ -54,11 +54,31 @@ CREATE TABLE IF NOT EXISTS aria_conversations (
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Per-tenant runtime settings (owner set on first /start; email set via /admin)
+CREATE TABLE IF NOT EXISTS aria_tenant_settings (
+    tenant_id           INTEGER PRIMARY KEY,
+    owner_telegram_id   BIGINT  NOT NULL,
+    email_address       TEXT,
+    email_password      TEXT,
+    email_imap_server   TEXT    NOT NULL DEFAULT 'imap.gmail.com',
+    email_imap_port     INTEGER NOT NULL DEFAULT 993,
+    email_allowed_senders TEXT  NOT NULL DEFAULT '',
+    email_poll_seconds  INTEGER NOT NULL DEFAULT 60,
+    email_since         TEXT,
+    gcal_access_token  TEXT,
+    gcal_refresh_token TEXT,
+    gcal_token_expiry  TIMESTAMPTZ,
+    gcal_calendar_id   TEXT NOT NULL DEFAULT 'primary',
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Service catalogue managed by the salon owner via /admin
 CREATE TABLE IF NOT EXISTS aria_service_categories (
-    id       SERIAL PRIMARY KEY,
-    name     TEXT    NOT NULL UNIQUE,
-    position INTEGER NOT NULL DEFAULT 0
+    id        SERIAL PRIMARY KEY,
+    tenant_id INTEGER NOT NULL DEFAULT 1,
+    name      TEXT    NOT NULL,
+    position  INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (tenant_id, name)
 );
 
 CREATE TABLE IF NOT EXISTS aria_service_items (
@@ -68,4 +88,27 @@ CREATE TABLE IF NOT EXISTS aria_service_items (
     position    INTEGER NOT NULL DEFAULT 0,
     UNIQUE (category_id, name)
 );
+
+-- Migrations: ensure PRIMARY KEY exists on tables that may have been created
+-- without it by older schema versions.
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'aria_clients'::regclass AND contype = 'p'
+    ) THEN
+        DELETE FROM aria_clients a USING aria_clients b
+            WHERE a.ctid < b.ctid AND a.user_id = b.user_id;
+        ALTER TABLE aria_clients ADD PRIMARY KEY (user_id);
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conrelid = 'aria_conversations'::regclass AND contype = 'p'
+    ) THEN
+        DELETE FROM aria_conversations a USING aria_conversations b
+            WHERE a.ctid < b.ctid AND a.user_id = b.user_id;
+        ALTER TABLE aria_conversations ADD PRIMARY KEY (user_id);
+    END IF;
+END $$;
 """

@@ -321,7 +321,12 @@ async def email_got_address(message: Message, state: FSMContext) -> None:
 
 @router.message(EmailSG.password)
 async def email_got_password(message: Message, state: FSMContext) -> None:
-    await state.update_data(email_password=message.text.strip())
+    password = message.text.strip() if message.text else ""
+    try:
+        await message.delete()
+    except Exception:
+        pass
+    await state.update_data(email_password=password)
     await state.set_state(EmailSG.senders)
     await message.answer(
         "📧 <b>Шаг 3 из 3 — Разрешённые отправители</b>\n\n"
@@ -335,34 +340,20 @@ async def email_got_password(message: Message, state: FSMContext) -> None:
 @router.message(EmailSG.senders)
 async def email_got_senders(message: Message, state: FSMContext) -> None:
     raw = message.text.strip()
-    # If user pressed a menu button instead of entering senders — cancel setup
-    if raw in ("📱 Меню", "📅 Сегодня", "📅 Завтра", "➕ Новая запись", "📋 Ближайшие", "📧 Почта"):
-        await state.clear()
-        await message.answer("Настройка email отменена.", parse_mode="HTML")
-        return
-
     senders = "" if raw.lower() in ("все", "all", "*") else raw
     data = await state.get_data()
-
-    await state.clear()  # clear state before DB call so bot never stays stuck
-
-    try:
-        await repo.save_email_settings(
-            data["tenant_id"],
-            email_address=data["email_address"],
-            email_password=data["email_password"],
-            email_allowed_senders=senders,
-        )
-        senders_display = senders or "все"
-        await message.answer(
-            f"✅ Email мониторинг настроен!\n\n"
-            f"Адрес: <code>{data['email_address']}</code>\n"
-            f"Отправители: {senders_display}\n\n"
-            f"Бот начнёт проверять почту в течение минуты.",
-            parse_mode="HTML",
-        )
-    except Exception as exc:
-        log.exception("Failed to save email settings for tenant %s", data.get("tenant_id"))
-        await message.answer(
-            "⚠️ Не удалось сохранить настройки. Попробуйте ещё раз через /admin → Email мониторинг."
-        )
+    await repo.save_email_settings(
+        data["tenant_id"],
+        email_address=data["email_address"],
+        email_password=data["email_password"],
+        email_allowed_senders=senders,
+    )
+    await state.clear()
+    senders_display = senders or "все"
+    await message.answer(
+        f"✅ Email мониторинг настроен!\n\n"
+        f"Адрес: <code>{data['email_address']}</code>\n"
+        f"Отправители: {senders_display}\n\n"
+        f"Бот начнёт проверять почту в течение минуты.",
+        parse_mode="HTML",
+    )
