@@ -101,22 +101,20 @@ async def _check_rate_limit(update: Update, lang: str) -> bool:
 
 def _main_keyboard(lang: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
+        [InlineKeyboardButton(t(lang, "btn_add"), callback_data="menu_add")],
         [
-            InlineKeyboardButton(t(lang, "btn_add"),       callback_data="menu_add"),
             InlineKeyboardButton(t(lang, "btn_list"),      callback_data="menu_list"),
-        ],
-        [
             InlineKeyboardButton(t(lang, "btn_search"),    callback_data="menu_search"),
-            InlineKeyboardButton(t(lang, "btn_favorites"), callback_data="menu_fav"),
         ],
         [
-            InlineKeyboardButton(t(lang, "btn_generate"),  callback_data="menu_gen"),
+            InlineKeyboardButton(t(lang, "btn_favorites"), callback_data="menu_fav"),
             InlineKeyboardButton(t(lang, "btn_backup"),    callback_data="menu_backup"),
         ],
         [
+            InlineKeyboardButton(t(lang, "btn_generate"),  callback_data="menu_gen"),
             InlineKeyboardButton(t(lang, "btn_subscribe"), callback_data="menu_subscribe"),
-            InlineKeyboardButton(t(lang, "btn_settings"),  callback_data="menu_settings"),
         ],
+        [InlineKeyboardButton(t(lang, "btn_settings"), callback_data="menu_settings")],
     ])
 
 
@@ -124,7 +122,20 @@ async def _send_main_menu(update: Update, user: dict):
     lang = user["lang"]
     count = await db.count_entries(user["user_id"])
     plan_label = _plan_label(user, lang)
-    text = t(lang, "menu", plan=plan_label, count=count)
+
+    tg_user = update.effective_user
+    name = (tg_user.first_name if tg_user and tg_user.first_name
+            else (tg_user.username if tg_user else "—"))
+
+    locked = utils.is_locked(user["user_id"])
+    if lang == "ru":
+        lock_icon, lock_status = ("🔒", "Заблокировано") if locked else ("🔓", "Открыто")
+    else:
+        lock_icon, lock_status = ("🔒", "Locked") if locked else ("🔓", "Unlocked")
+
+    text = t(lang, "menu",
+             plan=plan_label, count=count,
+             name=name, lock_icon=lock_icon, lock_status=lock_status)
     kb = _main_keyboard(lang)
     if update.callback_query:
         await update.callback_query.edit_message_text(text, reply_markup=kb, parse_mode="Markdown")

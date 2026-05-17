@@ -16,12 +16,17 @@ EN = {
     "unlocked":         "🔓 Vault unlocked.",
 
     # Main menu
-    "menu":             "🔐 *Vault Bot* — main menu\n\nPlan: {plan} | Entries: {count}",
-    "btn_add":          "➕ Add",
+    "menu": (
+        "🔐 *Vault Bot*\n"
+        "━━━━━━━━━━━━━━━━━\n"
+        "👤 {name}  •  {plan}\n"
+        "📦 Entries: {count}  •  {lock_icon} {lock_status}"
+    ),
+    "btn_add":          "➕  Add new entry",
     "btn_list":         "📋 List",
     "btn_search":       "🔍 Search",
     "btn_favorites":    "⭐ Favorites",
-    "btn_generate":     "⚙️ Generator",
+    "btn_generate":     "⚡ Generator",
     "btn_backup":       "💾 Backup",
     "btn_subscribe":    "💎 Subscribe",
     "btn_settings":     "⚙️ Settings",

@@ -16,12 +16,17 @@ RU = {
     "unlocked":         "🔓 Хранилище разблокировано.",
 
     # Главное меню
-    "menu":             "🔐 *Vault Bot* — главное меню\n\nПлан: {plan} | Записей: {count}",
-    "btn_add":          "➕ Добавить",
+    "menu": (
+        "🔐 *Vault Bot*\n"
+        "━━━━━━━━━━━━━━━━━\n"
+        "👤 {name}  •  {plan}\n"
+        "📦 Записей: {count}  •  {lock_icon} {lock_status}"
+    ),
+    "btn_add":          "➕  Добавить запись",
     "btn_list":         "📋 Список",
     "btn_search":       "🔍 Поиск",
     "btn_favorites":    "⭐ Избранное",
-    "btn_generate":     "⚙️ Генератор",
+    "btn_generate":     "⚡ Генератор",
     "btn_backup":       "💾 Бэкап",
     "btn_subscribe":    "💎 Подписка",
     "btn_settings":     "⚙️ Настройки",
