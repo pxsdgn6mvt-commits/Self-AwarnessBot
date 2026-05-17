@@ -8,7 +8,9 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
 from aiogram import F, Router
+from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
@@ -26,6 +28,11 @@ from aria.tenant import TenantConfig
 
 log = logging.getLogger(__name__)
 router = Router()
+
+
+class IncomeSettings(StatesGroup):
+    master_percent = State()
+    tax_percent    = State()
 
 
 # ── Admin reply keyboard (shown in @AriaReseptionist_Bot) ─────────────────────
@@ -64,10 +71,21 @@ def _owner_settings_kb() -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="📊 Статус",           callback_data="cfg:status"),
         ],
         [InlineKeyboardButton(text="📋 Услуги и категории",  callback_data="adm:services")],
-        [InlineKeyboardButton(text="👤 Клиенты",            callback_data="cfg:clients")],
+        [InlineKeyboardButton(text="💼 Доходы мастера",      callback_data="cfg:income")],
+        [InlineKeyboardButton(text="👤 Клиенты",             callback_data="cfg:clients")],
         [InlineKeyboardButton(text="🗑 Сбросить историю",    callback_data="cfg:reset_chat")],
         [InlineKeyboardButton(text="❓ Помощь",              callback_data="cfg:help")],
         [InlineKeyboardButton(text="✖️ Закрыть",             callback_data="menu:close")],
+    ])
+
+
+def _income_kb(master_pct: float | None, tax_pct: float | None) -> InlineKeyboardMarkup:
+    m_label = f"👤 Доля мастера: {int(master_pct)}%" if master_pct is not None else "👤 Доля мастера: не задана"
+    t_label = f"🧾 Налог: {int(tax_pct)}%"            if tax_pct is not None    else "🧾 Налог: не задан"
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=m_label, callback_data="cfg:inc_master")],
+        [InlineKeyboardButton(text=t_label, callback_data="cfg:inc_tax")],
+        [InlineKeyboardButton(text="◀️ Назад", callback_data="menu:settings")],
     ])
 
 
@@ -546,3 +564,108 @@ async def cb_adm_revoke_help(callback: CallbackQuery) -> None:
         "<code>/revoke_vip &lt;tenant_id&gt; &lt;user_id&gt;</code>"
     )
     await callback.answer()
+
+
+# ── Income settings (master % + tax %) ───────────────────────────────────────
+
+@router.callback_query(F.data == "cfg:income", SetupDone())
+async def cb_cfg_income(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    if not tenant.is_owner(callback.from_user.id):
+        await callback.answer("Нет доступа.", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "💼 <b>Доходы мастера</b>\n\n"
+        "Укажи долю мастера и ставку налога — дашборд покажет чистый заработок.\n\n"
+        "Нажми кнопку чтобы изменить значение:",
+        reply_markup=_income_kb(tenant.master_percent, tenant.tax_percent),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "cfg:inc_master", SetupDone())
+async def cb_cfg_inc_master(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
+    if not tenant.is_owner(callback.from_user.id):
+        await callback.answer("Нет доступа.", show_alert=True)
+        return
+    cur = f"{int(tenant.master_percent)}%" if tenant.master_percent is not None else "не задана"
+    await state.set_state(IncomeSettings.master_percent)
+    await state.update_data(tenant_id=tenant.id, bot_token=tenant.bot_token)
+    await callback.message.answer(
+        f"👤 <b>Доля мастера</b>\n\nТекущая: <b>{cur}</b>\n\n"
+        "Введи процент (например <code>70</code>) или /skip чтобы убрать.",
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@router.message(IncomeSettings.master_percent, Command("skip"))
+async def skip_master_percent(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    await repo.update_tenant(data["tenant_id"], master_percent=None)
+    from aria.middleware import TenantMiddleware
+    TenantMiddleware.invalidate(data["bot_token"])
+    await state.clear()
+    await message.answer("✅ Доля мастера удалена.")
+
+
+@router.message(IncomeSettings.master_percent, F.text.func(lambda x: not x.startswith("/")))
+async def save_master_percent(message: Message, state: FSMContext) -> None:
+    text = message.text.strip().replace("%", "").replace(",", ".")
+    try:
+        pct = float(text)
+        if not 0 < pct <= 100:
+            raise ValueError
+    except ValueError:
+        await message.answer("Введи число от 1 до 100, например <code>70</code>, или /skip:", parse_mode="HTML")
+        return
+    data = await state.get_data()
+    await repo.update_tenant(data["tenant_id"], master_percent=pct)
+    from aria.middleware import TenantMiddleware
+    TenantMiddleware.invalidate(data["bot_token"])
+    await state.clear()
+    await message.answer(f"✅ Доля мастера: <b>{int(pct)}%</b>", parse_mode="HTML")
+
+
+@router.callback_query(F.data == "cfg:inc_tax", SetupDone())
+async def cb_cfg_inc_tax(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
+    if not tenant.is_owner(callback.from_user.id):
+        await callback.answer("Нет доступа.", show_alert=True)
+        return
+    cur = f"{int(tenant.tax_percent)}%" if tenant.tax_percent is not None else "не задан"
+    await state.set_state(IncomeSettings.tax_percent)
+    await state.update_data(tenant_id=tenant.id, bot_token=tenant.bot_token)
+    await callback.message.answer(
+        f"🧾 <b>Налог</b>\n\nТекущий: <b>{cur}</b>\n\n"
+        "Введи ставку в % (например <code>6</code> для самозанятого, <code>13</code> для НДФЛ)\n"
+        "Или /skip чтобы убрать.",
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@router.message(IncomeSettings.tax_percent, Command("skip"))
+async def skip_tax_percent(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    await repo.update_tenant(data["tenant_id"], tax_percent=None)
+    from aria.middleware import TenantMiddleware
+    TenantMiddleware.invalidate(data["bot_token"])
+    await state.clear()
+    await message.answer("✅ Налог удалён.")
+
+
+@router.message(IncomeSettings.tax_percent, F.text.func(lambda x: not x.startswith("/")))
+async def save_tax_percent(message: Message, state: FSMContext) -> None:
+    text = message.text.strip().replace("%", "").replace(",", ".")
+    try:
+        pct = float(text)
+        if not 0 <= pct < 100:
+            raise ValueError
+    except ValueError:
+        await message.answer("Введи число от 0 до 99, например <code>6</code>, или /skip:", parse_mode="HTML")
+        return
+    data = await state.get_data()
+    await repo.update_tenant(data["tenant_id"], tax_percent=pct)
+    from aria.middleware import TenantMiddleware
+    TenantMiddleware.invalidate(data["bot_token"])
+    await state.clear()
+    await message.answer(f"✅ Налог: <b>{int(pct)}%</b>", parse_mode="HTML")

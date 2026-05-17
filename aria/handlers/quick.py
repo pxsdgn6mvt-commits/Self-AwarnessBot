@@ -362,7 +362,14 @@ async def quick_dashboard(message: Message, tenant: TenantConfig) -> None:
 
     if stats["expected"] > 0:
         lines.append(f"💰 Ожидаемый доход: <b>{int(stats['expected'])}€</b>")
-        lines.append(f"✅ Уже оплачено: <b>{int(stats['received'])}€</b>")
+        received = float(stats["received"])
+        lines.append(f"✅ Уже оплачено: <b>{int(received)}€</b>")
+        if tenant.master_percent is not None and received > 0:
+            master_cut = received * tenant.master_percent / 100
+            lines.append(f"   👤 Доля ({int(tenant.master_percent)}%): <b>{master_cut:.2f}€</b>")
+            if tenant.tax_percent is not None:
+                after_tax = master_cut * (1 - tenant.tax_percent / 100)
+                lines.append(f"   🧾 После налога ({int(tenant.tax_percent)}%): <b>{after_tax:.2f}€</b>")
 
     if free_slots:
         slots_str = "  ".join(free_slots[:6])
