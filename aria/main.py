@@ -9,11 +9,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import signal
 import sys
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramConflictError
 from aiogram.types import ErrorEvent
 
 from aria import runtime
@@ -112,6 +114,12 @@ async def _poll_bot(bot: Bot, dp: Dispatcher, tenant_id: int) -> None:
                     offset = update.update_id + 1
             except asyncio.CancelledError:
                 raise
+            except TelegramConflictError:
+                log.warning(
+                    "Conflict on tenant #%d — another instance still running, waiting 30s",
+                    tenant_id,
+                )
+                await asyncio.sleep(30)
             except Exception:
                 log.exception("get_updates error tenant #%d, retry in 5s", tenant_id)
                 await asyncio.sleep(5)
@@ -223,7 +231,30 @@ async def main() -> None:
         _tasks[tid] = asyncio.create_task(_poll_bot(bot, dp, tid))
 
     log.info("Aria polling mode — %d bot(s)", len(_bots))
-    await _watch_tenants(dp)
+
+    loop = asyncio.get_running_loop()
+    stop_event = asyncio.Event()
+
+    def _on_stop() -> None:
+        log.info("Shutdown signal received — stopping all polling tasks")
+        stop_event.set()
+
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            loop.add_signal_handler(sig, _on_stop)
+        except NotImplementedError:
+            pass
+
+    watch_task = asyncio.create_task(_watch_tenants(dp))
+    await stop_event.wait()
+
+    log.info("Cancelling %d polling tasks...", len(_tasks))
+    watch_task.cancel()
+    for task in _tasks.values():
+        task.cancel()
+    await asyncio.gather(*_tasks.values(), watch_task, return_exceptions=True)
+    await close_pool()
+    log.info("Aria shutdown complete")
 
 
 if __name__ == "__main__":
