@@ -441,3 +441,11 @@ async def is_user_blocked(telegram_id: int) -> bool:
             telegram_id,
         )
         return bool(row and row["is_blocked"])
+
+
+async def delete_managed_user(custom_id: int):
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "DELETE FROM managed_users WHERE id=$1", custom_id
+        )

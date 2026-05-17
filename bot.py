@@ -41,7 +41,8 @@ logger = logging.getLogger(__name__)
     ST_ADD_CAT, ST_ADD_NAME, ST_ADD_CONTENT, ST_ADD_TAGS,
     ST_SEARCH, ST_PIN_NEW, ST_PIN_CONFIRM,
     ST_RESTORE,
-) = range(13)
+    ST_ADMIN_ADD_ID, ST_ADMIN_ADD_NAME, ST_ADMIN_RENAME, ST_ADMIN_NOTES,
+) = range(17)
 
 
 # ─── Вспомогательные функции ─────────────────────────────────────────────────
@@ -885,41 +886,63 @@ async def _blocked_middleware(update: Update, context: ContextTypes.DEFAULT_TYPE
                     "⛔ Ваш доступ к боту заблокирован. Обратитесь к администратору."
                 )
             elif update.callback_query:
-                await update.callback_query.answer(
-                    "⛔ Доступ заблокирован.", show_alert=True
-                )
+                await update.callback_query.answer("⛔ Доступ заблокирован.", show_alert=True)
             raise ApplicationHandlerStop()
 
 
-# ─── /admin ───────────────────────────────────────────────────────────────────
+# ─── Admin: вспомогательные функции ──────────────────────────────────────────
 
-def _build_users_text_and_kb(managed: list) -> tuple[str, InlineKeyboardMarkup]:
+def _build_users_kb(managed: list) -> tuple[str, InlineKeyboardMarkup]:
     if not managed:
-        text = "👥 Управляемые пользователи\n\nСписок пуст. Добавьте пользователя:\n`/adduser <telegram_id> <имя>`"
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="admin_back")]])
+        text = "👥 *Управление пользователями*\n\nСписок пуст. Нажмите «➕ Добавить»."
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("➕ Добавить пользователя", callback_data="admin_add")],
+            [InlineKeyboardButton("🔙 Назад", callback_data="admin_back")],
+        ])
         return text, kb
 
-    lines = [f"👥 Управляемые пользователи — {len(managed)}\n"]
-    for m in managed:
-        status = "⛔" if m["is_blocked"] else "✅"
-        notes_hint = f" 📝" if m["notes"] else ""
-        lines.append(f"#{m['id']}  {m['custom_name']}{notes_hint}  |  `{m['telegram_id']}`  {status}")
-
-    lines.append("\n`/adduser <telegram_id> <имя>` — добавить")
-    lines.append("`/rename <номер> <имя>` — переименовать")
-    lines.append("`/notes <номер> <текст>` — заметка (платежи)")
-
+    lines = [f"👥 *Управление пользователями* — {len(managed)}\n"]
     buttons = []
     for m in managed:
-        if m["is_blocked"]:
-            label = f"✅ Разблок. #{m['id']} {m['custom_name']}"
-        else:
-            label = f"⛔ Блок. #{m['id']} {m['custom_name']}"
-        buttons.append([InlineKeyboardButton(label, callback_data=f"admin_toggle_{m['id']}")])
+        icon = "⛔" if m["is_blocked"] else "✅"
+        notes_mark = " 📝" if m["notes"] else ""
+        lines.append(f"{icon} #{m['id']} {m['custom_name']}{notes_mark}")
+        buttons.append([InlineKeyboardButton(
+            f"{icon} #{m['id']}  {m['custom_name']}{notes_mark}",
+            callback_data=f"admin_view_{m['id']}",
+        )])
+    buttons.append([InlineKeyboardButton("➕ Добавить пользователя", callback_data="admin_add")])
     buttons.append([InlineKeyboardButton("🔙 Назад", callback_data="admin_back")])
-
     return "\n".join(lines), InlineKeyboardMarkup(buttons)
 
+
+def _build_user_detail(mu) -> tuple[str, InlineKeyboardMarkup]:
+    status = "⛔ Заблокирован" if mu["is_blocked"] else "✅ Активен"
+    toggle_label = "✅ Разблокировать" if mu["is_blocked"] else "⛔ Заблокировать"
+    notes = mu["notes"] or "—"
+    text = (
+        f"👤 *Пользователь \\#{mu['id']}*\n\n"
+        f"Имя: {mu['custom_name']}\n"
+        f"Telegram ID: `{mu['telegram_id']}`\n"
+        f"Статус: {status}\n"
+        f"📝 Заметка: {notes}"
+    )
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton(toggle_label, callback_data=f"admin_toggle_{mu['id']}")],
+        [
+            InlineKeyboardButton("✏️ Переименовать", callback_data=f"admin_rename_{mu['id']}"),
+            InlineKeyboardButton("📝 Заметка",        callback_data=f"admin_setnotes_{mu['id']}"),
+        ],
+        [InlineKeyboardButton("🗑️ Удалить из списка", callback_data=f"admin_del_{mu['id']}")],
+        [InlineKeyboardButton("🔙 К списку",          callback_data="admin_tolist")],
+    ])
+    return text, kb
+
+
+_CANCEL_KB = InlineKeyboardMarkup([[InlineKeyboardButton("❌ Отмена", callback_data="admin_conv_cancel")]])
+
+
+# ─── /admin ───────────────────────────────────────────────────────────────────
 
 async def cmd_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != OWNER_ID:
@@ -940,23 +963,53 @@ async def cb_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != OWNER_ID:
         return
 
-    if query.data == "admin_users":
+    data = query.data
+
+    if data in ("admin_users", "admin_tolist"):
         managed = await db.get_all_managed_users()
-        text, kb = _build_users_text_and_kb(managed)
+        text, kb = _build_users_kb(managed)
         await query.edit_message_text(text, reply_markup=kb, parse_mode="Markdown")
 
-    elif query.data.startswith("admin_toggle_"):
-        custom_id = int(query.data[13:])
-        new_state = await db.toggle_managed_user_blocked(custom_id)
-        managed = await db.get_all_managed_users()
-        text, kb = _build_users_text_and_kb(managed)
-        action = "заблокирован ⛔" if new_state else "разблокирован ✅"
+    elif data.startswith("admin_view_"):
+        custom_id = int(data[11:])
+        mu = await db.get_managed_user_by_id(custom_id)
+        if not mu:
+            await query.edit_message_text("❌ Пользователь не найден.")
+            return
+        text, kb = _build_user_detail(mu)
+        await query.edit_message_text(text, reply_markup=kb, parse_mode="Markdown")
+
+    elif data.startswith("admin_toggle_"):
+        custom_id = int(data[13:])
+        await db.toggle_managed_user_blocked(custom_id)
+        mu = await db.get_managed_user_by_id(custom_id)
+        text, kb = _build_user_detail(mu)
+        await query.edit_message_text(text, reply_markup=kb, parse_mode="Markdown")
+
+    elif data.startswith("admin_del_") and not data.startswith("admin_delconfirm_"):
+        custom_id = int(data[10:])
+        mu = await db.get_managed_user_by_id(custom_id)
+        kb = InlineKeyboardMarkup([[
+            InlineKeyboardButton("✅ Да, удалить",  callback_data=f"admin_delconfirm_{custom_id}"),
+            InlineKeyboardButton("❌ Нет",          callback_data=f"admin_view_{custom_id}"),
+        ]])
         await query.edit_message_text(
-            f"Пользователь #{custom_id} {action}\n\n" + text,
-            reply_markup=kb, parse_mode="Markdown",
+            f"🗑️ Удалить *\\#{custom_id} {mu['custom_name']}* из списка?\n"
+            "Это не разблокирует пользователя — удаляет только запись.",
+            reply_markup=kb, parse_mode="MarkdownV2",
         )
 
-    elif query.data == "admin_back":
+    elif data.startswith("admin_delconfirm_"):
+        custom_id = int(data[17:])
+        await db.delete_managed_user(custom_id)
+        managed = await db.get_all_managed_users()
+        text, kb = _build_users_kb(managed)
+        await query.edit_message_text(
+            f"🗑️ Пользователь \\#{custom_id} удалён\\.\n\n" + text,
+            reply_markup=kb, parse_mode="MarkdownV2",
+        )
+
+    elif data == "admin_back":
         stats = await db.get_stats()
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton("👥 Управление пользователями", callback_data="admin_users")],
@@ -966,158 +1019,151 @@ async def cb_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
-# ─── /users — список управляемых пользователей ───────────────────────────────
+# ─── Admin conversation: добавить / переименовать / заметка ──────────────────
 
-async def cmd_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cb_admin_start_add(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
     if update.effective_user.id != OWNER_ID:
-        await update.message.reply_text(t("en", "not_admin"))
-        return
-    managed = await db.get_all_managed_users()
-    text, kb = _build_users_text_and_kb(managed)
-    await update.message.reply_text(text, reply_markup=kb, parse_mode="Markdown")
+        return ConversationHandler.END
+    await query.edit_message_text(
+        "➕ *Новый пользователь*\n\nВведите Telegram ID\n_(числовой, например: `123456789`)_",
+        reply_markup=_CANCEL_KB,
+        parse_mode="Markdown",
+    )
+    return ST_ADMIN_ADD_ID
 
 
-# ─── /adduser <telegram_id> <имя> ────────────────────────────────────────────
-
-async def cmd_adduser(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def rcv_admin_add_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != OWNER_ID:
-        await update.message.reply_text(t("en", "not_admin"))
-        return
-    args = context.args or []
-    if len(args) < 2:
-        await update.message.reply_text(
-            "Использование: `/adduser <telegram_id> <имя>`\n"
-            "Пример: `/adduser 123456789 Иван Петров`",
-            parse_mode="Markdown",
-        )
-        return
+        return ConversationHandler.END
+    raw = update.message.text.strip()
     try:
-        telegram_id = int(args[0])
+        telegram_id = int(raw)
     except ValueError:
-        await update.message.reply_text("❌ telegram\\_id должен быть числом.", parse_mode="Markdown")
-        return
-    custom_name = " ".join(args[1:])
+        await update.message.reply_text(
+            "❌ Должно быть число. Введите Telegram ID ещё раз:",
+            reply_markup=_CANCEL_KB,
+        )
+        return ST_ADMIN_ADD_ID
+    context.user_data["admin_add_tg_id"] = telegram_id
+    await update.message.reply_text(
+        f"ID: `{telegram_id}`\n\nВведите имя или метку для этого пользователя:",
+        reply_markup=_CANCEL_KB,
+        parse_mode="Markdown",
+    )
+    return ST_ADMIN_ADD_NAME
+
+
+async def rcv_admin_add_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != OWNER_ID:
+        return ConversationHandler.END
+    telegram_id = context.user_data.pop("admin_add_tg_id", None)
+    custom_name = update.message.text.strip()
     custom_id = await db.add_managed_user(telegram_id, custom_name)
+    managed = await db.get_all_managed_users()
+    text, kb = _build_users_kb(managed)
     await update.message.reply_text(
-        f"✅ Пользователь добавлен:\n"
-        f"#{custom_id} | {custom_name} | `{telegram_id}`",
-        parse_mode="Markdown",
+        f"✅ *Добавлен \\#{custom_id} {custom_name}*\n\n" + text,
+        reply_markup=kb, parse_mode="MarkdownV2",
     )
+    return ConversationHandler.END
 
 
-# ─── /block <номер> / /unblock <номер> ───────────────────────────────────────
-
-async def cmd_block(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cb_admin_start_rename(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
     if update.effective_user.id != OWNER_ID:
-        await update.message.reply_text(t("en", "not_admin"))
-        return
-    args = context.args or []
-    if not args:
-        await update.message.reply_text("Использование: `/block <номер>`", parse_mode="Markdown")
-        return
-    try:
-        custom_id = int(args[0])
-    except ValueError:
-        await update.message.reply_text("❌ Укажите числовой номер пользователя.")
-        return
+        return ConversationHandler.END
+    custom_id = int(query.data.split("_")[-1])
     mu = await db.get_managed_user_by_id(custom_id)
-    if not mu:
-        await update.message.reply_text(f"❌ Пользователь #{custom_id} не найден в списке.")
-        return
-    if mu["is_blocked"]:
-        await update.message.reply_text(f"ℹ️ Пользователь #{custom_id} уже заблокирован.")
-        return
-    await db.toggle_managed_user_blocked(custom_id)
-    await update.message.reply_text(
-        f"⛔ Пользователь #{custom_id} *{mu['custom_name']}* заблокирован.",
-        parse_mode="Markdown",
+    context.user_data["admin_edit_id"] = custom_id
+    await query.edit_message_text(
+        f"✏️ *Переименование \\#{custom_id}*\n\nТекущее: {mu['custom_name']}\n\nВведите новое имя:",
+        reply_markup=_CANCEL_KB,
+        parse_mode="MarkdownV2",
     )
+    return ST_ADMIN_RENAME
 
 
-async def cmd_unblock(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def rcv_admin_rename(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != OWNER_ID:
-        await update.message.reply_text(t("en", "not_admin"))
-        return
-    args = context.args or []
-    if not args:
-        await update.message.reply_text("Использование: `/unblock <номер>`", parse_mode="Markdown")
-        return
-    try:
-        custom_id = int(args[0])
-    except ValueError:
-        await update.message.reply_text("❌ Укажите числовой номер пользователя.")
-        return
-    mu = await db.get_managed_user_by_id(custom_id)
-    if not mu:
-        await update.message.reply_text(f"❌ Пользователь #{custom_id} не найден в списке.")
-        return
-    if not mu["is_blocked"]:
-        await update.message.reply_text(f"ℹ️ Пользователь #{custom_id} уже активен.")
-        return
-    await db.toggle_managed_user_blocked(custom_id)
-    await update.message.reply_text(
-        f"✅ Пользователь #{custom_id} *{mu['custom_name']}* разблокирован.",
-        parse_mode="Markdown",
-    )
-
-
-# ─── /rename <номер> <новое_имя> ─────────────────────────────────────────────
-
-async def cmd_rename(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != OWNER_ID:
-        await update.message.reply_text(t("en", "not_admin"))
-        return
-    args = context.args or []
-    if len(args) < 2:
-        await update.message.reply_text(
-            "Использование: `/rename <номер> <новое_имя>`", parse_mode="Markdown"
-        )
-        return
-    try:
-        custom_id = int(args[0])
-    except ValueError:
-        await update.message.reply_text("❌ Укажите числовой номер пользователя.")
-        return
-    mu = await db.get_managed_user_by_id(custom_id)
-    if not mu:
-        await update.message.reply_text(f"❌ Пользователь #{custom_id} не найден в списке.")
-        return
-    new_name = " ".join(args[1:])
+        return ConversationHandler.END
+    custom_id = context.user_data.pop("admin_edit_id", None)
+    new_name = update.message.text.strip()
     await db.update_managed_user_name(custom_id, new_name)
-    await update.message.reply_text(
-        f"✅ Пользователь #{custom_id} переименован: *{new_name}*",
-        parse_mode="Markdown",
-    )
-
-
-# ─── /notes <номер> <текст> ──────────────────────────────────────────────────
-
-async def cmd_notes(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != OWNER_ID:
-        await update.message.reply_text(t("en", "not_admin"))
-        return
-    args = context.args or []
-    if len(args) < 2:
-        await update.message.reply_text(
-            "Использование: `/notes <номер> <текст заметки>`\n"
-            "Например: `/notes 3 Оплатил Premium 17.05`",
-            parse_mode="Markdown",
-        )
-        return
-    try:
-        custom_id = int(args[0])
-    except ValueError:
-        await update.message.reply_text("❌ Укажите числовой номер пользователя.")
-        return
     mu = await db.get_managed_user_by_id(custom_id)
-    if not mu:
-        await update.message.reply_text(f"❌ Пользователь #{custom_id} не найден в списке.")
-        return
-    notes_text = " ".join(args[1:])
-    await db.update_managed_user_notes(custom_id, notes_text)
+    text, kb = _build_user_detail(mu)
     await update.message.reply_text(
-        f"📝 Заметка для #{custom_id} *{mu['custom_name']}* сохранена:\n_{notes_text}_",
-        parse_mode="Markdown",
+        f"✅ Переименован: *#{custom_id} {new_name}*\n\n" + text,
+        reply_markup=kb, parse_mode="Markdown",
+    )
+    return ConversationHandler.END
+
+
+async def cb_admin_start_notes(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    if update.effective_user.id != OWNER_ID:
+        return ConversationHandler.END
+    custom_id = int(query.data.split("_")[-1])
+    mu = await db.get_managed_user_by_id(custom_id)
+    context.user_data["admin_edit_id"] = custom_id
+    current = mu["notes"] or "—"
+    await query.edit_message_text(
+        f"📝 *Заметка для \\#{custom_id} {mu['custom_name']}*\n\n"
+        f"Текущая: {current}\n\nВведите новую заметку \\(платёж, дата и т\\.д\\.\\):",
+        reply_markup=_CANCEL_KB,
+        parse_mode="MarkdownV2",
+    )
+    return ST_ADMIN_NOTES
+
+
+async def rcv_admin_notes(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != OWNER_ID:
+        return ConversationHandler.END
+    custom_id = context.user_data.pop("admin_edit_id", None)
+    notes_text = update.message.text.strip()
+    await db.update_managed_user_notes(custom_id, notes_text)
+    mu = await db.get_managed_user_by_id(custom_id)
+    text, kb = _build_user_detail(mu)
+    await update.message.reply_text(
+        f"📝 Заметка сохранена.\n\n" + text,
+        reply_markup=kb, parse_mode="Markdown",
+    )
+    return ConversationHandler.END
+
+
+async def cb_admin_conv_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    context.user_data.pop("admin_add_tg_id", None)
+    context.user_data.pop("admin_edit_id", None)
+    managed = await db.get_all_managed_users()
+    text, kb = _build_users_kb(managed)
+    await query.edit_message_text(text, reply_markup=kb, parse_mode="Markdown")
+    return ConversationHandler.END
+
+
+def _build_admin_conv_handler() -> ConversationHandler:
+    cancel = [CallbackQueryHandler(cb_admin_conv_cancel, pattern="^admin_conv_cancel$")]
+    return ConversationHandler(
+        entry_points=[
+            CallbackQueryHandler(cb_admin_start_add,    pattern="^admin_add$"),
+            CallbackQueryHandler(cb_admin_start_rename, pattern=r"^admin_rename_\d+$"),
+            CallbackQueryHandler(cb_admin_start_notes,  pattern=r"^admin_setnotes_\d+$"),
+        ],
+        states={
+            ST_ADMIN_ADD_ID:   cancel + [MessageHandler(filters.TEXT & ~filters.COMMAND, rcv_admin_add_id)],
+            ST_ADMIN_ADD_NAME: cancel + [MessageHandler(filters.TEXT & ~filters.COMMAND, rcv_admin_add_name)],
+            ST_ADMIN_RENAME:   cancel + [MessageHandler(filters.TEXT & ~filters.COMMAND, rcv_admin_rename)],
+            ST_ADMIN_NOTES:    cancel + [MessageHandler(filters.TEXT & ~filters.COMMAND, rcv_admin_notes)],
+        },
+        fallbacks=[
+            CallbackQueryHandler(cb_admin_conv_cancel, pattern="^admin_conv_cancel$"),
+            CommandHandler("admin", cmd_admin),
+        ],
+        per_message=False,
     )
 
 
@@ -1236,13 +1282,7 @@ async def post_init(application: Application):
         BotCommand("subscribe", "💎 Subscribe / Подписка"),
         BotCommand("refer",     "👥 Referral / Реферал"),
         BotCommand("language",  "🌐 Language / Язык"),
-        BotCommand("admin",     "📊 Admin stats"),
-        BotCommand("users",     "👥 Список пользователей (admin)"),
-        BotCommand("adduser",   "➕ Добавить пользователя (admin)"),
-        BotCommand("block",     "⛔ Заблокировать пользователя (admin)"),
-        BotCommand("unblock",   "✅ Разблокировать пользователя (admin)"),
-        BotCommand("rename",    "✏️ Переименовать пользователя (admin)"),
-        BotCommand("notes",     "📝 Заметка к пользователю (admin)"),
+        BotCommand("admin",     "📊 Панель администратора"),
     ])
 
 
@@ -1263,6 +1303,7 @@ def main():
     app.add_handler(_build_search_handler())
     app.add_handler(_build_pin_handler())
     app.add_handler(_build_restore_handler())
+    app.add_handler(_build_admin_conv_handler())  # admin inline-flow
 
     # Обычные команды
     app.add_handler(CommandHandler("list",      cmd_list))
@@ -1274,20 +1315,12 @@ def main():
     app.add_handler(CommandHandler("language",  cmd_language))
     app.add_handler(CommandHandler("admin",     cmd_admin))
 
-    # Команды управления пользователями (только владелец)
-    app.add_handler(CommandHandler("users",    cmd_users))
-    app.add_handler(CommandHandler("adduser",  cmd_adduser))
-    app.add_handler(CommandHandler("block",    cmd_block))
-    app.add_handler(CommandHandler("unblock",  cmd_unblock))
-    app.add_handler(CommandHandler("rename",   cmd_rename))
-    app.add_handler(CommandHandler("notes",    cmd_notes))
-
     # Inline /get_N /del_N /fav_N
     app.add_handler(MessageHandler(
         filters.Regex(r"^/(get|del|fav)_\d+$"), handle_inline_cmd
     ))
 
-    # CallbackQuery
+    # CallbackQuery (admin_conv_handler выше перехватывает admin_add/rename/setnotes)
     app.add_handler(CallbackQueryHandler(cb_admin_panel,    pattern="^admin_"))
     app.add_handler(CallbackQueryHandler(cb_menu,           pattern="^menu_"))
     app.add_handler(CallbackQueryHandler(cb_list_cat,       pattern="^listcat_"))
