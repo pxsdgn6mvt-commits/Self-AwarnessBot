@@ -43,8 +43,13 @@ CREATE TABLE IF NOT EXISTS aria_bookings (
     noshow_check_sent   BOOLEAN NOT NULL DEFAULT FALSE,
     upsell_offered      BOOLEAN NOT NULL DEFAULT FALSE,
     calendar_event_id   TEXT,
+    paid                BOOLEAN NOT NULL DEFAULT FALSE,
+    notes               TEXT,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE aria_bookings ADD COLUMN IF NOT EXISTS paid  BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE aria_bookings ADD COLUMN IF NOT EXISTS notes TEXT;
 
 CREATE TABLE IF NOT EXISTS aria_waitlist (
     id          BIGSERIAL PRIMARY KEY,
@@ -158,10 +163,18 @@ CREATE TABLE IF NOT EXISTS aria_service_categories (
 );
 
 CREATE TABLE IF NOT EXISTS aria_service_items (
-    id          SERIAL PRIMARY KEY,
-    category_id INT  NOT NULL REFERENCES aria_service_categories(id) ON DELETE CASCADE,
-    name        TEXT NOT NULL,
-    position    INT  NOT NULL DEFAULT 0,
+    id               SERIAL PRIMARY KEY,
+    category_id      INT     NOT NULL REFERENCES aria_service_categories(id) ON DELETE CASCADE,
+    name             TEXT    NOT NULL,
+    position         INT     NOT NULL DEFAULT 0,
+    price            NUMERIC(10,2),
+    duration_minutes INT,
     UNIQUE (category_id, name)
 );
+
+ALTER TABLE aria_service_items ADD COLUMN IF NOT EXISTS price            NUMERIC(10,2);
+ALTER TABLE aria_service_items ADD COLUMN IF NOT EXISTS duration_minutes INT;
+
+ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS master_percent NUMERIC(5,2);
+ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS tax_percent    NUMERIC(5,2);
 """

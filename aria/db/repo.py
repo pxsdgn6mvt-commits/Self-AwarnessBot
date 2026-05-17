@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import date as _date, datetime, timedelta, timezone
 from typing import Any, Optional
 
 import asyncpg
@@ -263,6 +263,20 @@ async def update_booking_status(booking_id: int, status: str) -> None:
         )
 
 
+async def set_booking_paid(booking_id: int, paid: bool = True) -> None:
+    async with _p().acquire() as conn:
+        await conn.execute(
+            "UPDATE aria_bookings SET paid=$1 WHERE id=$2", paid, booking_id
+        )
+
+
+async def set_booking_note(booking_id: int, note: str) -> None:
+    async with _p().acquire() as conn:
+        await conn.execute(
+            "UPDATE aria_bookings SET notes=$1 WHERE id=$2", note, booking_id
+        )
+
+
 async def mark_reminder_sent(booking_id: int) -> None:
     async with _p().acquire() as conn:
         await conn.execute(
@@ -278,15 +292,16 @@ async def mark_noshow_check_sent(booking_id: int) -> None:
 
 
 async def get_bookings_for_date(tenant_id: int, date_str: str) -> list[asyncpg.Record]:
+    date_obj = _date.fromisoformat(date_str)
     async with _p().acquire() as conn:
         return await conn.fetch(
             """
             SELECT * FROM aria_bookings
-            WHERE tenant_id=$1 AND scheduled_at::date=$2::date
+            WHERE tenant_id=$1 AND scheduled_at::date=$2
               AND status IN ('confirmed','pending')
             ORDER BY scheduled_at ASC
             """,
-            tenant_id, date_str,
+            tenant_id, date_obj,
         )
 
 
@@ -320,16 +335,129 @@ async def get_all_upcoming_bookings(tenant_id: int, limit: int = 30) -> list[asy
 
 
 async def get_slots_on_date(tenant_id: int, date_str: str) -> list[datetime]:
+    date_obj = _date.fromisoformat(date_str)
     async with _p().acquire() as conn:
         rows = await conn.fetch(
             """
             SELECT scheduled_at FROM aria_bookings
-            WHERE tenant_id=$1 AND scheduled_at::date=$2::date AND status='confirmed'
+            WHERE tenant_id=$1 AND scheduled_at::date=$2 AND status='confirmed'
             """,
-            tenant_id, date_str,
+            tenant_id, date_obj,
         )
         return [r["scheduled_at"] for r in rows]
 
+
+
+# ── Dashboard & analytics ─────────────────────────────────────────────────────
+
+async def get_today_stats(tenant_id: int, date_str: str) -> dict:
+    """Returns booking count, paid count, expected and received income for a date."""
+    date_obj = _date.fromisoformat(date_str)
+    async with _p().acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT
+                COUNT(*) FILTER (WHERE status IN ('confirmed','pending'))            AS total,
+                COUNT(*) FILTER (WHERE paid = TRUE)                                  AS paid_count,
+                COALESCE(SUM(si.price) FILTER (WHERE status IN ('confirmed','pending')), 0) AS expected,
+                COALESCE(SUM(si.price) FILTER (WHERE paid = TRUE), 0)               AS received
+            FROM aria_bookings b
+            LEFT JOIN aria_service_items si
+                ON LOWER(si.name) = LOWER(b.service)
+               AND si.category_id IN (
+                       SELECT id FROM aria_service_categories WHERE tenant_id = $1
+                   )
+            WHERE b.tenant_id = $1 AND b.scheduled_at::date = $2
+            """,
+            tenant_id, date_obj,
+        )
+        return dict(row) if row else {"total": 0, "paid_count": 0, "expected": 0, "received": 0}
+
+
+async def get_week_booking_count(tenant_id: int, tz_str: str = "UTC") -> int:
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo(tz_str)
+    now_local = datetime.now(tz)
+    monday     = now_local.date() - timedelta(days=now_local.weekday())
+    next_monday = monday + timedelta(days=7)
+    week_start = datetime(monday.year,      monday.month,      monday.day,      tzinfo=tz).astimezone(timezone.utc)
+    week_end   = datetime(next_monday.year, next_monday.month, next_monday.day, tzinfo=tz).astimezone(timezone.utc)
+    async with _p().acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT COUNT(*) FROM aria_bookings
+            WHERE tenant_id=$1
+              AND status IN ('confirmed','pending')
+              AND scheduled_at >= $2
+              AND scheduled_at <  $3
+            """,
+            tenant_id, week_start, week_end,
+        )
+        return row[0] if row else 0
+
+
+async def get_period_stats(tenant_id: int, dt_from: datetime, dt_to: datetime) -> dict:
+    """General booking stats for any time range."""
+    async with _p().acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT
+                COUNT(*) FILTER (WHERE b.status IN ('confirmed','pending'))                   AS total,
+                COUNT(*) FILTER (WHERE b.paid = TRUE)                                         AS paid_count,
+                COALESCE(SUM(si.price) FILTER (WHERE b.status IN ('confirmed','pending')), 0) AS expected,
+                COALESCE(SUM(si.price) FILTER (WHERE b.paid = TRUE), 0)                      AS received
+            FROM aria_bookings b
+            LEFT JOIN aria_service_items si
+                ON LOWER(si.name) = LOWER(b.service)
+               AND si.category_id IN (
+                       SELECT id FROM aria_service_categories WHERE tenant_id = $1
+                   )
+            WHERE b.tenant_id = $1
+              AND b.scheduled_at >= $2
+              AND b.scheduled_at <= $3
+            """,
+            tenant_id, dt_from, dt_to,
+        )
+        return dict(row) if row else {"total": 0, "paid_count": 0, "expected": 0, "received": 0}
+
+
+async def get_client_stats(tenant_id: int, limit: int = 50) -> list[asyncpg.Record]:
+    """Returns clients sorted by visit count with basic stats."""
+    async with _p().acquire() as conn:
+        return await conn.fetch(
+            """
+            SELECT
+                client_name,
+                COUNT(*)                                           AS visits,
+                MAX(scheduled_at)                                  AS last_visit,
+                COUNT(*) FILTER (WHERE paid = TRUE)               AS paid_visits,
+                COALESCE(SUM(si.price) FILTER (WHERE paid=TRUE), 0) AS total_spent
+            FROM aria_bookings b
+            LEFT JOIN aria_service_items si
+                ON LOWER(si.name) = LOWER(b.service)
+               AND si.category_id IN (
+                       SELECT id FROM aria_service_categories WHERE tenant_id = $1
+                   )
+            WHERE b.tenant_id = $1 AND b.status IN ('confirmed','pending','completed')
+            GROUP BY client_name
+            ORDER BY visits DESC
+            LIMIT $2
+            """,
+            tenant_id, limit,
+        )
+
+
+async def get_client_bookings(tenant_id: int, client_name: str) -> list[asyncpg.Record]:
+    async with _p().acquire() as conn:
+        return await conn.fetch(
+            """
+            SELECT * FROM aria_bookings
+            WHERE tenant_id=$1 AND LOWER(client_name)=LOWER($2)
+            ORDER BY scheduled_at DESC
+            LIMIT 20
+            """,
+            tenant_id, client_name,
+        )
 
 
 # ── Waitlist ──────────────────────────────────────────────────────────────────
@@ -400,6 +528,36 @@ async def get_categories(tenant_id: int) -> list[asyncpg.Record]:
         )
 
 
+async def get_all_service_items(tenant_id: int) -> list[asyncpg.Record]:
+    """All items across all categories for a tenant (for booking wizard)."""
+    async with _p().acquire() as conn:
+        return await conn.fetch(
+            """
+            SELECT si.id, si.name, si.price, si.duration_minutes, sc.name AS category_name
+            FROM aria_service_items si
+            JOIN aria_service_categories sc ON si.category_id = sc.id
+            WHERE sc.tenant_id = $1
+            ORDER BY sc.name, si.position, si.id
+            """,
+            tenant_id,
+        )
+
+
+async def get_service_info(tenant_id: int, service_name: str) -> asyncpg.Record | None:
+    """Fetch price and duration for a service by name."""
+    async with _p().acquire() as conn:
+        return await conn.fetchrow(
+            """
+            SELECT si.price, si.duration_minutes
+            FROM aria_service_items si
+            JOIN aria_service_categories sc ON si.category_id = sc.id
+            WHERE sc.tenant_id = $1 AND LOWER(si.name) = LOWER($2)
+            LIMIT 1
+            """,
+            tenant_id, service_name,
+        )
+
+
 async def get_items(category_id: int) -> list[asyncpg.Record]:
     async with _p().acquire() as conn:
         return await conn.fetch(
@@ -424,11 +582,17 @@ async def delete_category(category_id: int) -> None:
         )
 
 
-async def add_item(category_id: int, name: str) -> int:
+async def add_item(
+    category_id: int,
+    name: str,
+    price: float | None = None,
+    duration_minutes: int | None = None,
+) -> int:
     async with _p().acquire() as conn:
         row = await conn.fetchrow(
-            "INSERT INTO aria_service_items(category_id, name) VALUES ($1,$2) RETURNING id",
-            category_id, name,
+            """INSERT INTO aria_service_items(category_id, name, price, duration_minutes)
+               VALUES ($1, $2, $3, $4) RETURNING id""",
+            category_id, name, price, duration_minutes,
         )
         return row["id"]
 
@@ -437,4 +601,18 @@ async def delete_item(item_id: int) -> None:
     async with _p().acquire() as conn:
         await conn.execute(
             "DELETE FROM aria_service_items WHERE id=$1", item_id
+        )
+
+
+async def update_item_price(item_id: int, price: float | None) -> None:
+    async with _p().acquire() as conn:
+        await conn.execute(
+            "UPDATE aria_service_items SET price=$2 WHERE id=$1", item_id, price
+        )
+
+
+async def update_item_duration(item_id: int, duration_minutes: int | None) -> None:
+    async with _p().acquire() as conn:
+        await conn.execute(
+            "UPDATE aria_service_items SET duration_minutes=$2 WHERE id=$1", item_id, duration_minutes
         )

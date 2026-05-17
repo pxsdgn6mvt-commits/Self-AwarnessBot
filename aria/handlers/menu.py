@@ -8,7 +8,9 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
 from aiogram import F, Router
+from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
@@ -26,6 +28,11 @@ from aria.tenant import TenantConfig
 
 log = logging.getLogger(__name__)
 router = Router()
+
+
+class IncomeSettings(StatesGroup):
+    master_percent = State()
+    tax_percent    = State()
 
 
 # ── Admin reply keyboard (shown in @AriaReseptionist_Bot) ─────────────────────
@@ -61,12 +68,24 @@ def _owner_settings_kb() -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(text="📧 Email",            callback_data="cfg:email"),
-            InlineKeyboardButton(text="🔍 Тест GCal",        callback_data="cfg:test_cal"),
+            InlineKeyboardButton(text="📊 Статус",           callback_data="cfg:status"),
         ],
         [InlineKeyboardButton(text="📋 Услуги и категории",  callback_data="adm:services")],
+        [InlineKeyboardButton(text="💼 Доходы мастера",      callback_data="cfg:income")],
+        [InlineKeyboardButton(text="👤 Клиенты",             callback_data="cfg:clients")],
         [InlineKeyboardButton(text="🗑 Сбросить историю",    callback_data="cfg:reset_chat")],
-        [InlineKeyboardButton(text="📊 Статус бота",         callback_data="cfg:status")],
+        [InlineKeyboardButton(text="❓ Помощь",              callback_data="cfg:help")],
         [InlineKeyboardButton(text="✖️ Закрыть",             callback_data="menu:close")],
+    ])
+
+
+def _income_kb(master_pct: float | None, tax_pct: float | None) -> InlineKeyboardMarkup:
+    m_label = f"👤 Доля мастера: {int(master_pct)}%" if master_pct is not None else "👤 Доля мастера: не задана"
+    t_label = f"🧾 Налог: {int(tax_pct)}%"            if tax_pct is not None    else "🧾 Налог: не задан"
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=m_label, callback_data="cfg:inc_master")],
+        [InlineKeyboardButton(text=t_label, callback_data="cfg:inc_tax")],
+        [InlineKeyboardButton(text="◀️ Назад", callback_data="menu:settings")],
     ])
 
 
@@ -173,7 +192,7 @@ async def _show_week(message: Message, tenant: TenantConfig, offset_weeks: int =
 
 # ── Entry points: reply keyboard buttons ──────────────────────────────────────
 
-@router.message(F.text == "📱 Меню", SetupDone())
+@router.message(F.text.in_({"📱 Меню", "⚙️ Настройки"}), SetupDone())
 async def cmd_menu(message: Message, tenant: TenantConfig) -> None:
     if _is_admin_bot(tenant, message.from_user.id):
         await message.answer("👑 <b>Управление платформой</b>", reply_markup=_admin_inline_kb())
@@ -369,6 +388,108 @@ async def cb_cfg_status(callback: CallbackQuery, tenant: TenantConfig) -> None:
     await cmd_status(callback.message, tenant, caller_id=callback.from_user.id)
 
 
+@router.callback_query(F.data == "cfg:clients", SetupDone())
+async def cb_clients_list(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    if not tenant.is_owner(callback.from_user.id):
+        await callback.answer("Нет доступа.", show_alert=True)
+        return
+    await callback.answer()
+    clients = await repo.get_client_stats(tenant.id)
+    if not clients:
+        await callback.message.edit_text(
+            "👤 <b>Клиенты</b>\n\nЗаписей пока нет.",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="← Назад", callback_data="menu:main")],
+            ]),
+        )
+        return
+    rows = []
+    for c in clients[:20]:
+        last = c["last_visit"].strftime("%-d %b") if c["last_visit"] else "—"
+        label = f"👤 {c['client_name']}  ({c['visits']} визит·{last})"
+        import urllib.parse
+        safe = urllib.parse.quote(c["client_name"])
+        rows.append([InlineKeyboardButton(text=label, callback_data=f"cfg:client:{safe}")])
+    rows.append([InlineKeyboardButton(text="← Назад", callback_data="menu:main")])
+    await callback.message.edit_text(
+        f"👤 <b>Клиенты</b> — {len(clients)} чел.",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+    )
+
+
+@router.callback_query(F.data.startswith("cfg:client:"), SetupDone())
+async def cb_client_card(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    if not tenant.is_owner(callback.from_user.id):
+        await callback.answer("Нет доступа.", show_alert=True)
+        return
+    import urllib.parse
+    client_name = urllib.parse.unquote(callback.data.split("cfg:client:")[1])
+    bookings = await repo.get_client_bookings(tenant.id, client_name)
+    await callback.answer()
+    if not bookings:
+        await callback.answer("Данные не найдены.", show_alert=True)
+        return
+
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo(tenant.timezone or "UTC")
+    visits = len(bookings)
+    paid_count = sum(1 for b in bookings if b.get("paid"))
+    last = bookings[0]["scheduled_at"].astimezone(tz).strftime("%-d %B %Y")
+    services: dict[str, int] = {}
+    for b in bookings:
+        svc = b["service"]
+        services[svc] = services.get(svc, 0) + 1
+    top_services = sorted(services.items(), key=lambda x: x[1], reverse=True)[:3]
+    notes_list = [b["notes"] for b in bookings if b.get("notes")]
+
+    lines = [f"👤 <b>{client_name}</b>\n"]
+    lines.append(f"📋 Визитов: {visits}")
+    lines.append(f"📅 Последний: {last}")
+    lines.append(f"✅ Оплачено: {paid_count} из {visits}")
+    if top_services:
+        svc_str = ", ".join(f"{s} ({n})" for s, n in top_services)
+        lines.append(f"💅 Услуги: {svc_str}")
+    if notes_list:
+        lines.append(f"\n📝 Заметки: {notes_list[-1]}")
+
+    await callback.message.edit_text(
+        "\n".join(lines),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="← К списку", callback_data="cfg:clients")],
+        ]),
+    )
+
+
+@router.callback_query(F.data == "cfg:help", SetupDone())
+async def cb_cfg_help(callback: CallbackQuery) -> None:
+    await callback.answer()
+    text = (
+        "❓ <b>Помощь — что умеет Aria</b>\n\n"
+        "<b>Кнопки:</b>\n"
+        "📅 <b>Сегодня / Завтра</b> — расписание на день\n"
+        "➕ <b>Новая запись</b> — добавить клиента вручную\n"
+        "📋 <b>Ближайшие</b> — записи на ближайшие 7 дней\n"
+        "⚙️ <b>Настройки</b> — настройки бота\n\n"
+        "<b>Просто пиши мне:</b>\n"
+        "• «запиши Катю на ресницы 20 мая в 14:00»\n"
+        "• «что у меня сегодня?»\n"
+        "• «что на этой неделе?»\n"
+        "• «перенеси запись #5 на завтра в 11:00»\n"
+        "• «отмени запись #5»\n"
+        "• «свободно 20 мая в 15:00?»\n\n"
+        "<b>Команды:</b>\n"
+        "/reset — очистить историю диалога\n"
+        "/status — статус бота и интеграций"
+    )
+    await callback.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="← Назад", callback_data="menu:main")],
+        ]),
+        parse_mode="HTML",
+    )
+
+
 # ── Admin callbacks ───────────────────────────────────────────────────────────
 
 @router.callback_query(F.data == "adm:list")
@@ -443,3 +564,108 @@ async def cb_adm_revoke_help(callback: CallbackQuery) -> None:
         "<code>/revoke_vip &lt;tenant_id&gt; &lt;user_id&gt;</code>"
     )
     await callback.answer()
+
+
+# ── Income settings (master % + tax %) ───────────────────────────────────────
+
+@router.callback_query(F.data == "cfg:income", SetupDone())
+async def cb_cfg_income(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    if not tenant.is_owner(callback.from_user.id):
+        await callback.answer("Нет доступа.", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "💼 <b>Доходы мастера</b>\n\n"
+        "Укажи долю мастера и ставку налога — дашборд покажет чистый заработок.\n\n"
+        "Нажми кнопку чтобы изменить значение:",
+        reply_markup=_income_kb(tenant.master_percent, tenant.tax_percent),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "cfg:inc_master", SetupDone())
+async def cb_cfg_inc_master(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
+    if not tenant.is_owner(callback.from_user.id):
+        await callback.answer("Нет доступа.", show_alert=True)
+        return
+    cur = f"{int(tenant.master_percent)}%" if tenant.master_percent is not None else "не задана"
+    await state.set_state(IncomeSettings.master_percent)
+    await state.update_data(tenant_id=tenant.id, bot_token=tenant.bot_token)
+    await callback.message.answer(
+        f"👤 <b>Доля мастера</b>\n\nТекущая: <b>{cur}</b>\n\n"
+        "Введи процент (например <code>70</code>) или /skip чтобы убрать.",
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@router.message(IncomeSettings.master_percent, Command("skip"))
+async def skip_master_percent(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    await repo.update_tenant(data["tenant_id"], master_percent=None)
+    from aria.middleware import TenantMiddleware
+    TenantMiddleware.invalidate(data["bot_token"])
+    await state.clear()
+    await message.answer("✅ Доля мастера удалена.")
+
+
+@router.message(IncomeSettings.master_percent, F.text.func(lambda x: not x.startswith("/")))
+async def save_master_percent(message: Message, state: FSMContext) -> None:
+    text = message.text.strip().replace("%", "").replace(",", ".")
+    try:
+        pct = float(text)
+        if not 0 < pct <= 100:
+            raise ValueError
+    except ValueError:
+        await message.answer("Введи число от 1 до 100, например <code>70</code>, или /skip:", parse_mode="HTML")
+        return
+    data = await state.get_data()
+    await repo.update_tenant(data["tenant_id"], master_percent=pct)
+    from aria.middleware import TenantMiddleware
+    TenantMiddleware.invalidate(data["bot_token"])
+    await state.clear()
+    await message.answer(f"✅ Доля мастера: <b>{int(pct)}%</b>", parse_mode="HTML")
+
+
+@router.callback_query(F.data == "cfg:inc_tax", SetupDone())
+async def cb_cfg_inc_tax(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
+    if not tenant.is_owner(callback.from_user.id):
+        await callback.answer("Нет доступа.", show_alert=True)
+        return
+    cur = f"{int(tenant.tax_percent)}%" if tenant.tax_percent is not None else "не задан"
+    await state.set_state(IncomeSettings.tax_percent)
+    await state.update_data(tenant_id=tenant.id, bot_token=tenant.bot_token)
+    await callback.message.answer(
+        f"🧾 <b>Налог</b>\n\nТекущий: <b>{cur}</b>\n\n"
+        "Введи ставку в % (например <code>6</code> для самозанятого, <code>13</code> для НДФЛ)\n"
+        "Или /skip чтобы убрать.",
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@router.message(IncomeSettings.tax_percent, Command("skip"))
+async def skip_tax_percent(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    await repo.update_tenant(data["tenant_id"], tax_percent=None)
+    from aria.middleware import TenantMiddleware
+    TenantMiddleware.invalidate(data["bot_token"])
+    await state.clear()
+    await message.answer("✅ Налог удалён.")
+
+
+@router.message(IncomeSettings.tax_percent, F.text.func(lambda x: not x.startswith("/")))
+async def save_tax_percent(message: Message, state: FSMContext) -> None:
+    text = message.text.strip().replace("%", "").replace(",", ".")
+    try:
+        pct = float(text)
+        if not 0 <= pct < 100:
+            raise ValueError
+    except ValueError:
+        await message.answer("Введи число от 0 до 99, например <code>6</code>, или /skip:", parse_mode="HTML")
+        return
+    data = await state.get_data()
+    await repo.update_tenant(data["tenant_id"], tax_percent=pct)
+    from aria.middleware import TenantMiddleware
+    TenantMiddleware.invalidate(data["bot_token"])
+    await state.clear()
+    await message.answer(f"✅ Налог: <b>{int(pct)}%</b>", parse_mode="HTML")

@@ -25,6 +25,8 @@ class TenantConfig:
     anthropic_api_key: Optional[str]
     setup_complete: bool
     active: bool
+    master_percent: Optional[float]
+    tax_percent: Optional[float]
 
     @classmethod
     def from_record(cls, r: dict) -> "TenantConfig":
@@ -46,6 +48,8 @@ class TenantConfig:
             anthropic_api_key=r["anthropic_api_key"],
             setup_complete=r["setup_complete"],
             active=r["active"],
+            master_percent=r.get("master_percent"),
+            tax_percent=r.get("tax_percent"),
         )
 
     @property
