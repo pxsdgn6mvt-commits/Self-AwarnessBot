@@ -424,11 +424,17 @@ async def delete_category(category_id: int) -> None:
         )
 
 
-async def add_item(category_id: int, name: str) -> int:
+async def add_item(
+    category_id: int,
+    name: str,
+    price: float | None = None,
+    duration_minutes: int | None = None,
+) -> int:
     async with _p().acquire() as conn:
         row = await conn.fetchrow(
-            "INSERT INTO aria_service_items(category_id, name) VALUES ($1,$2) RETURNING id",
-            category_id, name,
+            """INSERT INTO aria_service_items(category_id, name, price, duration_minutes)
+               VALUES ($1, $2, $3, $4) RETURNING id""",
+            category_id, name, price, duration_minutes,
         )
         return row["id"]
 

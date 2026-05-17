@@ -44,6 +44,8 @@ class AdminBroadcast(StatesGroup):
 class CatalogueSG(StatesGroup):
     add_category = State()
     add_item     = State()
+    add_price    = State()
+    add_duration = State()
 
 
 # ── Service catalogue (categories / subcategories) ────────────────────────────
@@ -64,13 +66,18 @@ async def _categories_kb(tenant_id: int) -> InlineKeyboardMarkup:
 
 async def _items_kb(category_id: int, tenant_id: int) -> InlineKeyboardMarkup:
     items = await repo.get_items(category_id)
-    rows: list[list[InlineKeyboardButton]] = [
-        [
-            InlineKeyboardButton(text=it["name"], callback_data="adm:noop"),
-            InlineKeyboardButton(text="🗑", callback_data=f"adm:dsub:{it['id']}:{category_id}"),
-        ]
-        for it in items
-    ]
+    rows: list[list[InlineKeyboardButton]] = []
+    for it in items:
+        parts = [it["name"]]
+        if it["price"] is not None:
+            parts.append(f"{int(it['price'])}€")
+        if it["duration_minutes"] is not None:
+            parts.append(f"{it['duration_minutes']}мин")
+        label = " · ".join(parts)
+        rows.append([
+            InlineKeyboardButton(text=label,  callback_data="adm:noop"),
+            InlineKeyboardButton(text="🗑",   callback_data=f"adm:dsub:{it['id']}:{category_id}"),
+        ])
     rows.append([InlineKeyboardButton(text="➕ Добавить услугу", callback_data=f"adm:addsub:{category_id}")])
     rows.append([InlineKeyboardButton(text="◀️ Назад", callback_data="adm:services")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -165,17 +172,81 @@ async def prompt_add_item(callback: CallbackQuery, state: FSMContext, tenant: Te
     await callback.answer()
 
 
-@router.message(CatalogueSG.add_item)
-async def save_item(message: Message, state: FSMContext) -> None:
+@router.message(CatalogueSG.add_item, ~Command())
+async def save_item_name(message: Message, state: FSMContext) -> None:
     name = message.text.strip()
     if not name:
         await message.answer("Название не может быть пустым. Попробуйте снова:")
         return
-    data = await state.get_data()
-    await repo.add_item(data["category_id"], name)
-    await state.clear()
+    await state.update_data(item_name=name)
+    await state.set_state(CatalogueSG.add_price)
     await message.answer(
-        f"✅ Услуга «{name}» добавлена в «{data['category_name']}».",
+        f"💰 Цена услуги «{name}» (например: <code>50</code>)\n"
+        "Или /skip чтобы не указывать.",
+        parse_mode="HTML",
+    )
+
+
+@router.message(CatalogueSG.add_price, Command("skip"))
+async def skip_price(message: Message, state: FSMContext) -> None:
+    await state.update_data(item_price=None)
+    await state.set_state(CatalogueSG.add_duration)
+    await message.answer(
+        "⏱ Длительность в минутах (например: <code>60</code>)\n"
+        "Или /skip чтобы не указывать.",
+        parse_mode="HTML",
+    )
+
+
+@router.message(CatalogueSG.add_price, ~Command())
+async def save_item_price(message: Message, state: FSMContext) -> None:
+    text = message.text.strip().replace(",", ".")
+    try:
+        price = float(text)
+        if price < 0:
+            raise ValueError
+    except ValueError:
+        await message.answer("Введите число, например <code>50</code>, или /skip:", parse_mode="HTML")
+        return
+    await state.update_data(item_price=price)
+    await state.set_state(CatalogueSG.add_duration)
+    await message.answer(
+        "⏱ Длительность в минутах (например: <code>60</code>)\n"
+        "Или /skip чтобы не указывать.",
+        parse_mode="HTML",
+    )
+
+
+@router.message(CatalogueSG.add_duration, Command("skip"))
+async def skip_duration(message: Message, state: FSMContext) -> None:
+    await _finish_add_item(message, state, duration=None)
+
+
+@router.message(CatalogueSG.add_duration, ~Command())
+async def save_item_duration(message: Message, state: FSMContext) -> None:
+    try:
+        duration = int(message.text.strip())
+        if duration <= 0:
+            raise ValueError
+    except ValueError:
+        await message.answer("Введите целое число минут, например <code>60</code>, или /skip:", parse_mode="HTML")
+        return
+    await _finish_add_item(message, state, duration=duration)
+
+
+async def _finish_add_item(message: Message, state: FSMContext, duration: int | None) -> None:
+    data = await state.get_data()
+    name  = data["item_name"]
+    price = data.get("item_price")
+    await repo.add_item(data["category_id"], name, price=price, duration_minutes=duration)
+    await state.clear()
+    parts = [f"✅ Услуга «{name}» добавлена"]
+    if price is not None:
+        parts.append(f"Цена: {int(price)}€")
+    if duration is not None:
+        parts.append(f"Длительность: {duration} мин")
+    await message.answer(
+        "\n".join(parts),
         reply_markup=await _items_kb(data["category_id"], data.get("tenant_id", 1)),
     )
 

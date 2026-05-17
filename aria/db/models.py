@@ -158,10 +158,15 @@ CREATE TABLE IF NOT EXISTS aria_service_categories (
 );
 
 CREATE TABLE IF NOT EXISTS aria_service_items (
-    id          SERIAL PRIMARY KEY,
-    category_id INT  NOT NULL REFERENCES aria_service_categories(id) ON DELETE CASCADE,
-    name        TEXT NOT NULL,
-    position    INT  NOT NULL DEFAULT 0,
+    id               SERIAL PRIMARY KEY,
+    category_id      INT     NOT NULL REFERENCES aria_service_categories(id) ON DELETE CASCADE,
+    name             TEXT    NOT NULL,
+    position         INT     NOT NULL DEFAULT 0,
+    price            NUMERIC(10,2),
+    duration_minutes INT,
     UNIQUE (category_id, name)
 );
+
+ALTER TABLE aria_service_items ADD COLUMN IF NOT EXISTS price            NUMERIC(10,2);
+ALTER TABLE aria_service_items ADD COLUMN IF NOT EXISTS duration_minutes INT;
 """
