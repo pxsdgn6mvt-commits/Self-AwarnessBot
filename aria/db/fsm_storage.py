@@ -24,7 +24,12 @@ class PostgresFSMStorage(BaseStorage):
 
     async def set_state(self, key: StorageKey, state: Optional[Any] = None) -> None:
         from aria.db.repo import _p
-        state_str = str(state) if state is not None else None
+        if state is None:
+            state_str = None
+        elif hasattr(state, "state"):
+            state_str = state.state  # "Group:name" without angle brackets
+        else:
+            state_str = str(state)
         try:
             await _p().execute(
                 """
