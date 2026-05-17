@@ -11,7 +11,7 @@ from telegram import (
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, CallbackQueryHandler,
     PreCheckoutQueryHandler, ConversationHandler, filters,
-    ContextTypes,
+    ContextTypes, TypeHandler, ApplicationHandlerStop,
 )
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
@@ -874,15 +874,250 @@ async def cb_setlang(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text(t(new_lang, "lang_set"))
 
 
+# ─── Middleware: блокировка пользователей ────────────────────────────────────
+
+async def _blocked_middleware(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if user and user.id != OWNER_ID:
+        if await db.is_user_blocked(user.id):
+            if update.effective_message:
+                await update.effective_message.reply_text(
+                    "⛔ Ваш доступ к боту заблокирован. Обратитесь к администратору."
+                )
+            elif update.callback_query:
+                await update.callback_query.answer(
+                    "⛔ Доступ заблокирован.", show_alert=True
+                )
+            raise ApplicationHandlerStop()
+
+
 # ─── /admin ───────────────────────────────────────────────────────────────────
+
+def _build_users_text_and_kb(managed: list) -> tuple[str, InlineKeyboardMarkup]:
+    if not managed:
+        text = "👥 Управляемые пользователи\n\nСписок пуст. Добавьте пользователя:\n`/adduser <telegram_id> <имя>`"
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="admin_back")]])
+        return text, kb
+
+    lines = [f"👥 Управляемые пользователи — {len(managed)}\n"]
+    for m in managed:
+        status = "⛔" if m["is_blocked"] else "✅"
+        notes_hint = f" 📝" if m["notes"] else ""
+        lines.append(f"#{m['id']}  {m['custom_name']}{notes_hint}  |  `{m['telegram_id']}`  {status}")
+
+    lines.append("\n`/adduser <telegram_id> <имя>` — добавить")
+    lines.append("`/rename <номер> <имя>` — переименовать")
+    lines.append("`/notes <номер> <текст>` — заметка (платежи)")
+
+    buttons = []
+    for m in managed:
+        if m["is_blocked"]:
+            label = f"✅ Разблок. #{m['id']} {m['custom_name']}"
+        else:
+            label = f"⛔ Блок. #{m['id']} {m['custom_name']}"
+        buttons.append([InlineKeyboardButton(label, callback_data=f"admin_toggle_{m['id']}")])
+    buttons.append([InlineKeyboardButton("🔙 Назад", callback_data="admin_back")])
+
+    return "\n".join(lines), InlineKeyboardMarkup(buttons)
+
 
 async def cmd_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != OWNER_ID:
         await update.message.reply_text(t("en", "not_admin"))
         return
     stats = await db.get_stats()
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("👥 Управление пользователями", callback_data="admin_users")],
+    ])
     await update.message.reply_text(
-        t("ru", "admin_stats", **stats), parse_mode="Markdown"
+        t("ru", "admin_stats", **stats), reply_markup=kb, parse_mode="Markdown"
+    )
+
+
+async def cb_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    if update.effective_user.id != OWNER_ID:
+        return
+
+    if query.data == "admin_users":
+        managed = await db.get_all_managed_users()
+        text, kb = _build_users_text_and_kb(managed)
+        await query.edit_message_text(text, reply_markup=kb, parse_mode="Markdown")
+
+    elif query.data.startswith("admin_toggle_"):
+        custom_id = int(query.data[13:])
+        new_state = await db.toggle_managed_user_blocked(custom_id)
+        managed = await db.get_all_managed_users()
+        text, kb = _build_users_text_and_kb(managed)
+        action = "заблокирован ⛔" if new_state else "разблокирован ✅"
+        await query.edit_message_text(
+            f"Пользователь #{custom_id} {action}\n\n" + text,
+            reply_markup=kb, parse_mode="Markdown",
+        )
+
+    elif query.data == "admin_back":
+        stats = await db.get_stats()
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("👥 Управление пользователями", callback_data="admin_users")],
+        ])
+        await query.edit_message_text(
+            t("ru", "admin_stats", **stats), reply_markup=kb, parse_mode="Markdown"
+        )
+
+
+# ─── /users — список управляемых пользователей ───────────────────────────────
+
+async def cmd_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != OWNER_ID:
+        await update.message.reply_text(t("en", "not_admin"))
+        return
+    managed = await db.get_all_managed_users()
+    text, kb = _build_users_text_and_kb(managed)
+    await update.message.reply_text(text, reply_markup=kb, parse_mode="Markdown")
+
+
+# ─── /adduser <telegram_id> <имя> ────────────────────────────────────────────
+
+async def cmd_adduser(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != OWNER_ID:
+        await update.message.reply_text(t("en", "not_admin"))
+        return
+    args = context.args or []
+    if len(args) < 2:
+        await update.message.reply_text(
+            "Использование: `/adduser <telegram_id> <имя>`\n"
+            "Пример: `/adduser 123456789 Иван Петров`",
+            parse_mode="Markdown",
+        )
+        return
+    try:
+        telegram_id = int(args[0])
+    except ValueError:
+        await update.message.reply_text("❌ telegram\\_id должен быть числом.", parse_mode="Markdown")
+        return
+    custom_name = " ".join(args[1:])
+    custom_id = await db.add_managed_user(telegram_id, custom_name)
+    await update.message.reply_text(
+        f"✅ Пользователь добавлен:\n"
+        f"#{custom_id} | {custom_name} | `{telegram_id}`",
+        parse_mode="Markdown",
+    )
+
+
+# ─── /block <номер> / /unblock <номер> ───────────────────────────────────────
+
+async def cmd_block(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != OWNER_ID:
+        await update.message.reply_text(t("en", "not_admin"))
+        return
+    args = context.args or []
+    if not args:
+        await update.message.reply_text("Использование: `/block <номер>`", parse_mode="Markdown")
+        return
+    try:
+        custom_id = int(args[0])
+    except ValueError:
+        await update.message.reply_text("❌ Укажите числовой номер пользователя.")
+        return
+    mu = await db.get_managed_user_by_id(custom_id)
+    if not mu:
+        await update.message.reply_text(f"❌ Пользователь #{custom_id} не найден в списке.")
+        return
+    if mu["is_blocked"]:
+        await update.message.reply_text(f"ℹ️ Пользователь #{custom_id} уже заблокирован.")
+        return
+    await db.toggle_managed_user_blocked(custom_id)
+    await update.message.reply_text(
+        f"⛔ Пользователь #{custom_id} *{mu['custom_name']}* заблокирован.",
+        parse_mode="Markdown",
+    )
+
+
+async def cmd_unblock(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != OWNER_ID:
+        await update.message.reply_text(t("en", "not_admin"))
+        return
+    args = context.args or []
+    if not args:
+        await update.message.reply_text("Использование: `/unblock <номер>`", parse_mode="Markdown")
+        return
+    try:
+        custom_id = int(args[0])
+    except ValueError:
+        await update.message.reply_text("❌ Укажите числовой номер пользователя.")
+        return
+    mu = await db.get_managed_user_by_id(custom_id)
+    if not mu:
+        await update.message.reply_text(f"❌ Пользователь #{custom_id} не найден в списке.")
+        return
+    if not mu["is_blocked"]:
+        await update.message.reply_text(f"ℹ️ Пользователь #{custom_id} уже активен.")
+        return
+    await db.toggle_managed_user_blocked(custom_id)
+    await update.message.reply_text(
+        f"✅ Пользователь #{custom_id} *{mu['custom_name']}* разблокирован.",
+        parse_mode="Markdown",
+    )
+
+
+# ─── /rename <номер> <новое_имя> ─────────────────────────────────────────────
+
+async def cmd_rename(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != OWNER_ID:
+        await update.message.reply_text(t("en", "not_admin"))
+        return
+    args = context.args or []
+    if len(args) < 2:
+        await update.message.reply_text(
+            "Использование: `/rename <номер> <новое_имя>`", parse_mode="Markdown"
+        )
+        return
+    try:
+        custom_id = int(args[0])
+    except ValueError:
+        await update.message.reply_text("❌ Укажите числовой номер пользователя.")
+        return
+    mu = await db.get_managed_user_by_id(custom_id)
+    if not mu:
+        await update.message.reply_text(f"❌ Пользователь #{custom_id} не найден в списке.")
+        return
+    new_name = " ".join(args[1:])
+    await db.update_managed_user_name(custom_id, new_name)
+    await update.message.reply_text(
+        f"✅ Пользователь #{custom_id} переименован: *{new_name}*",
+        parse_mode="Markdown",
+    )
+
+
+# ─── /notes <номер> <текст> ──────────────────────────────────────────────────
+
+async def cmd_notes(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != OWNER_ID:
+        await update.message.reply_text(t("en", "not_admin"))
+        return
+    args = context.args or []
+    if len(args) < 2:
+        await update.message.reply_text(
+            "Использование: `/notes <номер> <текст заметки>`\n"
+            "Например: `/notes 3 Оплатил Premium 17.05`",
+            parse_mode="Markdown",
+        )
+        return
+    try:
+        custom_id = int(args[0])
+    except ValueError:
+        await update.message.reply_text("❌ Укажите числовой номер пользователя.")
+        return
+    mu = await db.get_managed_user_by_id(custom_id)
+    if not mu:
+        await update.message.reply_text(f"❌ Пользователь #{custom_id} не найден в списке.")
+        return
+    notes_text = " ".join(args[1:])
+    await db.update_managed_user_notes(custom_id, notes_text)
+    await update.message.reply_text(
+        f"📝 Заметка для #{custom_id} *{mu['custom_name']}* сохранена:\n_{notes_text}_",
+        parse_mode="Markdown",
     )
 
 
@@ -1002,6 +1237,12 @@ async def post_init(application: Application):
         BotCommand("refer",     "👥 Referral / Реферал"),
         BotCommand("language",  "🌐 Language / Язык"),
         BotCommand("admin",     "📊 Admin stats"),
+        BotCommand("users",     "👥 Список пользователей (admin)"),
+        BotCommand("adduser",   "➕ Добавить пользователя (admin)"),
+        BotCommand("block",     "⛔ Заблокировать пользователя (admin)"),
+        BotCommand("unblock",   "✅ Разблокировать пользователя (admin)"),
+        BotCommand("rename",    "✏️ Переименовать пользователя (admin)"),
+        BotCommand("notes",     "📝 Заметка к пользователю (admin)"),
     ])
 
 
@@ -1012,6 +1253,9 @@ def main():
         .post_init(post_init)
         .build()
     )
+
+    # Middleware: блокировка пользователей (группа -1 — выполняется первой)
+    app.add_handler(TypeHandler(Update, _blocked_middleware), group=-1)
 
     # ConversationHandlers (порядок важен — от частного к общему)
     app.add_handler(_build_conv_handler())
@@ -1030,12 +1274,21 @@ def main():
     app.add_handler(CommandHandler("language",  cmd_language))
     app.add_handler(CommandHandler("admin",     cmd_admin))
 
+    # Команды управления пользователями (только владелец)
+    app.add_handler(CommandHandler("users",    cmd_users))
+    app.add_handler(CommandHandler("adduser",  cmd_adduser))
+    app.add_handler(CommandHandler("block",    cmd_block))
+    app.add_handler(CommandHandler("unblock",  cmd_unblock))
+    app.add_handler(CommandHandler("rename",   cmd_rename))
+    app.add_handler(CommandHandler("notes",    cmd_notes))
+
     # Inline /get_N /del_N /fav_N
     app.add_handler(MessageHandler(
         filters.Regex(r"^/(get|del|fav)_\d+$"), handle_inline_cmd
     ))
 
     # CallbackQuery
+    app.add_handler(CallbackQueryHandler(cb_admin_panel,    pattern="^admin_"))
     app.add_handler(CallbackQueryHandler(cb_menu,           pattern="^menu_"))
     app.add_handler(CallbackQueryHandler(cb_list_cat,       pattern="^listcat_"))
     app.add_handler(CallbackQueryHandler(cb_generate,       pattern="^gen_"))

@@ -68,6 +68,15 @@ async def init_db():
                 created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
             );
 
+            CREATE TABLE IF NOT EXISTS managed_users (
+                id          SERIAL PRIMARY KEY,
+                telegram_id BIGINT UNIQUE NOT NULL,
+                custom_name TEXT NOT NULL DEFAULT '',
+                is_blocked  BOOLEAN NOT NULL DEFAULT FALSE,
+                notes       TEXT NOT NULL DEFAULT '',
+                created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+
             CREATE INDEX IF NOT EXISTS idx_entries_user  ON entries(user_id);
             CREATE INDEX IF NOT EXISTS idx_entries_cat   ON entries(user_id, category);
             CREATE INDEX IF NOT EXISTS idx_referrals_ref ON referrals(referrer_id);
@@ -350,3 +359,85 @@ async def import_entries_from_backup(user_id: int, entries_json: str):
                 e.get("tags", ""),
                 e.get("is_favorite", False),
             )
+
+
+# ─── Управляемые пользователи (блокировка) ───────────────────────────────────
+
+async def add_managed_user(telegram_id: int, custom_name: str) -> int:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO managed_users(telegram_id, custom_name)
+            VALUES($1, $2)
+            ON CONFLICT(telegram_id) DO UPDATE SET custom_name=EXCLUDED.custom_name
+            RETURNING id
+            """,
+            telegram_id, custom_name,
+        )
+        return row["id"]
+
+
+async def get_all_managed_users() -> list:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        return await conn.fetch(
+            "SELECT * FROM managed_users ORDER BY id ASC"
+        )
+
+
+async def get_managed_user_by_id(custom_id: int) -> Optional[asyncpg.Record]:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        return await conn.fetchrow(
+            "SELECT * FROM managed_users WHERE id=$1", custom_id
+        )
+
+
+async def get_managed_user_by_telegram_id(telegram_id: int) -> Optional[asyncpg.Record]:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        return await conn.fetchrow(
+            "SELECT * FROM managed_users WHERE telegram_id=$1", telegram_id
+        )
+
+
+async def toggle_managed_user_blocked(custom_id: int) -> bool:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            UPDATE managed_users SET is_blocked = NOT is_blocked
+            WHERE id=$1 RETURNING is_blocked
+            """,
+            custom_id,
+        )
+        return row["is_blocked"] if row else False
+
+
+async def update_managed_user_name(custom_id: int, new_name: str):
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE managed_users SET custom_name=$1 WHERE id=$2",
+            new_name, custom_id,
+        )
+
+
+async def update_managed_user_notes(custom_id: int, notes: str):
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE managed_users SET notes=$1 WHERE id=$2",
+            notes, custom_id,
+        )
+
+
+async def is_user_blocked(telegram_id: int) -> bool:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT is_blocked FROM managed_users WHERE telegram_id=$1",
+            telegram_id,
+        )
+        return bool(row and row["is_blocked"])
