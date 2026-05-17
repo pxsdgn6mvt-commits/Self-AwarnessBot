@@ -14,11 +14,11 @@ import sys
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import ErrorEvent
 
 from aria import runtime
 from aria.config import settings
+from aria.db.fsm_storage import PostgresFSMStorage
 from aria.db.repo import (
     close_pool, create_tenant, get_tenant, get_tenant_by_token,
     init_db, list_active_tenants,
@@ -43,7 +43,7 @@ _tasks: dict[int, asyncio.Task] = {}
 # ── Shared Dispatcher ─────────────────────────────────────────────────────────
 
 def _build_dispatcher() -> Dispatcher:
-    dp = Dispatcher(storage=MemoryStorage())
+    dp = Dispatcher(storage=PostgresFSMStorage())
     dp.update.middleware(TenantMiddleware())
     dp.include_router(setup_router)
     dp.include_router(admin.router)

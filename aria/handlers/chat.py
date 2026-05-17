@@ -15,6 +15,8 @@ from aiogram import Bot, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
+from typing import Optional
+
 import aria.db.repo as repo
 from aria.services.ai import chat
 from aria.tenant import TenantConfig
@@ -117,7 +119,7 @@ def _detect_style(text: str) -> str:
 # ── Main handler ──────────────────────────────────────────────────────────────
 
 @router.message()
-async def handle_message(message: Message, bot: Bot, tenant: TenantConfig, state: FSMContext) -> None:
+async def handle_message(message: Message, bot: Bot, state: FSMContext, tenant: Optional[TenantConfig] = None) -> None:
     if not message.text or not tenant or not tenant.setup_complete:
         return
 

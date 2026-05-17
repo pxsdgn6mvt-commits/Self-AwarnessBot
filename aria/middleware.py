@@ -29,7 +29,7 @@ class TenantMiddleware(BaseMiddleware):
         if bot is None:
             return await handler(event, data)
 
-        log.info("Update received for bot ...%s", bot.token[-8:])
+        log.debug("Update received for bot ...%s", bot.token[-8:])
 
         now = time.monotonic()
         cached = TenantMiddleware._cache.get(bot.token)
@@ -46,8 +46,7 @@ class TenantMiddleware(BaseMiddleware):
             except Exception:
                 log.exception("DB error resolving tenant for bot token ...%s", bot.token[-8:])
 
-        if cached:
-            data["tenant"] = cached[0]
+        data["tenant"] = cached[0] if cached else None
         return await handler(event, data)
 
     @classmethod
