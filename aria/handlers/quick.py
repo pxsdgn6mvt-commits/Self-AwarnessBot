@@ -478,7 +478,12 @@ async def _build_dashboard(tenant: TenantConfig, period: str) -> str:
 @router.message(F.text == "📊 Дашборд", SetupDone(), StateFilter("*"))
 async def quick_dashboard(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
     await state.clear()
-    text = await _build_dashboard(tenant, "day")
+    try:
+        text = await _build_dashboard(tenant, "day")
+    except Exception as exc:
+        log.exception("Dashboard build error for tenant #%d", tenant.id)
+        await message.answer(f"⚠️ Ошибка дашборда: <code>{exc}</code>", parse_mode="HTML")
+        return
     await _delete_old_info(message.bot, message.chat.id)
     sent = await message.answer(text, reply_markup=_dashboard_kb("day"), parse_mode="HTML")
     _last_info_msg[message.chat.id] = sent.message_id
