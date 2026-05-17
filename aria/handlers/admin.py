@@ -294,7 +294,7 @@ async def cmd_add_bot(message: Message, state: FSMContext, tenant: TenantConfig)
     )
 
 
-@router.message(AddBot.waiting_token, ~Command())
+@router.message(AddBot.waiting_token, F.text.func(lambda x: not x.startswith("/")))
 async def process_new_token(message: Message, state: FSMContext) -> None:
     token = message.text.strip()
 
