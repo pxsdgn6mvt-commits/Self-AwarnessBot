@@ -111,6 +111,8 @@ class LocalAdapter(BookingAdapter):
                 "date": r["scheduled_at"].astimezone(tz).strftime("%Y-%m-%d"),
                 "time": r["scheduled_at"].astimezone(tz).strftime("%H:%M"),
                 "status": r["status"],
+                "paid": r["paid"] if "paid" in r.keys() else False,
+                "notes": r["notes"] if "notes" in r.keys() else None,
             }
             for r in rows
         ]
@@ -197,10 +199,10 @@ class GoogleAdapter(BookingAdapter):
         tz = ZoneInfo(self._t.timezone or "UTC")
         items = await asyncio.to_thread(self._list_events_sync, date_from.isoformat(), date_to.isoformat())
 
-        # Cross-reference with local DB: GCal event_id → integer DB booking_id
+        # Cross-reference with local DB: GCal event_id → DB row
         db_rows = await repo.get_bookings_in_range(self._t.id, date_from, date_to)
-        cal_to_db: dict[str, int] = {
-            r["calendar_event_id"]: r["id"]
+        cal_to_db: dict[str, dict] = {
+            r["calendar_event_id"]: dict(r)
             for r in db_rows if r.get("calendar_event_id")
         }
 
@@ -214,15 +216,17 @@ class GoogleAdapter(BookingAdapter):
             gcal_id = item.get("id", "")
             summary = item.get("summary", "")
             service, client = (summary.split(" — ", 1) if " — " in summary else ("", summary))
+            db_row = cal_to_db.get(gcal_id, {})
             events.append({
-                # Prefer integer DB id for cancel buttons; keep gcal string as fallback
-                "id": cal_to_db.get(gcal_id, gcal_id),
+                "id": db_row.get("id", gcal_id),
                 "title": summary,
                 "client": client.strip(),
                 "service": service.strip(),
                 "date": local_dt.strftime("%Y-%m-%d"),
                 "time": local_dt.strftime("%H:%M"),
                 "description": item.get("description", ""),
+                "paid": db_row.get("paid", False),
+                "notes": db_row.get("notes"),
             })
         return events
 

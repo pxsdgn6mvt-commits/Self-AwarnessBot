@@ -43,8 +43,13 @@ CREATE TABLE IF NOT EXISTS aria_bookings (
     noshow_check_sent   BOOLEAN NOT NULL DEFAULT FALSE,
     upsell_offered      BOOLEAN NOT NULL DEFAULT FALSE,
     calendar_event_id   TEXT,
+    paid                BOOLEAN NOT NULL DEFAULT FALSE,
+    notes               TEXT,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE aria_bookings ADD COLUMN IF NOT EXISTS paid  BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE aria_bookings ADD COLUMN IF NOT EXISTS notes TEXT;
 
 CREATE TABLE IF NOT EXISTS aria_waitlist (
     id          BIGSERIAL PRIMARY KEY,

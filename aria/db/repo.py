@@ -263,6 +263,20 @@ async def update_booking_status(booking_id: int, status: str) -> None:
         )
 
 
+async def set_booking_paid(booking_id: int, paid: bool = True) -> None:
+    async with _p().acquire() as conn:
+        await conn.execute(
+            "UPDATE aria_bookings SET paid=$1 WHERE id=$2", paid, booking_id
+        )
+
+
+async def set_booking_note(booking_id: int, note: str) -> None:
+    async with _p().acquire() as conn:
+        await conn.execute(
+            "UPDATE aria_bookings SET notes=$1 WHERE id=$2", note, booking_id
+        )
+
+
 async def mark_reminder_sent(booking_id: int) -> None:
     async with _p().acquire() as conn:
         await conn.execute(

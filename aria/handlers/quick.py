@@ -64,6 +64,11 @@ class QuickBook(StatesGroup):
     client  = State()
 
 
+class QuickEdit(StatesGroup):
+    note       = State()
+    reschedule = State()
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _services_kb(tenant: TenantConfig) -> InlineKeyboardMarkup:
@@ -102,28 +107,47 @@ def _time_kb(tenant: TenantConfig, date_str: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+def _booking_actions(bid: int, paid: bool) -> list[list[InlineKeyboardButton]]:
+    pay_label = "✅ Оплачено" if paid else "💰 Оплата"
+    return [
+        [
+            InlineKeyboardButton(text="✏️ Перенести",  callback_data=f"bk_reschedule:{bid}"),
+            InlineKeyboardButton(text="❌ Отменить",   callback_data=f"del_booking:{bid}"),
+        ],
+        [
+            InlineKeyboardButton(text=pay_label,       callback_data=f"bk_paid:{bid}"),
+            InlineKeyboardButton(text="📝 Заметка",    callback_data=f"bk_note:{bid}"),
+        ],
+    ]
+
+
 def _schedule_text_and_kb(
     events: list[dict], date_label: str
 ) -> tuple[str, InlineKeyboardMarkup | None]:
     if not events:
         return f"📅 {date_label}\n\nЗаписей нет.", None
 
-    lines = [f"📅 {date_label}\n"]
-    cancel_btns: list[InlineKeyboardButton] = []
+    lines = [f"📅 <b>{date_label}</b>\n"]
+    rows: list[list[InlineKeyboardButton]] = []
     for e in events:
         bid = e.get("id")
-        lines.append(f"• {e['time']} — {e['client']}, {e['service']}")
+        paid = e.get("paid", False)
+        notes = e.get("notes")
+        paid_mark = " ✅" if paid else ""
+        line = f"• {e['time']} — {e['client']}, {e['service']}{paid_mark}"
+        if notes:
+            line += f"\n  📝 {notes}"
+        lines.append(line)
         if isinstance(bid, int):
-            cancel_btns.append(
-                InlineKeyboardButton(
-                    text=f"❌ {e['client']} {e['time']}",
-                    callback_data=f"del_booking:{bid}",
-                )
-            )
+            rows.extend(_booking_actions(bid, paid))
+            rows.append([])  # визуальный разделитель между записями
 
-    rows: list[list[InlineKeyboardButton]] = [cancel_btns[i:i+2] for i in range(0, len(cancel_btns), 2)]
+    # убираем пустые строки-разделители в конце
+    while rows and rows[-1] == []:
+        rows.pop()
+
     rows.append([InlineKeyboardButton(text="➕ Добавить запись", callback_data="qb_start")])
-    kb = InlineKeyboardMarkup(inline_keyboard=rows)
+    kb = InlineKeyboardMarkup(inline_keyboard=[r for r in rows if r])
     return "\n".join(lines), kb
 
 
@@ -237,6 +261,113 @@ async def cb_cancel_booking(callback: CallbackQuery, tenant: TenantConfig) -> No
         )
     except Exception:
         pass
+
+
+# ── Quick actions: paid / note / reschedule ───────────────────────────────────
+
+@router.callback_query(F.data.startswith("bk_paid:"), SetupDone())
+async def cb_booking_paid(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    if not tenant.is_owner(callback.from_user.id):
+        await callback.answer("Нет доступа.", show_alert=True)
+        return
+    booking_id = int(callback.data.split(":")[1])
+    booking = await repo.get_booking(booking_id)
+    if not booking:
+        await callback.answer("Запись не найдена.", show_alert=True)
+        return
+    new_paid = not booking["paid"] if "paid" in booking.keys() else True
+    await repo.set_booking_paid(booking_id, new_paid)
+    label = "✅ Отмечено как оплачено" if new_paid else "↩️ Оплата отменена"
+    await callback.answer(label)
+    # обновляем кнопки под записью
+    try:
+        rows = list(callback.message.reply_markup.inline_keyboard)
+        new_rows = []
+        for row in rows:
+            new_row = []
+            for btn in row:
+                if btn.callback_data == callback.data:
+                    pay_label = "✅ Оплачено" if new_paid else "💰 Оплата"
+                    new_row.append(InlineKeyboardButton(text=pay_label, callback_data=btn.callback_data))
+                else:
+                    new_row.append(btn)
+            new_rows.append(new_row)
+        await callback.message.edit_reply_markup(
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=new_rows)
+        )
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data.startswith("bk_note:"), SetupDone())
+async def cb_booking_note_prompt(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
+    if not tenant.is_owner(callback.from_user.id):
+        await callback.answer("Нет доступа.", show_alert=True)
+        return
+    booking_id = int(callback.data.split(":")[1])
+    await state.set_state(QuickEdit.note)
+    await state.update_data(booking_id=booking_id, msg_id=callback.message.message_id)
+    await callback.answer()
+    await callback.message.answer(
+        "📝 Введи заметку для этой записи\n(или /skip чтобы отменить):"
+    )
+
+
+@router.message(QuickEdit.note, Command("skip"))
+async def cb_note_skip(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await message.answer("Отменено.")
+
+
+@router.message(QuickEdit.note, ~Command())
+async def cb_note_save(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    await repo.set_booking_note(data["booking_id"], message.text.strip())
+    await state.clear()
+    await message.answer("📝 Заметка сохранена.")
+
+
+@router.callback_query(F.data.startswith("bk_reschedule:"), SetupDone())
+async def cb_booking_reschedule_prompt(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
+    if not tenant.is_owner(callback.from_user.id):
+        await callback.answer("Нет доступа.", show_alert=True)
+        return
+    booking_id = int(callback.data.split(":")[1])
+    await state.set_state(QuickEdit.reschedule)
+    await state.update_data(booking_id=booking_id, tenant_id=tenant.id)
+    await callback.answer()
+    await callback.message.answer(
+        "✏️ Введи новую дату и время записи\n"
+        "Например: <code>20 мая 14:00</code>\n"
+        "Или /skip чтобы отменить.",
+        parse_mode="HTML",
+    )
+
+
+@router.message(QuickEdit.reschedule, Command("skip"))
+async def cb_reschedule_skip(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await message.answer("Отменено.")
+
+
+@router.message(QuickEdit.reschedule, ~Command())
+async def cb_reschedule_save(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
+    data = await state.get_data()
+    booking_id = data["booking_id"]
+    new_dt = parse_datetime(message.text.strip(), tenant)
+    if new_dt is None:
+        await message.answer(
+            "Не удалось распознать дату. Попробуй ещё раз, например: <code>20 мая 14:00</code>\n"
+            "Или /skip чтобы отменить.",
+            parse_mode="HTML",
+        )
+        return
+    await repo.update_booking_time(booking_id, new_dt)
+    await state.clear()
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo(tenant.timezone or "UTC")
+    formatted = new_dt.astimezone(tz).strftime("%-d %B %H:%M")
+    await message.answer(f"✅ Запись #{booking_id} перенесена на {formatted}.")
 
 
 # ── Guided booking wizard ─────────────────────────────────────────────────────
