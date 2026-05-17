@@ -59,10 +59,11 @@ MAIN_KB = ReplyKeyboardMarkup(
 # ── FSM ───────────────────────────────────────────────────────────────────────
 
 class QuickBook(StatesGroup):
-    service = State()
-    date    = State()
-    time    = State()
-    client  = State()
+    category = State()
+    service  = State()
+    date     = State()
+    time     = State()
+    client   = State()
 
 
 class QuickEdit(StatesGroup):
@@ -72,14 +73,25 @@ class QuickEdit(StatesGroup):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-async def _services_kb(tenant: TenantConfig) -> InlineKeyboardMarkup:
-    catalogue = await repo.get_all_service_items(tenant.id)
-    if catalogue:
-        rows = [[InlineKeyboardButton(text=it["name"], callback_data=f"qb_svc:{it['name']}")] for it in catalogue]
-    else:
-        # fallback: old flat services field
-        names = [s.strip() for s in tenant.services.split(",") if s.strip()]
-        rows = [[InlineKeyboardButton(text=s, callback_data=f"qb_svc:{s}")] for s in names]
+def _cats_kb(cats: list) -> InlineKeyboardMarkup:
+    rows = [[InlineKeyboardButton(text=c["name"], callback_data=f"qb_cat:{c['id']}")] for c in cats]
+    rows.append([InlineKeyboardButton(text="❌ Отмена", callback_data="qb_cancel")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _items_for_booking_kb(items: list) -> InlineKeyboardMarkup:
+    rows = []
+    for it in items:
+        label = it["name"]
+        extras = []
+        if it.get("price") is not None:
+            extras.append(f"{int(it['price'])}€")
+        if it.get("duration_minutes") is not None:
+            extras.append(f"{it['duration_minutes']}мин")
+        if extras:
+            label += " · " + " · ".join(extras)
+        rows.append([InlineKeyboardButton(text=label, callback_data=f"qb_svc:{it['name']}")])
+    rows.append([InlineKeyboardButton(text="◀️ Назад", callback_data="qb_back_cats")])
     rows.append([InlineKeyboardButton(text="❌ Отмена", callback_data="qb_cancel")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -99,12 +111,17 @@ def _date_kb(tenant: TenantConfig) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def _time_kb(tenant: TenantConfig, date_str: str) -> InlineKeyboardMarkup:
+async def _time_kb(tenant: TenantConfig, date_str: str) -> InlineKeyboardMarkup:
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo(tenant.timezone or "UTC")
+    booked_dts = await repo.get_slots_on_date(tenant.id, date_str)
+    booked = {dt.astimezone(tz).strftime("%H:%M") for dt in booked_dts}
     h, m = tenant.open_hour, 0
     buttons: list[InlineKeyboardButton] = []
     while h < tenant.close_hour:
         label = f"{h:02d}:{m:02d}"
-        buttons.append(InlineKeyboardButton(text=label, callback_data=f"qb_time:{label}"))
+        if label not in booked:
+            buttons.append(InlineKeyboardButton(text=label, callback_data=f"qb_time:{label}"))
         total = h * 60 + m + tenant.slot_minutes
         h, m = divmod(total, 60)
     rows = [buttons[i:i+3] for i in range(0, len(buttons), 3)]
@@ -444,9 +461,18 @@ async def cb_reschedule_save(message: Message, state: FSMContext, tenant: Tenant
 # ── Guided booking wizard ─────────────────────────────────────────────────────
 
 async def _start_booking(message_or_query, state: FSMContext, tenant: TenantConfig) -> None:
-    await state.set_state(QuickBook.service)
-    text = "➕ <b>Новая запись</b>\n\nВыбери услугу:"
-    kb   = await _services_kb(tenant)
+    cats = await repo.get_categories(tenant.id)
+    if cats:
+        await state.set_state(QuickBook.category)
+        text = "➕ <b>Новая запись</b>\n\nВыбери категорию:"
+        kb   = _cats_kb(cats)
+    else:
+        await state.set_state(QuickBook.service)
+        text = "➕ <b>Новая запись</b>\n\nВыбери услугу:"
+        names = [s.strip() for s in tenant.services.split(",") if s.strip()]
+        rows  = [[InlineKeyboardButton(text=s, callback_data=f"qb_svc:{s}")] for s in names]
+        rows.append([InlineKeyboardButton(text="❌ Отмена", callback_data="qb_cancel")])
+        kb = InlineKeyboardMarkup(inline_keyboard=rows)
     if isinstance(message_or_query, Message):
         sent = await message_or_query.answer(text, reply_markup=kb)
     else:
@@ -478,15 +504,48 @@ async def cb_qb_cancel(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
+# Step 0 — category chosen
+@router.callback_query(QuickBook.category, F.data.startswith("qb_cat:"))
+async def cb_category(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
+    cat_id = int(callback.data[len("qb_cat:"):])
+    cats   = await repo.get_categories(tenant.id)
+    cat    = next((c for c in cats if c["id"] == cat_id), None)
+    cat_name = cat["name"] if cat else "?"
+    items  = await repo.get_items(cat_id)
+    await state.update_data(category=cat_name)
+    await state.set_state(QuickBook.service)
+    await callback.message.edit_text(
+        f"➕ <b>Новая запись</b>\n"
+        f"Категория: <b>{cat_name}</b>\n\n"
+        f"Выбери услугу:",
+        reply_markup=_items_for_booking_kb(items),
+    )
+    await callback.answer()
+
+
+@router.callback_query(QuickBook.service, F.data == "qb_back_cats")
+async def cb_back_to_cats(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
+    cats = await repo.get_categories(tenant.id)
+    await state.set_state(QuickBook.category)
+    await callback.message.edit_text(
+        "➕ <b>Новая запись</b>\n\nВыбери категорию:",
+        reply_markup=_cats_kb(cats),
+    )
+    await callback.answer()
+
+
 # Step 1 — service chosen
 @router.callback_query(QuickBook.service, F.data.startswith("qb_svc:"))
 async def cb_service(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
-    service = callback.data[len("qb_svc:"):]
+    service  = callback.data[len("qb_svc:"):]
+    data     = await state.get_data()
+    category = data.get("category", "")
     await state.update_data(service=service)
     await state.set_state(QuickBook.date)
+    cat_line = f"Категория: <b>{category}</b>\n" if category else ""
     await callback.message.edit_text(
         f"➕ <b>Новая запись</b>\n"
-        f"Услуга: <b>{service}</b>\n\n"
+        f"{cat_line}Услуга: <b>{service}</b>\n\n"
         f"Выбери дату:",
         reply_markup=_date_kb(tenant),
     )
@@ -517,7 +576,7 @@ async def cb_date(callback: CallbackQuery, state: FSMContext, tenant: TenantConf
         f"Услуга: <b>{service}</b>\n"
         f"Дата: <b>{value}</b>\n\n"
         f"Выбери время:",
-        reply_markup=_time_kb(tenant, value),
+        reply_markup=await _time_kb(tenant, value),
     )
     await callback.answer()
 
@@ -570,6 +629,7 @@ async def text_date(message: Message, state: FSMContext, tenant: TenantConfig) -
     except Exception:
         pass
 
+    time_kb = await _time_kb(tenant, date_str)
     if wizard_msg_id:
         try:
             await message.bot.edit_message_text(
@@ -581,14 +641,14 @@ async def text_date(message: Message, state: FSMContext, tenant: TenantConfig) -
                     f"Дата: <b>{date_str}</b>\n\n"
                     f"Выбери время:"
                 ),
-                reply_markup=_time_kb(tenant, date_str),
+                reply_markup=time_kb,
             )
             return
         except Exception:
             pass
     await message.answer(
         f"✅ Дата: <b>{date_str}</b>\n\nВыбери время:",
-        reply_markup=_time_kb(tenant, date_str),
+        reply_markup=time_kb,
     )
 
 
@@ -712,9 +772,17 @@ async def text_client(message: Message, state: FSMContext, tenant: TenantConfig)
             schedule_reminder_job(bid, dt, message.from_user.id, message.bot, tenant)
             schedule_noshow_job(bid, dt, message.from_user.id, message.bot, tenant)
 
+            svc_info = await repo.get_service_info(tenant.id, service)
+            svc_extras = []
+            if svc_info and svc_info["price"] is not None:
+                svc_extras.append(f"{int(svc_info['price'])}€")
+            if svc_info and svc_info["duration_minutes"] is not None:
+                svc_extras.append(f"{svc_info['duration_minutes']}мин")
+            svc_line = service + (" · " + " · ".join(svc_extras) if svc_extras else "")
+
             gcal_note = " · Google Calendar 📅" if cal_id else ""
             result = (
-                f"✅ <b>{client_name}</b> — <b>{service}</b>\n"
+                f"✅ <b>{client_name}</b> — <b>{svc_line}</b>\n"
                 f"{date_str}, {time_str}{gcal_note}\n"
                 f"Запись #{bid}"
             )

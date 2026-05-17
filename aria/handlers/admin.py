@@ -76,10 +76,10 @@ async def _items_kb(category_id: int, tenant_id: int) -> InlineKeyboardMarkup:
         if it["duration_minutes"] is not None:
             parts.append(f"{it['duration_minutes']}мин")
         label = " · ".join(parts)
+        rows.append([InlineKeyboardButton(text=label, callback_data="adm:noop")])
         rows.append([
-            InlineKeyboardButton(text=label,  callback_data="adm:noop"),
-            InlineKeyboardButton(text="✏️",   callback_data=f"adm:eitem:{it['id']}:{category_id}"),
-            InlineKeyboardButton(text="🗑",   callback_data=f"adm:dsub:{it['id']}:{category_id}"),
+            InlineKeyboardButton(text="✏️ Изменить", callback_data=f"adm:eitem:{it['id']}:{category_id}"),
+            InlineKeyboardButton(text="🗑 Удалить",  callback_data=f"adm:dsub:{it['id']}:{category_id}"),
         ])
     rows.append([InlineKeyboardButton(text="➕ Добавить услугу", callback_data=f"adm:addsub:{category_id}")])
     rows.append([InlineKeyboardButton(text="◀️ Назад", callback_data="adm:services")])

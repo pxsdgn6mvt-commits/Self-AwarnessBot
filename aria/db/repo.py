@@ -497,6 +497,7 @@ async def get_categories(tenant_id: int) -> list[asyncpg.Record]:
 
 
 async def get_all_service_items(tenant_id: int) -> list[asyncpg.Record]:
+    """All items across all categories for a tenant (for booking wizard)."""
     async with _p().acquire() as conn:
         return await conn.fetch(
             """
@@ -507,6 +508,21 @@ async def get_all_service_items(tenant_id: int) -> list[asyncpg.Record]:
             ORDER BY sc.name, si.position, si.id
             """,
             tenant_id,
+        )
+
+
+async def get_service_info(tenant_id: int, service_name: str) -> asyncpg.Record | None:
+    """Fetch price and duration for a service by name."""
+    async with _p().acquire() as conn:
+        return await conn.fetchrow(
+            """
+            SELECT si.price, si.duration_minutes
+            FROM aria_service_items si
+            JOIN aria_service_categories sc ON si.category_id = sc.id
+            WHERE sc.tenant_id = $1 AND LOWER(si.name) = LOWER($2)
+            LIMIT 1
+            """,
+            tenant_id, service_name,
         )
 
 
