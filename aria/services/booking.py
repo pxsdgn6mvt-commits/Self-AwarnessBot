@@ -266,8 +266,14 @@ class GoogleAdapter(BookingAdapter):
             "start": {"dateTime": dt.isoformat(), "timeZone": tz_name},
             "end": {"dateTime": end_dt.isoformat(), "timeZone": tz_name},
         }
-        created = await asyncio.to_thread(self._insert_sync, body)
-        cal_id = created.get("id")
+        cal_id: Optional[str] = None
+        try:
+            created = await asyncio.to_thread(self._insert_sync, body)
+            cal_id = created.get("id")
+        except Exception as exc:
+            # GCal insert failed — save to DB only so the booking is NOT lost.
+            # Caller receives cal_id=None and must tell the AI "google_calendar: false".
+            log.warning("Tenant %d: GCal insert failed (%s), saving to DB only", self._t.id, exc)
         bid = await repo.create_booking(self._t.id, user_id, client_name, service, dt, cal_id)
         return bid, cal_id
 

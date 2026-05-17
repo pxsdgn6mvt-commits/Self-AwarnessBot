@@ -67,9 +67,14 @@ def _build_system_prompt(tenant: "TenantConfig", style: str = "casual") -> str: 
 — Каждое действие подтверждаешь: «Готово — Катя записана на 16 мая в 14:00»
 — Если непонятно — один уточняющий вопрос, не больше
 — Не начинай с «Конечно!», «Отлично!», «Как я могу помочь?»
-— НИКОГДА не говори что запись в Google Calendar если в результате инструмента нет "google_calendar": true
-— Если ошибка "calendar_not_found" — скажи поделиться календарём с сервисным аккаунтом
-— Если ошибка "calendar_api_disabled" — скажи включить Google Calendar API в консоли
+
+ПРАВИЛА ИНСТРУМЕНТОВ (строго обязательны):
+— Если инструмент вернул поле "error" — это означает ПРОВАЛ. Запись НЕ создана. Сообщи об ошибке.
+— НИКОГДА не говори «запись создана» или «готово», если в ответе инструмента есть "error".
+— НИКОГДА не говори что запись в Google Calendar если в ответе инструмента нет "google_calendar": true.
+— Если "error": "calendar_not_found" — скажи поделиться календарём с сервисным аккаунтом и дать права «Вносить изменения».
+— Если "error": "calendar_api_disabled" — скажи включить Google Calendar API в Google Cloud Console.
+— Если "google_calendar": false — запись сохранена ТОЛЬКО в боте, без Google Calendar (так и скажи).
 
 ЯЗЫК:
 Отвечай ВСЕГДА на том же языке, на котором пишет {tenant.owner_name}.
@@ -245,19 +250,27 @@ async def _exec_tool(
     if name == "add_booking":
         dt = parse_datetime(args["date"], args["time"], tz_str)
         if dt is None:
-            return json.dumps({"error": "invalid date/time"})
-        bid, cal_id = await adapter.create_event(
-            owner_id, args["client_name"], args["service"], dt
-        )
+            return json.dumps({"error": "invalid_datetime",
+                               "message": "Could not parse date/time. Ask user to confirm the date and time."})
+        try:
+            bid, cal_id = await adapter.create_event(
+                owner_id, args["client_name"], args["service"], dt
+            )
+        except Exception as exc:
+            log.exception("add_booking: create_event failed")
+            return json.dumps({"error": "booking_not_created",
+                               "message": f"Failed to save booking: {exc}"})
         # Schedule reminder (day before at 09:00 local) and no-show check (2h after)
         from aria.services.scheduler import schedule_reminder_job, schedule_noshow_job
         schedule_reminder_job(bid, dt, owner_id, bot, tenant)
         schedule_noshow_job(bid, dt, owner_id, bot, tenant)
+        gcal_ok = cal_id is not None
         return json.dumps({
             "booking_id": bid, "client": args["client_name"],
             "service": args["service"], "date": args["date"],
             "time": args["time"], "confirmed": True,
-            "google_calendar": cal_id is not None,
+            "google_calendar": gcal_ok,
+            "storage": "google_calendar" if gcal_ok else "local_only",
         })
 
     if name == "reschedule_booking":
@@ -354,14 +367,19 @@ async def chat(
                                           owner_id=user_id, bot=bot)
             except Exception as exc:
                 log.exception("Tool %s failed", tc.name)
-                if "404" in str(exc) or "Not Found" in str(exc):
+                err_str = str(exc)
+                if tc.name == "add_booking":
+                    # Must be unambiguous: booking was NOT created
+                    result = json.dumps({"error": "booking_not_created",
+                                         "message": f"Booking failed: {err_str}"})
+                elif "404" in err_str or "Not Found" in err_str or "could not find" in err_str.lower():
                     result = json.dumps({"error": "calendar_not_found",
-                                         "hint": "Share the calendar with the service account email (Editor role)."})
-                elif "403" in str(exc) or "disabled" in str(exc):
+                                         "hint": "Share the calendar with the service account (Editor role)."})
+                elif "403" in err_str or "disabled" in err_str:
                     result = json.dumps({"error": "calendar_api_disabled",
                                          "hint": "Enable Google Calendar API in Google Cloud Console."})
                 else:
-                    result = json.dumps({"error": str(exc)})
+                    result = json.dumps({"error": err_str})
             tool_results.append({"type": "tool_result", "tool_use_id": tc.id, "content": result})
         history.append({"role": "user", "content": tool_results})
     else:
