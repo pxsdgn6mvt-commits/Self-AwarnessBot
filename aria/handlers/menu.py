@@ -61,11 +61,11 @@ def _owner_settings_kb() -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(text="📧 Email",            callback_data="cfg:email"),
-            InlineKeyboardButton(text="🔍 Тест GCal",        callback_data="cfg:test_cal"),
+            InlineKeyboardButton(text="📊 Статус",           callback_data="cfg:status"),
         ],
         [InlineKeyboardButton(text="📋 Услуги и категории",  callback_data="adm:services")],
         [InlineKeyboardButton(text="🗑 Сбросить историю",    callback_data="cfg:reset_chat")],
-        [InlineKeyboardButton(text="📊 Статус бота",         callback_data="cfg:status")],
+        [InlineKeyboardButton(text="❓ Помощь",              callback_data="cfg:help")],
         [InlineKeyboardButton(text="✖️ Закрыть",             callback_data="menu:close")],
     ])
 
@@ -173,7 +173,7 @@ async def _show_week(message: Message, tenant: TenantConfig, offset_weeks: int =
 
 # ── Entry points: reply keyboard buttons ──────────────────────────────────────
 
-@router.message(F.text == "📱 Меню", SetupDone())
+@router.message(F.text.in_({"📱 Меню", "⚙️ Настройки"}), SetupDone())
 async def cmd_menu(message: Message, tenant: TenantConfig) -> None:
     if _is_admin_bot(tenant, message.from_user.id):
         await message.answer("👑 <b>Управление платформой</b>", reply_markup=_admin_inline_kb())
@@ -367,6 +367,36 @@ async def cb_cfg_status(callback: CallbackQuery, tenant: TenantConfig) -> None:
         pass
     from aria.handlers.start import cmd_status
     await cmd_status(callback.message, tenant, caller_id=callback.from_user.id)
+
+
+@router.callback_query(F.data == "cfg:help", SetupDone())
+async def cb_cfg_help(callback: CallbackQuery) -> None:
+    await callback.answer()
+    text = (
+        "❓ <b>Помощь — что умеет Aria</b>\n\n"
+        "<b>Кнопки:</b>\n"
+        "📅 <b>Сегодня / Завтра</b> — расписание на день\n"
+        "➕ <b>Новая запись</b> — добавить клиента вручную\n"
+        "📋 <b>Ближайшие</b> — записи на ближайшие 7 дней\n"
+        "⚙️ <b>Настройки</b> — настройки бота\n\n"
+        "<b>Просто пиши мне:</b>\n"
+        "• «запиши Катю на ресницы 20 мая в 14:00»\n"
+        "• «что у меня сегодня?»\n"
+        "• «что на этой неделе?»\n"
+        "• «перенеси запись #5 на завтра в 11:00»\n"
+        "• «отмени запись #5»\n"
+        "• «свободно 20 мая в 15:00?»\n\n"
+        "<b>Команды:</b>\n"
+        "/reset — очистить историю диалога\n"
+        "/status — статус бота и интеграций"
+    )
+    await callback.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="← Назад", callback_data="menu:main")],
+        ]),
+        parse_mode="HTML",
+    )
 
 
 # ── Admin callbacks ───────────────────────────────────────────────────────────

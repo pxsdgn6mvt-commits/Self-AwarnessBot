@@ -52,6 +52,21 @@ def _tz_kb(prefix: str) -> InlineKeyboardMarkup:
     ])
 
 
+_WELCOME = {
+    "ru": "Привет, {name}! 👋\nЯ Aria — AI-ресепшн для <b>{salon}</b>.\n\nГотова помочь с расписанием и записями.\n💡 Нажми <b>⚙️ Настройки → ❓ Помощь</b> чтобы узнать всё что умею.",
+    "en": "Hi, {name}! 👋\nI'm Aria — AI receptionist for <b>{salon}</b>.\n\nReady to help with your schedule and bookings.\n💡 Tap <b>⚙️ Settings → ❓ Help</b> to see everything I can do.",
+    "fi": "Hei, {name}! 👋\nOlen Aria — AI-vastaanottovirkailija kohteelle <b>{salon}</b>.\n\nValmis auttamaan aikatauluissa ja varauksissa.\n💡 Paina <b>⚙️ Asetukset → ❓ Ohje</b> nähdäksesi kaiken mitä osaan.",
+}
+
+
+def _lang_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="🇷🇺 Русский", callback_data="start_lang:ru"),
+        InlineKeyboardButton(text="🇬🇧 English", callback_data="start_lang:en"),
+        InlineKeyboardButton(text="🇫🇮 Suomi",   callback_data="start_lang:fi"),
+    ]])
+
+
 @router.message(CommandStart(), SetupDone())
 async def cmd_start(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
     await repo.upsert_client(tenant.id, message.from_user.id,
@@ -70,14 +85,20 @@ async def cmd_start(message: Message, state: FSMContext, tenant: TenantConfig) -
         )
     else:
         await message.answer(
-            f"Привет, {tenant.owner_name}! Я Aria — твой ресепшн для <b>{tenant.salon_name}</b>.\n\n"
-            "Используй кнопки внизу или просто пиши:\n"
-            "• «что у меня сегодня?»\n"
-            "• «запиши Катю на ресницы 20 мая в 14:00»\n"
-            "• «что на этой неделе?»\n\n"
-            "/help — список примеров",
-            reply_markup=MAIN_KB,
+            "🌐 Выбери язык / Choose language / Valitse kieli:",
+            reply_markup=_lang_kb(),
         )
+
+
+@router.callback_query(F.data.startswith("start_lang:"), SetupDone())
+async def cb_start_lang(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    lang = callback.data.split(":")[1]
+    await repo.upsert_client(tenant.id, callback.from_user.id, lang)
+    name = tenant.owner_name or callback.from_user.first_name or "друг"
+    text = _WELCOME.get(lang, _WELCOME["ru"]).format(name=name, salon=tenant.salon_name)
+    await callback.answer()
+    await callback.message.delete()
+    await callback.message.answer(text, parse_mode="HTML", reply_markup=MAIN_KB)
 
 
 @router.message(Command("reset"))
