@@ -1,272 +1,78 @@
 from __future__ import annotations
-
 import os
-from dataclasses import dataclass
 from typing import Optional
 
 
-def _env(key: str, default: str = "") -> str:
-    return os.getenv(key, default)
+def _require(key: str) -> str:
+    val = os.getenv(key)
+    if not val:
+        raise RuntimeError(f"Required env var {key!r} is not set")
+    return val
 
 
-def _int_env(key: str, default: int) -> int:
+def _int(key: str, default: int) -> int:
     return int(os.getenv(key, str(default)))
 
 
-@dataclass
-class TenantConfig:
-    """Per-bot configuration injected into every handler via aiogram DI."""
-    bot_token: str
-    tenant_id: int
-
-    salon_name: str = "Our Salon"
-    owner_name: str = "the manager"
-    owner_telegram_id: int = 0
-
-    salon_services: str = "haircut, coloring, manicure, pedicure, facial"
-    salon_services_tree: str = ""   # "Cat[sub1,sub2];Cat2[sub3]"
-    salon_hours: str = "Mon–Sat 10:00–20:00"
-    booking_link: str = ""
-    escalation_hours: int = 2
-    max_services: int = 20
-    salon_avatar_url: str = ""
-
-    salon_open_hour: int = 10
-    salon_close_hour: int = 20
-    salon_slot_minutes: int = 60
-    salon_working_days: str = "1,2,3,4,5,6"
-    upsell_pairs: str = "haircut:coloring,manicure:pedicure,facial:massage"
-
-    claude_model: str = "claude-haiku-4-5-20251001"
-    anthropic_api_key: str = ""
-    database_url: str = ""
-
-    salon_timezone: str = "Europe/Moscow"
-
-    # Email monitoring (IMAP)
-    # Gmail: enable IMAP + create App Password at myaccount.google.com/apppasswords
-    email_address: str = ""
-    email_password: str = ""
-    email_imap_server: str = "imap.gmail.com"
-    email_imap_port: int = 993
-    email_allowed_senders: str = ""   # comma-separated; empty = allow all
-    email_poll_seconds: int = 60
-
-    @property
-    def services_tree_dict(self) -> dict[str, list[str]]:
-        raw = self.salon_services_tree.strip()
-        if not raw:
-            return {}
-        result: dict[str, list[str]] = {}
-        for chunk in raw.split(";"):
-            chunk = chunk.strip()
-            if "[" not in chunk or not chunk.endswith("]"):
-                continue
-            cat, rest = chunk.split("[", 1)
-            subs = [s.strip() for s in rest[:-1].split(",") if s.strip()]
-            if cat.strip() and subs:
-                result[cat.strip()] = subs
-        return result
-
-    @property
-    def working_days(self) -> list[int]:
-        return [int(d) for d in self.salon_working_days.split(",") if d.strip()]
-
-    def upsell_for(self, service: str) -> Optional[str]:
-        for pair in self.upsell_pairs.split(","):
-            parts = pair.strip().split(":")
-            if len(parts) == 2 and parts[0].strip().lower() == service.lower():
-                return parts[1].strip()
-        return None
+def _str(key: str, default: str = "") -> str:
+    return os.getenv(key, default)
 
 
-def _build_tenant(n: int, prefix: str) -> TenantConfig:
-    def p(key: str, shared: str, default: str = "") -> str:
-        return _env(f"{prefix}{key}", _env(shared, default))
+class Settings:
+    # ── Global infrastructure ─────────────────────────────────────────────
+    DATABASE_URL: str
+    ANTHROPIC_API_KEY: str       # shared fallback; tenants can override per-row
+    ADMIN_TELEGRAM_ID: int       # your personal Telegram ID — full admin access
 
-    def pi(key: str, shared: str, default: int) -> int:
-        raw = os.getenv(f"{prefix}{key}") or os.getenv(shared)
-        return int(raw) if raw else default
+    # ── Management bot ────────────────────────────────────────────────────
+    # Set MANAGEMENT_BOT_TOKEN to the token of @AriaReseptionist_Bot.
+    # That bot will show the admin panel UI; all other bots show the salon UI.
+    MANAGEMENT_BOT_TOKEN: str
+    # Used on first startup to auto-create the initial tenant from env vars.
+    # After that, new tenants are added via /add_bot admin command.
+    BOT_TOKEN: str
+    OWNER_TELEGRAM_ID: int
+    SALON_NAME: str
+    OWNER_NAME: str
+    SALON_SERVICES: str
+    SALON_HOURS: str
+    SALON_OPEN_HOUR: int
+    SALON_CLOSE_HOUR: int
+    SALON_SLOT_MINUTES: int
+    SALON_WORKING_DAYS: str
+    GOOGLE_CALENDAR_CREDENTIALS: Optional[str]
+    GOOGLE_CALENDAR_ID: Optional[str]
 
-    return TenantConfig(
-        bot_token=_env(f"{prefix}TOKEN"),
-        tenant_id=n,
-        salon_name=p("SALON_NAME", "SALON_NAME", "Our Salon"),
-        owner_name=p("OWNER_NAME", "SALON_OWNER_NAME", "the manager"),
-        owner_telegram_id=pi("OWNER_ID", "ARIA_OWNER_TELEGRAM_ID", 0),
-        salon_services=p("SERVICES", "SALON_SERVICES", "haircut, coloring, manicure"),
-        salon_services_tree=p("SERVICES_TREE", "SALON_SERVICES_TREE", ""),
-        salon_hours=p("HOURS", "SALON_HOURS", "Mon–Sat 10:00–20:00"),
-        booking_link=p("BOOKING_LINK", "SALON_BOOKING_LINK", ""),
-        escalation_hours=pi("ESCALATION_HOURS", "SALON_ESCALATION_HOURS", 2),
-        max_services=pi("MAX_SERVICES", "SALON_MAX_SERVICES", 20),
-        salon_avatar_url=p("AVATAR_URL", "SALON_AVATAR_URL", ""),
-        salon_open_hour=pi("OPEN_HOUR", "SALON_OPEN_HOUR", 10),
-        salon_close_hour=pi("CLOSE_HOUR", "SALON_CLOSE_HOUR", 20),
-        salon_slot_minutes=pi("SLOT_MINUTES", "SALON_SLOT_MINUTES", 60),
-        salon_working_days=p("WORKING_DAYS", "SALON_WORKING_DAYS", "1,2,3,4,5,6"),
-        upsell_pairs=p("UPSELL_PAIRS", "SALON_UPSELL_PAIRS",
-                       "haircut:coloring,manicure:pedicure,facial:massage"),
-        claude_model=_env("ARIA_CLAUDE_MODEL", "claude-haiku-4-5-20251001"),
-        anthropic_api_key=_env("ANTHROPIC_API_KEY"),
-        database_url=_env("ARIA_DATABASE_URL", "postgresql://localhost/aria_salon"),
-        email_address=p("EMAIL_ADDRESS", "ARIA_EMAIL_ADDRESS", ""),
-        email_password=p("EMAIL_PASSWORD", "ARIA_EMAIL_PASSWORD", ""),
-        email_imap_server=p("EMAIL_IMAP_SERVER", "ARIA_EMAIL_IMAP_SERVER", "imap.gmail.com"),
-        email_imap_port=pi("EMAIL_IMAP_PORT", "ARIA_EMAIL_IMAP_PORT", 993),
-        email_allowed_senders=p("EMAIL_ALLOWED_SENDERS", "ARIA_EMAIL_ALLOWED_SENDERS", ""),
-        email_poll_seconds=pi("EMAIL_POLL_SECONDS", "ARIA_EMAIL_POLL_SECONDS", 60),
-        salon_timezone=p("TIMEZONE", "SALON_TIMEZONE", "Europe/Moscow"),
-    )
+    def __init__(self) -> None:
+        self.DATABASE_URL = (
+            _str("ARIA_DATABASE_URL") or _str("DATABASE_URL", "postgresql://localhost/aria_salon")
+        )
+        self.ANTHROPIC_API_KEY = _require("ANTHROPIC_API_KEY")
+        self.ADMIN_TELEGRAM_ID = _int("ARIA_OWNER_TELEGRAM_ID", 0)
 
+        self.MANAGEMENT_BOT_TOKEN = _str("MANAGEMENT_BOT_TOKEN", "")
 
-def load_tenants() -> list[TenantConfig]:
-    """
-    Load all tenant configs from environment variables.
-
-    Format A — numbered bots (multi-tenant):
-      ARIA_BOT_1_TOKEN, ARIA_BOT_1_SALON_NAME, ARIA_BOT_1_OWNER_ID,
-      ARIA_BOT_1_SERVICES_TREE, ...
-      ARIA_BOT_2_TOKEN, ...
-
-    Format B — legacy single bot:
-      ARIA_BOT_TOKEN, SALON_NAME, ...
-
-    Shared across all bots (used as defaults):
-      ANTHROPIC_API_KEY, ARIA_DATABASE_URL, ARIA_CLAUDE_MODEL,
-      SALON_MAX_SERVICES, SALON_OPEN_HOUR, SALON_CLOSE_HOUR, ...
-    """
-    tenants: list[TenantConfig] = []
-
-    for i in range(1, 21):
-        prefix = f"ARIA_BOT_{i}_"
-        if not _env(f"{prefix}TOKEN"):
-            continue
-        tenants.append(_build_tenant(i, prefix))
-
-    if not tenants:
-        token = _env("ARIA_BOT_TOKEN")
-        if token:
-            t = _build_tenant(1, "ARIA_BOT_1_")
-            t.bot_token = token
-            tenants.append(t)
-
-    return tenants
+        self.BOT_TOKEN = _require("ARIA_BOT_TOKEN")
+        self.OWNER_TELEGRAM_ID = _int("ARIA_OWNER_TELEGRAM_ID", 0)
+        self.SALON_NAME = _str("SALON_NAME", "My Salon")
+        self.OWNER_NAME = _str("SALON_OWNER_NAME", "Owner")
+        self.SALON_SERVICES = _str("SALON_SERVICES", "haircut, manicure")
+        self.SALON_HOURS = _str("SALON_HOURS", "Mon-Sat 10:00-20:00")
+        self.SALON_OPEN_HOUR = _int("SALON_OPEN_HOUR", 10)
+        self.SALON_CLOSE_HOUR = _int("SALON_CLOSE_HOUR", 20)
+        self.SALON_SLOT_MINUTES = _int("SALON_SLOT_MINUTES", 60)
+        self.SALON_WORKING_DAYS = _str("SALON_WORKING_DAYS", "1,2,3,4,5,6")
+        self.GOOGLE_CALENDAR_CREDENTIALS = os.getenv("GOOGLE_CALENDAR_CREDENTIALS")
+        self.GOOGLE_CALENDAR_ID = os.getenv("GOOGLE_CALENDAR_ID")
+        # Webhook mode: set WEBHOOK_BASE_URL to your Railway public domain.
+        # Accepted forms:
+        #   https://aria-bot.up.railway.app   (full URL)
+        #   aria-bot.up.railway.app           (auto-prepends https://)
+        raw_url = _str("WEBHOOK_BASE_URL", "").strip().rstrip("/")
+        if raw_url and not raw_url.startswith("http"):
+            raw_url = "https://" + raw_url
+        self.WEBHOOK_BASE_URL = raw_url
+        self.WEBHOOK_SECRET = _str("WEBHOOK_SECRET", "")
 
 
-# Keep a global singleton for code that hasn't been migrated to DI yet
-class _LegacySettings:
-    """Backwards-compat shim — reads first tenant or env vars directly."""
-    @property
-    def BOT_TOKEN(self) -> str:
-        return _env("ARIA_BOT_TOKEN")
-
-    @property
-    def OWNER_TELEGRAM_ID(self) -> int:
-        return _int_env("ARIA_OWNER_TELEGRAM_ID", 0)
-
-    @property
-    def ANTHROPIC_API_KEY(self) -> str:
-        return _env("ANTHROPIC_API_KEY")
-
-    @property
-    def CLAUDE_MODEL(self) -> str:
-        return _env("ARIA_CLAUDE_MODEL", "claude-haiku-4-5-20251001")
-
-    @property
-    def DATABASE_URL(self) -> str:
-        return _env("ARIA_DATABASE_URL", "postgresql://localhost/aria_salon")
-
-    @property
-    def SALON_NAME(self) -> str:
-        return _env("SALON_NAME", "Our Salon")
-
-    @property
-    def OWNER_NAME(self) -> str:
-        return _env("SALON_OWNER_NAME", "the manager")
-
-    @property
-    def SALON_SERVICES(self) -> str:
-        return _env("SALON_SERVICES", "haircut, coloring, manicure")
-
-    @property
-    def SALON_HOURS(self) -> str:
-        return _env("SALON_HOURS", "Mon–Sat 10:00–20:00")
-
-    @property
-    def BOOKING_LINK(self) -> str:
-        return _env("SALON_BOOKING_LINK", "")
-
-    @property
-    def ESCALATION_HOURS(self) -> int:
-        return _int_env("SALON_ESCALATION_HOURS", 2)
-
-    @property
-    def SALON_OPEN_HOUR(self) -> int:
-        return _int_env("SALON_OPEN_HOUR", 10)
-
-    @property
-    def SALON_CLOSE_HOUR(self) -> int:
-        return _int_env("SALON_CLOSE_HOUR", 20)
-
-    @property
-    def SALON_SLOT_MINUTES(self) -> int:
-        return _int_env("SALON_SLOT_MINUTES", 60)
-
-    @property
-    def SALON_WORKING_DAYS(self) -> str:
-        return _env("SALON_WORKING_DAYS", "1,2,3,4,5,6")
-
-    @property
-    def GOOGLE_CALENDAR_CREDENTIALS(self) -> Optional[str]:
-        return os.getenv("GOOGLE_CALENDAR_CREDENTIALS")
-
-    @property
-    def GOOGLE_CALENDAR_ID(self) -> Optional[str]:
-        return os.getenv("GOOGLE_CALENDAR_ID")
-
-    @property
-    def UPSELL_PAIRS(self) -> str:
-        return _env("SALON_UPSELL_PAIRS", "haircut:coloring,manicure:pedicure")
-
-    @property
-    def MAX_SERVICES(self) -> int:
-        return _int_env("SALON_MAX_SERVICES", 20)
-
-    @property
-    def SALON_AVATAR_URL(self) -> str:
-        return _env("SALON_AVATAR_URL", "")
-
-    @property
-    def SALON_SERVICES_TREE(self) -> str:
-        return _env("SALON_SERVICES_TREE", "")
-
-    @property
-    def working_days(self) -> list[int]:
-        return [int(d) for d in self.SALON_WORKING_DAYS.split(",") if d.strip()]
-
-    @property
-    def services_tree(self) -> dict[str, list[str]]:
-        raw = self.SALON_SERVICES_TREE.strip()
-        if not raw:
-            return {}
-        result: dict[str, list[str]] = {}
-        for chunk in raw.split(";"):
-            chunk = chunk.strip()
-            if "[" not in chunk or not chunk.endswith("]"):
-                continue
-            cat, rest = chunk.split("[", 1)
-            subs = [s.strip() for s in rest[:-1].split(",") if s.strip()]
-            if cat.strip() and subs:
-                result[cat.strip()] = subs
-        return result
-
-    def upsell_for(self, service: str) -> Optional[str]:
-        for pair in self.UPSELL_PAIRS.split(","):
-            parts = pair.strip().split(":")
-            if len(parts) == 2 and parts[0].strip().lower() == service.lower():
-                return parts[1].strip()
-        return None
-
-
-settings = _LegacySettings()
+settings = Settings()
