@@ -46,9 +46,9 @@ _last_info_msg: dict[int, int] = {}  # chat_id → message_id
 
 MAIN_KB = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="📅 Сегодня"), KeyboardButton(text="📅 Завтра")],
-        [KeyboardButton(text="➕ Новая запись"), KeyboardButton(text="📋 Ближайшие")],
-        [KeyboardButton(text="⚙️ Настройки")],
+        [KeyboardButton(text="📅 Сегодня"),      KeyboardButton(text="📅 Завтра")],
+        [KeyboardButton(text="➕ Новая запись"),  KeyboardButton(text="📋 Ближайшие")],
+        [KeyboardButton(text="📊 Дашборд"),       KeyboardButton(text="⚙️ Настройки")],
     ],
     resize_keyboard=True,
     is_persistent=True,
@@ -261,6 +261,71 @@ async def cb_cancel_booking(callback: CallbackQuery, tenant: TenantConfig) -> No
         )
     except Exception:
         pass
+
+
+# ── Dashboard ────────────────────────────────────────────────────────────────
+
+@router.message(F.text == "📊 Дашборд", SetupDone())
+async def quick_dashboard(message: Message, tenant: TenantConfig) -> None:
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo(tenant.timezone or "UTC")
+    now_local = datetime.now(tz)
+    date_str   = now_local.strftime("%Y-%m-%d")
+    day_names  = ["Понедельник","Вторник","Среда","Четверг","Пятница","Суббота","Воскресенье"]
+    day_label  = f"{day_names[now_local.weekday()]}, {now_local.strftime('%-d %B')}"
+
+    stats = await repo.get_today_stats(tenant.id, date_str)
+    week_count = await repo.get_week_booking_count(tenant.id)
+
+    # ближайшая запись сегодня
+    bookings_today = await repo.get_bookings_for_date(tenant.id, date_str)
+    next_booking = None
+    for b in bookings_today:
+        if b["scheduled_at"].astimezone(tz) > now_local:
+            next_booking = b
+            break
+
+    # свободные окна сегодня
+    booked_slots = {
+        dt.astimezone(tz).strftime("%H:%M")
+        for dt in await repo.get_slots_on_date(tenant.id, date_str)
+    }
+    free_slots = []
+    h, m = tenant.open_hour, 0
+    while h < tenant.close_hour:
+        slot = f"{h:02d}:{m:02d}"
+        if slot not in booked_slots:
+            free_slots.append(slot)
+        total = h * 60 + m + tenant.slot_minutes
+        h, m = divmod(total, 60)
+
+    lines = [f"📊 <b>Дашборд — {day_label}</b>\n"]
+
+    lines.append(f"📋 Записей сегодня: <b>{stats['total']}</b>")
+
+    if next_booking:
+        t_str = next_booking["scheduled_at"].astimezone(tz).strftime("%H:%M")
+        diff  = int((next_booking["scheduled_at"].astimezone(tz) - now_local).total_seconds() / 60)
+        lines.append(f"⏰ Следующий: <b>{next_booking['client_name']}</b> в {t_str} (через {diff} мин)")
+    else:
+        lines.append("⏰ Записей до конца дня нет")
+
+    if stats["expected"] > 0:
+        lines.append(f"💰 Ожидаемый доход: <b>{int(stats['expected'])}€</b>")
+        lines.append(f"✅ Уже оплачено: <b>{int(stats['received'])}€</b>")
+
+    if free_slots:
+        slots_str = "  ".join(free_slots[:6])
+        more = f" +{len(free_slots)-6}" if len(free_slots) > 6 else ""
+        lines.append(f"\n🕐 Свободно сегодня: {slots_str}{more}")
+    else:
+        lines.append("\n🔴 Свободных окон сегодня нет")
+
+    lines.append(f"\n📈 Эта неделя: <b>{week_count}</b> записей")
+
+    await _delete_old_info(message.bot, message.chat.id)
+    sent = await message.answer("\n".join(lines), parse_mode="HTML")
+    _last_info_msg[message.chat.id] = sent.message_id
 
 
 # ── Quick actions: paid / note / reschedule ───────────────────────────────────

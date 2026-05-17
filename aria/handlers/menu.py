@@ -64,6 +64,7 @@ def _owner_settings_kb() -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="📊 Статус",           callback_data="cfg:status"),
         ],
         [InlineKeyboardButton(text="📋 Услуги и категории",  callback_data="adm:services")],
+        [InlineKeyboardButton(text="👤 Клиенты",            callback_data="cfg:clients")],
         [InlineKeyboardButton(text="🗑 Сбросить историю",    callback_data="cfg:reset_chat")],
         [InlineKeyboardButton(text="❓ Помощь",              callback_data="cfg:help")],
         [InlineKeyboardButton(text="✖️ Закрыть",             callback_data="menu:close")],
@@ -367,6 +368,78 @@ async def cb_cfg_status(callback: CallbackQuery, tenant: TenantConfig) -> None:
         pass
     from aria.handlers.start import cmd_status
     await cmd_status(callback.message, tenant, caller_id=callback.from_user.id)
+
+
+@router.callback_query(F.data == "cfg:clients", SetupDone())
+async def cb_clients_list(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    if not tenant.is_owner(callback.from_user.id):
+        await callback.answer("Нет доступа.", show_alert=True)
+        return
+    await callback.answer()
+    clients = await repo.get_client_stats(tenant.id)
+    if not clients:
+        await callback.message.edit_text(
+            "👤 <b>Клиенты</b>\n\nЗаписей пока нет.",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="← Назад", callback_data="menu:main")],
+            ]),
+        )
+        return
+    rows = []
+    for c in clients[:20]:
+        last = c["last_visit"].strftime("%-d %b") if c["last_visit"] else "—"
+        label = f"👤 {c['client_name']}  ({c['visits']} визит·{last})"
+        import urllib.parse
+        safe = urllib.parse.quote(c["client_name"])
+        rows.append([InlineKeyboardButton(text=label, callback_data=f"cfg:client:{safe}")])
+    rows.append([InlineKeyboardButton(text="← Назад", callback_data="menu:main")])
+    await callback.message.edit_text(
+        f"👤 <b>Клиенты</b> — {len(clients)} чел.",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+    )
+
+
+@router.callback_query(F.data.startswith("cfg:client:"), SetupDone())
+async def cb_client_card(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    if not tenant.is_owner(callback.from_user.id):
+        await callback.answer("Нет доступа.", show_alert=True)
+        return
+    import urllib.parse
+    client_name = urllib.parse.unquote(callback.data.split("cfg:client:")[1])
+    bookings = await repo.get_client_bookings(tenant.id, client_name)
+    await callback.answer()
+    if not bookings:
+        await callback.answer("Данные не найдены.", show_alert=True)
+        return
+
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo(tenant.timezone or "UTC")
+    visits = len(bookings)
+    paid_count = sum(1 for b in bookings if b.get("paid"))
+    last = bookings[0]["scheduled_at"].astimezone(tz).strftime("%-d %B %Y")
+    services: dict[str, int] = {}
+    for b in bookings:
+        svc = b["service"]
+        services[svc] = services.get(svc, 0) + 1
+    top_services = sorted(services.items(), key=lambda x: x[1], reverse=True)[:3]
+    notes_list = [b["notes"] for b in bookings if b.get("notes")]
+
+    lines = [f"👤 <b>{client_name}</b>\n"]
+    lines.append(f"📋 Визитов: {visits}")
+    lines.append(f"📅 Последний: {last}")
+    lines.append(f"✅ Оплачено: {paid_count} из {visits}")
+    if top_services:
+        svc_str = ", ".join(f"{s} ({n})" for s, n in top_services)
+        lines.append(f"💅 Услуги: {svc_str}")
+    if notes_list:
+        lines.append(f"\n📝 Заметки: {notes_list[-1]}")
+
+    await callback.message.edit_text(
+        "\n".join(lines),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="← К списку", callback_data="cfg:clients")],
+        ]),
+    )
 
 
 @router.callback_query(F.data == "cfg:help", SetupDone())

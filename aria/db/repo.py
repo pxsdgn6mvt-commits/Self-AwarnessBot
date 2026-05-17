@@ -346,6 +346,85 @@ async def get_slots_on_date(tenant_id: int, date_str: str) -> list[datetime]:
 
 
 
+# ── Dashboard & analytics ─────────────────────────────────────────────────────
+
+async def get_today_stats(tenant_id: int, date_str: str) -> dict:
+    """Returns booking count, paid count, expected and received income for a date."""
+    async with _p().acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT
+                COUNT(*) FILTER (WHERE status IN ('confirmed','pending'))            AS total,
+                COUNT(*) FILTER (WHERE paid = TRUE)                                  AS paid_count,
+                COALESCE(SUM(si.price) FILTER (WHERE status IN ('confirmed','pending')), 0) AS expected,
+                COALESCE(SUM(si.price) FILTER (WHERE paid = TRUE), 0)               AS received
+            FROM aria_bookings b
+            LEFT JOIN aria_service_items si
+                ON LOWER(si.name) = LOWER(b.service)
+               AND si.category_id IN (
+                       SELECT id FROM aria_service_categories WHERE tenant_id = $1
+                   )
+            WHERE b.tenant_id = $1 AND b.scheduled_at::date = $2::date
+            """,
+            tenant_id, date_str,
+        )
+        return dict(row) if row else {"total": 0, "paid_count": 0, "expected": 0, "received": 0}
+
+
+async def get_week_booking_count(tenant_id: int) -> int:
+    async with _p().acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT COUNT(*) FROM aria_bookings
+            WHERE tenant_id=$1
+              AND status IN ('confirmed','pending')
+              AND scheduled_at >= date_trunc('week', NOW())
+              AND scheduled_at <  date_trunc('week', NOW()) + INTERVAL '7 days'
+            """,
+            tenant_id,
+        )
+        return row[0] if row else 0
+
+
+async def get_client_stats(tenant_id: int, limit: int = 50) -> list[asyncpg.Record]:
+    """Returns clients sorted by visit count with basic stats."""
+    async with _p().acquire() as conn:
+        return await conn.fetch(
+            """
+            SELECT
+                client_name,
+                COUNT(*)                                           AS visits,
+                MAX(scheduled_at)                                  AS last_visit,
+                COUNT(*) FILTER (WHERE paid = TRUE)               AS paid_visits,
+                COALESCE(SUM(si.price) FILTER (WHERE paid=TRUE), 0) AS total_spent
+            FROM aria_bookings b
+            LEFT JOIN aria_service_items si
+                ON LOWER(si.name) = LOWER(b.service)
+               AND si.category_id IN (
+                       SELECT id FROM aria_service_categories WHERE tenant_id = $1
+                   )
+            WHERE b.tenant_id = $1 AND b.status IN ('confirmed','pending','completed')
+            GROUP BY client_name
+            ORDER BY visits DESC
+            LIMIT $2
+            """,
+            tenant_id, limit,
+        )
+
+
+async def get_client_bookings(tenant_id: int, client_name: str) -> list[asyncpg.Record]:
+    async with _p().acquire() as conn:
+        return await conn.fetch(
+            """
+            SELECT * FROM aria_bookings
+            WHERE tenant_id=$1 AND LOWER(client_name)=LOWER($2)
+            ORDER BY scheduled_at DESC
+            LIMIT 20
+            """,
+            tenant_id, client_name,
+        )
+
+
 # ── Waitlist ──────────────────────────────────────────────────────────────────
 
 async def add_to_waitlist(
