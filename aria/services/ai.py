@@ -142,25 +142,11 @@ TOOLS: list[dict] = [
     },
     {
         "name": "cancel_booking",
-        "description": "Cancel one appointment. booking_id is the integer id from get_schedule (preferred) or a Google Calendar event id string for external bookings.",
+        "description": "Cancel an appointment by booking ID.",
         "input_schema": {
             "type": "object",
-            "properties": {
-                "booking_id": {"description": "Integer booking id or Google Calendar event id string"},
-            },
+            "properties": {"booking_id": {"type": "integer"}},
             "required": ["booking_id"],
-        },
-    },
-    {
-        "name": "cancel_bookings_in_range",
-        "description": "Cancel ALL appointments in a date range. Use for 'delete everything until May 20', 'clear next week', etc.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "date_from": {"type": "string", "description": "YYYY-MM-DD or 'today'"},
-                "date_to":   {"type": "string", "description": "YYYY-MM-DD or 'today'"},
-            },
-            "required": ["date_from", "date_to"],
         },
     },
     {
@@ -292,70 +278,17 @@ async def _exec_tool(
         })
 
     if name == "cancel_booking":
-        from aria.services.booking import GoogleAdapter as _GAdp
-        from aria.services.scheduler import cancel_booking_jobs
-        raw_id = args["booking_id"]
-        # Try integer DB booking first
+        booking = await repo.get_booking(args["booking_id"])
+        if not booking:
+            return json.dumps({"error": "booking not found"})
+        await repo.update_booking_status(args["booking_id"], "cancelled")
         try:
-            booking = await repo.get_booking(int(raw_id))
-        except (ValueError, TypeError):
-            booking = None
-        if booking:
-            bid = booking["id"]
-            await repo.update_booking_status(bid, "cancelled")
-            try:
-                await adapter.delete_event(bid, booking.get("calendar_event_id"))
-            except Exception as exc:
-                log.warning("GCal delete skipped for booking %d: %s", bid, exc)
-            cancel_booking_jobs(bid)
-            return json.dumps({"cancelled": True, "booking_id": bid})
-        # Fallback: external GCal booking with no DB entry — delete by event id string
-        if isinstance(adapter, _GAdp) and raw_id:
-            try:
-                await adapter.delete_event(None, str(raw_id))
-                return json.dumps({"cancelled": True, "gcal_event_id": str(raw_id)})
-            except Exception as exc:
-                return json.dumps({"error": f"GCal delete failed: {exc}"})
-        return json.dumps({"error": "booking not found"})
-
-    if name == "cancel_bookings_in_range":
-        from zoneinfo import ZoneInfo
-        from aria.services.booking import GoogleAdapter as _GAdp
+            await adapter.delete_event(args["booking_id"], booking.get("calendar_event_id"))
+        except Exception as exc:
+            log.warning("GCal delete skipped for booking %d: %s", args["booking_id"], exc)
         from aria.services.scheduler import cancel_booking_jobs
-        tz = ZoneInfo(tz_str)
-        from_str = _resolve_date(args["date_from"], tz_str)
-        to_str   = _resolve_date(args["date_to"],   tz_str)
-        dt_from = datetime.strptime(from_str, "%Y-%m-%d").replace(hour=0,  minute=0,  tzinfo=tz).astimezone(timezone.utc)
-        dt_to   = datetime.strptime(to_str,   "%Y-%m-%d").replace(hour=23, minute=59, tzinfo=tz).astimezone(timezone.utc)
-        events = await adapter.get_events(dt_from, dt_to)
-        cancelled, failed = [], []
-        for evt in events:
-            evt_id = evt.get("id")
-            try:
-                if isinstance(evt_id, int):
-                    booking = await repo.get_booking(evt_id)
-                    if booking:
-                        await repo.update_booking_status(evt_id, "cancelled")
-                        try:
-                            await adapter.delete_event(evt_id, booking.get("calendar_event_id"))
-                        except Exception:
-                            pass
-                        cancel_booking_jobs(evt_id)
-                        cancelled.append(evt_id)
-                else:
-                    # External GCal-only event
-                    if isinstance(adapter, _GAdp):
-                        await adapter.delete_event(None, str(evt_id))
-                    cancelled.append(str(evt_id))
-            except Exception as exc:
-                failed.append({"id": evt_id, "error": str(exc)})
-        return json.dumps({
-            "cancelled_count": len(cancelled),
-            "cancelled": cancelled,
-            "failed": failed or None,
-            "date_from": from_str,
-            "date_to": to_str,
-        })
+        cancel_booking_jobs(args["booking_id"])
+        return json.dumps({"cancelled": True, "booking_id": args["booking_id"]})
 
     if name == "get_upcoming":
         limit = int(args.get("limit") or 10)
