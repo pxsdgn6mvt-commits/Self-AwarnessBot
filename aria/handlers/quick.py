@@ -130,28 +130,14 @@ async def _time_kb(tenant: TenantConfig, date_str: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def _booking_actions(bid: int, paid: bool) -> list[list[InlineKeyboardButton]]:
-    pay_label = "✅ Оплачено" if paid else "💰 Оплата"
-    return [
-        [
-            InlineKeyboardButton(text="✏️ Перенести",  callback_data=f"bk_reschedule:{bid}"),
-            InlineKeyboardButton(text="❌ Отменить",   callback_data=f"del_booking:{bid}"),
-        ],
-        [
-            InlineKeyboardButton(text=pay_label,       callback_data=f"bk_paid:{bid}"),
-            InlineKeyboardButton(text="📝 Заметка",    callback_data=f"bk_note:{bid}"),
-        ],
-    ]
-
-
 def _schedule_text_and_kb(
-    events: list[dict], date_label: str
+    events: list[dict], date_label: str, date_str: str = ""
 ) -> tuple[str, InlineKeyboardMarkup | None]:
     if not events:
         return f"📅 {date_label}\n\nЗаписей нет.", None
 
     lines = [f"📅 <b>{date_label}</b>\n"]
-    rows: list[list[InlineKeyboardButton]] = []
+    sel_btns: list[InlineKeyboardButton] = []
     for e in events:
         bid = e.get("id")
         paid = e.get("paid", False)
@@ -161,17 +147,44 @@ def _schedule_text_and_kb(
         if notes:
             line += f"\n  📝 {notes}"
         lines.append(line)
-        if isinstance(bid, int):
-            rows.extend(_booking_actions(bid, paid))
-            rows.append([])  # визуальный разделитель между записями
+        if isinstance(bid, int) and date_str:
+            label = f"{e['time']} {e['client']}{paid_mark}"
+            sel_btns.append(
+                InlineKeyboardButton(text=label, callback_data=f"bk_card:{bid}|{date_str}")
+            )
 
-    # убираем пустые строки-разделители в конце
-    while rows and rows[-1] == []:
-        rows.pop()
-
+    rows = [sel_btns[i:i+2] for i in range(0, len(sel_btns), 2)]
     rows.append([InlineKeyboardButton(text="➕ Добавить запись", callback_data="qb_start")])
-    kb = InlineKeyboardMarkup(inline_keyboard=[r for r in rows if r])
-    return "\n".join(lines), kb
+    return "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _booking_card_text(booking: dict) -> str:
+    paid  = booking.get("paid") or False
+    notes = booking.get("notes")
+    lines = [
+        f"📌 <b>{booking['client_name']}</b>",
+        f"Услуга: {booking['service']}",
+    ]
+    if paid:
+        lines.append("💰 Оплачено ✅")
+    if notes:
+        lines.append(f"📝 {notes}")
+    return "\n".join(lines)
+
+
+def _booking_card_kb(booking_id: int, paid: bool, date_str: str) -> InlineKeyboardMarkup:
+    pay_label = "✅ Оплачено" if paid else "💰 Оплата"
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="✏️ Перенести", callback_data=f"bk_reschedule:{booking_id}"),
+            InlineKeyboardButton(text="❌ Отменить",  callback_data=f"del_booking:{booking_id}"),
+        ],
+        [
+            InlineKeyboardButton(text=pay_label,      callback_data=f"bk_paid:{booking_id}"),
+            InlineKeyboardButton(text="📝 Заметка",   callback_data=f"bk_note:{booking_id}"),
+        ],
+        [InlineKeyboardButton(text="◀️ К списку дня", callback_data=f"bk_list|{date_str}")],
+    ])
 
 
 async def _delete_old_info(bot: Bot, chat_id: int) -> None:
@@ -198,7 +211,7 @@ async def _show_schedule(message: Message, tenant: TenantConfig, days_offset: in
 
     labels = {0: "Сегодня", 1: "Завтра"}
     date_label = f"{labels.get(days_offset, '')} {target.strftime('%-d %B')}".strip()
-    text, kb = _schedule_text_and_kb(events, date_label)
+    text, kb = _schedule_text_and_kb(events, date_label, target.isoformat())
 
     await _delete_old_info(message.bot, message.chat.id)
     sent = await message.answer(text, reply_markup=kb)
@@ -277,10 +290,19 @@ async def cb_cancel_booking(callback: CallbackQuery, tenant: TenantConfig) -> No
     cancel_booking_jobs(booking_id)
 
     await callback.answer("✅ Запись отменена")
+    # keep ◀️ К списку дня button if we're in card view
+    back_btn = None
+    if callback.message.reply_markup:
+        for row in callback.message.reply_markup.inline_keyboard:
+            for btn in row:
+                if btn.callback_data and btn.callback_data.startswith("bk_list|"):
+                    back_btn = btn
+                    break
+    new_kb = InlineKeyboardMarkup(inline_keyboard=[[back_btn]]) if back_btn else None
     try:
         await callback.message.edit_text(
             callback.message.text + f"\n\n❌ <i>Запись #{booking_id} отменена</i>",
-            reply_markup=None,
+            reply_markup=new_kb,
         )
     except Exception:
         pass
@@ -351,6 +373,61 @@ async def quick_dashboard(message: Message, tenant: TenantConfig) -> None:
     _last_info_msg[message.chat.id] = sent.message_id
 
 
+# ── Booking card (Variant C: tap booking → card → back to list) ──────────────
+
+@router.callback_query(F.data.startswith("bk_card:"), SetupDone())
+async def cb_booking_card(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    if not tenant.is_owner(callback.from_user.id):
+        await callback.answer("Нет доступа.", show_alert=True)
+        return
+    rest = callback.data[len("bk_card:"):]
+    bid_str, date_str = rest.split("|", 1)
+    booking = await repo.get_booking(int(bid_str))
+    if not booking or booking["status"] == "cancelled":
+        await callback.answer("Запись не найдена или уже отменена.", show_alert=True)
+        return
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo(tenant.timezone or "UTC")
+    dt_local = booking["scheduled_at"].astimezone(tz)
+    paid = booking.get("paid") or False
+    notes = booking.get("notes")
+    lines = [
+        f"📌 <b>{dt_local.strftime('%H:%M')} — {booking['client_name']}</b>",
+        f"Услуга: {booking['service']}",
+    ]
+    if paid:
+        lines.append("💰 Оплачено ✅")
+    if notes:
+        lines.append(f"📝 {notes}")
+    await callback.message.edit_text(
+        "\n".join(lines),
+        reply_markup=_booking_card_kb(booking["id"], paid, date_str),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("bk_list|"), SetupDone())
+async def cb_back_to_list(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    from zoneinfo import ZoneInfo
+    from datetime import date as _d
+    date_str = callback.data[len("bk_list|"):]
+    tz = ZoneInfo(tenant.timezone or "UTC")
+    target  = _d.fromisoformat(date_str)
+    dt_from = datetime(target.year, target.month, target.day,  0,  0, tzinfo=tz).astimezone(timezone.utc)
+    dt_to   = datetime(target.year, target.month, target.day, 23, 59, tzinfo=tz).astimezone(timezone.utc)
+    events  = await get_adapter(tenant).get_events(dt_from, dt_to)
+    today = datetime.now(tz).date()
+    diff  = (target - today).days
+    _MON = ["января","февраля","марта","апреля","мая","июня",
+            "июля","августа","сентября","октября","ноября","декабря"]
+    prefix = {0: "Сегодня", 1: "Завтра"}.get(diff) or \
+             ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"][target.weekday()]
+    date_label = f"{prefix} {target.day} {_MON[target.month - 1]}"
+    text, kb = _schedule_text_and_kb(events, date_label, date_str)
+    await callback.message.edit_text(text, reply_markup=kb)
+    await callback.answer()
+
+
 # ── Quick actions: paid / note / reschedule ───────────────────────────────────
 
 @router.callback_query(F.data.startswith("bk_paid:"), SetupDone())
@@ -363,25 +440,21 @@ async def cb_booking_paid(callback: CallbackQuery, tenant: TenantConfig) -> None
     if not booking:
         await callback.answer("Запись не найдена.", show_alert=True)
         return
-    new_paid = not booking["paid"] if "paid" in booking.keys() else True
+    new_paid = not (booking.get("paid") or False)
     await repo.set_booking_paid(booking_id, new_paid)
-    label = "✅ Отмечено как оплачено" if new_paid else "↩️ Оплата отменена"
-    await callback.answer(label)
-    # обновляем кнопки под записью
-    try:
-        rows = list(callback.message.reply_markup.inline_keyboard)
-        new_rows = []
-        for row in rows:
-            new_row = []
+    await callback.answer("✅ Оплачено" if new_paid else "↩️ Оплата отменена")
+    # find date_str from ◀️ back button and refresh card
+    date_str = ""
+    if callback.message.reply_markup:
+        for row in callback.message.reply_markup.inline_keyboard:
             for btn in row:
-                if btn.callback_data == callback.data:
-                    pay_label = "✅ Оплачено" if new_paid else "💰 Оплата"
-                    new_row.append(InlineKeyboardButton(text=pay_label, callback_data=btn.callback_data))
-                else:
-                    new_row.append(btn)
-            new_rows.append(new_row)
-        await callback.message.edit_reply_markup(
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=new_rows)
+                if btn.callback_data and btn.callback_data.startswith("bk_list|"):
+                    date_str = btn.callback_data[len("bk_list|"):]
+    booking = await repo.get_booking(booking_id)
+    try:
+        await callback.message.edit_text(
+            _booking_card_text(dict(booking)),
+            reply_markup=_booking_card_kb(booking_id, new_paid, date_str),
         )
     except Exception:
         pass
