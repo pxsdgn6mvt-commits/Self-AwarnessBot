@@ -42,10 +42,12 @@ class AdminBroadcast(StatesGroup):
 
 
 class CatalogueSG(StatesGroup):
-    add_category = State()
-    add_item     = State()
-    add_price    = State()
-    add_duration = State()
+    add_category  = State()
+    add_item      = State()
+    add_price     = State()
+    add_duration  = State()
+    edit_price    = State()
+    edit_duration = State()
 
 
 # ── Service catalogue (categories / subcategories) ────────────────────────────
@@ -76,6 +78,7 @@ async def _items_kb(category_id: int, tenant_id: int) -> InlineKeyboardMarkup:
         label = " · ".join(parts)
         rows.append([
             InlineKeyboardButton(text=label,  callback_data="adm:noop"),
+            InlineKeyboardButton(text="✏️",   callback_data=f"adm:eitem:{it['id']}:{category_id}"),
             InlineKeyboardButton(text="🗑",   callback_data=f"adm:dsub:{it['id']}:{category_id}"),
         ])
     rows.append([InlineKeyboardButton(text="➕ Добавить услугу", callback_data=f"adm:addsub:{category_id}")])
@@ -262,6 +265,128 @@ async def delete_item(callback: CallbackQuery, tenant: TenantConfig) -> None:
         reply_markup=await _items_kb(int(parts[3]), tenant.id)
     )
     await callback.answer("Услуга удалена")
+
+
+@router.callback_query(F.data.startswith("adm:eitem:"), SetupDone())
+async def prompt_edit_item(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
+    if not tenant.is_owner(callback.from_user.id):
+        await callback.answer("Нет доступа.", show_alert=True)
+        return
+    parts = callback.data.split(":")
+    item_id, cat_id = int(parts[2]), int(parts[3])
+    items = await repo.get_items(cat_id)
+    item = next((i for i in items if i["id"] == item_id), None)
+    if not item:
+        await callback.answer("Услуга не найдена.")
+        return
+    label_parts = [item["name"]]
+    if item["price"] is not None:
+        label_parts.append(f"цена: {int(item['price'])}€")
+    if item["duration_minutes"] is not None:
+        label_parts.append(f"{item['duration_minutes']} мин")
+    info = ", ".join(label_parts)
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="💰 Цена",   callback_data=f"adm:eprice:{item_id}:{cat_id}"),
+            InlineKeyboardButton(text="⏱ Длит.",   callback_data=f"adm:edur:{item_id}:{cat_id}"),
+        ],
+        [InlineKeyboardButton(text="◀️ Назад", callback_data=f"adm:cat:{cat_id}")],
+    ])
+    await callback.message.edit_text(f"✏️ <b>{info}</b>\n\nЧто редактировать?", reply_markup=kb)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("adm:eprice:"), SetupDone())
+async def prompt_edit_price(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
+    if not tenant.is_owner(callback.from_user.id):
+        await callback.answer("Нет доступа.", show_alert=True)
+        return
+    parts = callback.data.split(":")
+    item_id, cat_id = int(parts[2]), int(parts[3])
+    await state.set_state(CatalogueSG.edit_price)
+    await state.update_data(edit_item_id=item_id, edit_cat_id=cat_id, tenant_id=tenant.id)
+    await callback.message.answer(
+        "💰 Введи новую цену (например: <code>50</code>)\n"
+        "Или /skip чтобы убрать цену.",
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@router.message(CatalogueSG.edit_price, Command("skip"))
+async def skip_edit_price(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    await repo.update_item_price(data["edit_item_id"], None)
+    await state.clear()
+    await message.answer(
+        "✅ Цена удалена.",
+        reply_markup=await _items_kb(data["edit_cat_id"], data.get("tenant_id", 1)),
+    )
+
+
+@router.message(CatalogueSG.edit_price, F.text.func(lambda x: not x.startswith("/")))
+async def save_edit_price(message: Message, state: FSMContext) -> None:
+    text = message.text.strip().replace(",", ".")
+    try:
+        price = float(text)
+        if price < 0:
+            raise ValueError
+    except ValueError:
+        await message.answer("Введите число, например <code>50</code>, или /skip:", parse_mode="HTML")
+        return
+    data = await state.get_data()
+    await repo.update_item_price(data["edit_item_id"], price)
+    await state.clear()
+    await message.answer(
+        f"✅ Цена обновлена: {int(price)}€",
+        reply_markup=await _items_kb(data["edit_cat_id"], data.get("tenant_id", 1)),
+    )
+
+
+@router.callback_query(F.data.startswith("adm:edur:"), SetupDone())
+async def prompt_edit_duration(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
+    if not tenant.is_owner(callback.from_user.id):
+        await callback.answer("Нет доступа.", show_alert=True)
+        return
+    parts = callback.data.split(":")
+    item_id, cat_id = int(parts[2]), int(parts[3])
+    await state.set_state(CatalogueSG.edit_duration)
+    await state.update_data(edit_item_id=item_id, edit_cat_id=cat_id, tenant_id=tenant.id)
+    await callback.message.answer(
+        "⏱ Введи длительность в минутах (например: <code>60</code>)\n"
+        "Или /skip чтобы убрать.",
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@router.message(CatalogueSG.edit_duration, Command("skip"))
+async def skip_edit_duration(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    await repo.update_item_duration(data["edit_item_id"], None)
+    await state.clear()
+    await message.answer(
+        "✅ Длительность удалена.",
+        reply_markup=await _items_kb(data["edit_cat_id"], data.get("tenant_id", 1)),
+    )
+
+
+@router.message(CatalogueSG.edit_duration, F.text.func(lambda x: not x.startswith("/")))
+async def save_edit_duration(message: Message, state: FSMContext) -> None:
+    try:
+        duration = int(message.text.strip())
+        if duration <= 0:
+            raise ValueError
+    except ValueError:
+        await message.answer("Введите целое число минут, например <code>60</code>, или /skip:", parse_mode="HTML")
+        return
+    data = await state.get_data()
+    await repo.update_item_duration(data["edit_item_id"], duration)
+    await state.clear()
+    await message.answer(
+        f"✅ Длительность обновлена: {duration} мин",
+        reply_markup=await _items_kb(data["edit_cat_id"], data.get("tenant_id", 1)),
+    )
 
 
 @router.callback_query(F.data == "adm:noop")

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import date as _date, datetime, timezone
 from typing import Any, Optional
 
 import asyncpg
@@ -292,15 +292,16 @@ async def mark_noshow_check_sent(booking_id: int) -> None:
 
 
 async def get_bookings_for_date(tenant_id: int, date_str: str) -> list[asyncpg.Record]:
+    date_obj = _date.fromisoformat(date_str)
     async with _p().acquire() as conn:
         return await conn.fetch(
             """
             SELECT * FROM aria_bookings
-            WHERE tenant_id=$1 AND scheduled_at::date=$2::date
+            WHERE tenant_id=$1 AND scheduled_at::date=$2
               AND status IN ('confirmed','pending')
             ORDER BY scheduled_at ASC
             """,
-            tenant_id, date_str,
+            tenant_id, date_obj,
         )
 
 
@@ -334,13 +335,14 @@ async def get_all_upcoming_bookings(tenant_id: int, limit: int = 30) -> list[asy
 
 
 async def get_slots_on_date(tenant_id: int, date_str: str) -> list[datetime]:
+    date_obj = _date.fromisoformat(date_str)
     async with _p().acquire() as conn:
         rows = await conn.fetch(
             """
             SELECT scheduled_at FROM aria_bookings
-            WHERE tenant_id=$1 AND scheduled_at::date=$2::date AND status='confirmed'
+            WHERE tenant_id=$1 AND scheduled_at::date=$2 AND status='confirmed'
             """,
-            tenant_id, date_str,
+            tenant_id, date_obj,
         )
         return [r["scheduled_at"] for r in rows]
 
@@ -350,6 +352,7 @@ async def get_slots_on_date(tenant_id: int, date_str: str) -> list[datetime]:
 
 async def get_today_stats(tenant_id: int, date_str: str) -> dict:
     """Returns booking count, paid count, expected and received income for a date."""
+    date_obj = _date.fromisoformat(date_str)
     async with _p().acquire() as conn:
         row = await conn.fetchrow(
             """
@@ -364,9 +367,9 @@ async def get_today_stats(tenant_id: int, date_str: str) -> dict:
                AND si.category_id IN (
                        SELECT id FROM aria_service_categories WHERE tenant_id = $1
                    )
-            WHERE b.tenant_id = $1 AND b.scheduled_at::date = $2::date
+            WHERE b.tenant_id = $1 AND b.scheduled_at::date = $2
             """,
-            tenant_id, date_str,
+            tenant_id, date_obj,
         )
         return dict(row) if row else {"total": 0, "paid_count": 0, "expected": 0, "received": 0}
 
@@ -536,4 +539,18 @@ async def delete_item(item_id: int) -> None:
     async with _p().acquire() as conn:
         await conn.execute(
             "DELETE FROM aria_service_items WHERE id=$1", item_id
+        )
+
+
+async def update_item_price(item_id: int, price: float | None) -> None:
+    async with _p().acquire() as conn:
+        await conn.execute(
+            "UPDATE aria_service_items SET price=$2 WHERE id=$1", item_id, price
+        )
+
+
+async def update_item_duration(item_id: int, duration_minutes: int | None) -> None:
+    async with _p().acquire() as conn:
+        await conn.execute(
+            "UPDATE aria_service_items SET duration_minutes=$2 WHERE id=$1", item_id, duration_minutes
         )
