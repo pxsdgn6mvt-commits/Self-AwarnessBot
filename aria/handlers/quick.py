@@ -384,7 +384,7 @@ async def cb_note_skip(message: Message, state: FSMContext) -> None:
     await message.answer("Отменено.")
 
 
-@router.message(QuickEdit.note, ~Command())
+@router.message(QuickEdit.note, F.text.func(lambda x: not x.startswith("/")))
 async def cb_note_save(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     await repo.set_booking_note(data["booking_id"], message.text.strip())
@@ -415,7 +415,7 @@ async def cb_reschedule_skip(message: Message, state: FSMContext) -> None:
     await message.answer("Отменено.")
 
 
-@router.message(QuickEdit.reschedule, ~Command())
+@router.message(QuickEdit.reschedule, F.text.func(lambda x: not x.startswith("/")))
 async def cb_reschedule_save(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
     data = await state.get_data()
     booking_id = data["booking_id"]

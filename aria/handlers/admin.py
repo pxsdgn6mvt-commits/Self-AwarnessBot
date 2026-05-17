@@ -172,7 +172,7 @@ async def prompt_add_item(callback: CallbackQuery, state: FSMContext, tenant: Te
     await callback.answer()
 
 
-@router.message(CatalogueSG.add_item, ~Command())
+@router.message(CatalogueSG.add_item, F.text.func(lambda x: not x.startswith("/")))
 async def save_item_name(message: Message, state: FSMContext) -> None:
     name = message.text.strip()
     if not name:
@@ -198,7 +198,7 @@ async def skip_price(message: Message, state: FSMContext) -> None:
     )
 
 
-@router.message(CatalogueSG.add_price, ~Command())
+@router.message(CatalogueSG.add_price, F.text.func(lambda x: not x.startswith("/")))
 async def save_item_price(message: Message, state: FSMContext) -> None:
     text = message.text.strip().replace(",", ".")
     try:
@@ -222,7 +222,7 @@ async def skip_duration(message: Message, state: FSMContext) -> None:
     await _finish_add_item(message, state, duration=None)
 
 
-@router.message(CatalogueSG.add_duration, ~Command())
+@router.message(CatalogueSG.add_duration, F.text.func(lambda x: not x.startswith("/")))
 async def save_item_duration(message: Message, state: FSMContext) -> None:
     try:
         duration = int(message.text.strip())
