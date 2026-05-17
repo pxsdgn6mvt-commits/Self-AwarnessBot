@@ -54,22 +54,23 @@ CREATE TABLE IF NOT EXISTS aria_conversations (
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Per-tenant runtime settings (owner set on first /start; email set via /admin)
+-- Per-tenant runtime settings (owner set on first /start; email/gcal/tz set via /admin)
 CREATE TABLE IF NOT EXISTS aria_tenant_settings (
-    tenant_id           INTEGER PRIMARY KEY,
-    owner_telegram_id   BIGINT  NOT NULL,
-    email_address       TEXT,
-    email_password      TEXT,
-    email_imap_server   TEXT    NOT NULL DEFAULT 'imap.gmail.com',
-    email_imap_port     INTEGER NOT NULL DEFAULT 993,
-    email_allowed_senders TEXT  NOT NULL DEFAULT '',
-    email_poll_seconds  INTEGER NOT NULL DEFAULT 60,
-    email_since         TEXT,
-    gcal_access_token  TEXT,
-    gcal_refresh_token TEXT,
-    gcal_token_expiry  TIMESTAMPTZ,
-    gcal_calendar_id   TEXT NOT NULL DEFAULT 'primary',
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    tenant_id             INTEGER PRIMARY KEY,
+    owner_telegram_id     BIGINT  NOT NULL DEFAULT 0,
+    email_address         TEXT,
+    email_password        TEXT,
+    email_imap_server     TEXT    NOT NULL DEFAULT 'imap.gmail.com',
+    email_imap_port       INTEGER NOT NULL DEFAULT 993,
+    email_allowed_senders TEXT    NOT NULL DEFAULT '',
+    email_poll_seconds    INTEGER NOT NULL DEFAULT 60,
+    email_since           TEXT,
+    gcal_access_token     TEXT,
+    gcal_refresh_token    TEXT,
+    gcal_token_expiry     TIMESTAMPTZ,
+    gcal_calendar_id      TEXT    NOT NULL DEFAULT 'primary',
+    timezone              TEXT    NOT NULL DEFAULT 'Europe/Moscow',
+    created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Service catalogue managed by the salon owner via /admin

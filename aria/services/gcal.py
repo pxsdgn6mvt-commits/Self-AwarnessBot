@@ -99,6 +99,8 @@ async def setup_calendar(owner_email: str, salon_name: str) -> Optional[str]:
 
 
 async def is_connected(tenant_id: int) -> bool:
+    if not is_configured():
+        return False
     import aria.db.repo as repo
     row = await repo.get_gcal_tokens(tenant_id)
     cal_id = row["gcal_calendar_id"] if row else None

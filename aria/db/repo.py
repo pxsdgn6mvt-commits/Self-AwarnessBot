@@ -233,7 +233,11 @@ async def get_tenant_timezone(tenant_id: int) -> str:
 async def save_tenant_timezone(tenant_id: int, tz: str) -> None:
     async with _p().acquire() as conn:
         await conn.execute(
-            "UPDATE aria_tenant_settings SET timezone=$2 WHERE tenant_id=$1",
+            """
+            INSERT INTO aria_tenant_settings(tenant_id, owner_telegram_id, timezone)
+            VALUES ($1, 0, $2)
+            ON CONFLICT (tenant_id) DO UPDATE SET timezone = EXCLUDED.timezone
+            """,
             tenant_id, tz,
         )
 
@@ -434,7 +438,8 @@ async def set_tenant_owner(tenant_id: int, owner_telegram_id: int) -> None:
             """
             INSERT INTO aria_tenant_settings(tenant_id, owner_telegram_id)
             VALUES ($1, $2)
-            ON CONFLICT (tenant_id) DO NOTHING
+            ON CONFLICT (tenant_id) DO UPDATE
+                SET owner_telegram_id = EXCLUDED.owner_telegram_id
             """,
             tenant_id, owner_telegram_id,
         )
@@ -468,10 +473,15 @@ async def save_gcal_tokens(
     async with _p().acquire() as conn:
         await conn.execute(
             """
-            UPDATE aria_tenant_settings SET
-                gcal_access_token=$2, gcal_refresh_token=$3,
-                gcal_token_expiry=$4, gcal_calendar_id=$5
-            WHERE tenant_id=$1
+            INSERT INTO aria_tenant_settings(
+                tenant_id, owner_telegram_id,
+                gcal_access_token, gcal_refresh_token, gcal_token_expiry, gcal_calendar_id
+            ) VALUES ($1, 0, $2, $3, $4, $5)
+            ON CONFLICT (tenant_id) DO UPDATE SET
+                gcal_access_token  = EXCLUDED.gcal_access_token,
+                gcal_refresh_token = EXCLUDED.gcal_refresh_token,
+                gcal_token_expiry  = EXCLUDED.gcal_token_expiry,
+                gcal_calendar_id   = EXCLUDED.gcal_calendar_id
             """,
             tenant_id, access_token, refresh_token, token_expiry, calendar_id,
         )
@@ -482,8 +492,14 @@ async def update_gcal_access_token(
 ) -> None:
     async with _p().acquire() as conn:
         await conn.execute(
-            "UPDATE aria_tenant_settings SET gcal_access_token=$2, gcal_token_expiry=$3"
-            " WHERE tenant_id=$1",
+            """
+            INSERT INTO aria_tenant_settings(tenant_id, owner_telegram_id,
+                gcal_access_token, gcal_token_expiry)
+            VALUES ($1, 0, $2, $3)
+            ON CONFLICT (tenant_id) DO UPDATE SET
+                gcal_access_token = EXCLUDED.gcal_access_token,
+                gcal_token_expiry = EXCLUDED.gcal_token_expiry
+            """,
             tenant_id, access_token, expiry,
         )
 
@@ -491,7 +507,11 @@ async def update_gcal_access_token(
 async def save_gcal_calendar_id(tenant_id: int, calendar_id: str) -> None:
     async with _p().acquire() as conn:
         await conn.execute(
-            "UPDATE aria_tenant_settings SET gcal_calendar_id=$2 WHERE tenant_id=$1",
+            """
+            INSERT INTO aria_tenant_settings(tenant_id, owner_telegram_id, gcal_calendar_id)
+            VALUES ($1, 0, $2)
+            ON CONFLICT (tenant_id) DO UPDATE SET gcal_calendar_id = EXCLUDED.gcal_calendar_id
+            """,
             tenant_id, calendar_id,
         )
 
@@ -509,38 +529,6 @@ async def clear_gcal_tokens(tenant_id: int) -> None:
         )
 
 
-async def _ensure_email_cols(conn: asyncpg.Connection) -> None:
-    existing = {
-        r["column_name"]
-        for r in await conn.fetch(
-            "SELECT column_name FROM information_schema.columns"
-            " WHERE table_name = 'aria_tenant_settings'"
-        )
-    }
-    for col, defn in [
-        ("email_address",         "TEXT"),
-        ("email_password",        "TEXT"),
-        ("email_imap_server",     "TEXT NOT NULL DEFAULT 'imap.gmail.com'"),
-        ("email_imap_port",       "INTEGER NOT NULL DEFAULT 993"),
-        ("email_allowed_senders", "TEXT NOT NULL DEFAULT ''"),
-        ("email_poll_seconds",    "INTEGER NOT NULL DEFAULT 60"),
-        ("email_since",           "TEXT"),
-    ]:
-        if col not in existing:
-            await conn.execute(f"ALTER TABLE aria_tenant_settings ADD COLUMN {col} {defn}")
-            log.info("save_email_settings: added missing column %s", col)
-
-
-_UPDATE_EMAIL_SQL = """
-    UPDATE aria_tenant_settings SET
-        email_address=$2, email_password=$3,
-        email_imap_server=$4, email_imap_port=$5,
-        email_allowed_senders=$6, email_poll_seconds=$7,
-        email_since=$8
-    WHERE tenant_id=$1
-"""
-
-
 async def save_email_settings(
     tenant_id: int,
     *,
@@ -555,19 +543,29 @@ async def save_email_settings(
     dt = _date.today()
     months = ("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec")
     email_since = f"{dt.day}-{months[dt.month - 1]}-{dt.year}"
-    args = (
-        tenant_id, email_address, email_password,
-        email_imap_server, email_imap_port,
-        email_allowed_senders, email_poll_seconds,
-        email_since,
-    )
     async with _p().acquire() as conn:
-        try:
-            await conn.execute(_UPDATE_EMAIL_SQL, *args)
-        except asyncpg.exceptions.UndefinedColumnError:
-            log.warning("save_email_settings: email columns missing, migrating now")
-            await _ensure_email_cols(conn)
-            await conn.execute(_UPDATE_EMAIL_SQL, *args)
+        await conn.execute(
+            """
+            INSERT INTO aria_tenant_settings(
+                tenant_id, owner_telegram_id,
+                email_address, email_password,
+                email_imap_server, email_imap_port,
+                email_allowed_senders, email_poll_seconds,
+                email_since
+            ) VALUES ($1, 0, $2, $3, $4, $5, $6, $7, $8)
+            ON CONFLICT (tenant_id) DO UPDATE SET
+                email_address         = EXCLUDED.email_address,
+                email_password        = EXCLUDED.email_password,
+                email_imap_server     = EXCLUDED.email_imap_server,
+                email_imap_port       = EXCLUDED.email_imap_port,
+                email_allowed_senders = EXCLUDED.email_allowed_senders,
+                email_poll_seconds    = EXCLUDED.email_poll_seconds,
+                email_since           = EXCLUDED.email_since
+            """,
+            tenant_id, email_address, email_password,
+            email_imap_server, email_imap_port,
+            email_allowed_senders, email_poll_seconds, email_since,
+        )
 
 
 async def clear_email_settings(tenant_id: int) -> None:

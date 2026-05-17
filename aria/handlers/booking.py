@@ -6,7 +6,7 @@ import logging
 import re
 import zoneinfo
 from datetime import date, datetime, time, timedelta, timezone
-from typing import Union
+from typing import Optional, Union
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
@@ -495,19 +495,12 @@ async def confirm_booking(
         log.exception("GCal event creation failed (tenant #%d)", tenant.tenant_id)
 
     if gcal_event_url:
-        kb = InlineKeyboardMarkup(inline_keyboard=[[
+        kb: Optional[InlineKeyboardMarkup] = InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(text="📅 Google Calendar", url=gcal_event_url),
         ]])
         gcal_note = _t("gcal_added", lang)
     else:
-        fallback_url = gcal.add_to_calendar_url(
-            title=f"{service} — {client_name}",
-            start=scheduled_at,
-            duration_minutes=tenant.salon_slot_minutes,
-        )
-        kb = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="📅 Google Calendar", url=fallback_url),
-        ]])
+        kb = None
         gcal_note = ""
 
     await callback.message.edit_text(
