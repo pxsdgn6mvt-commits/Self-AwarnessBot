@@ -48,8 +48,8 @@ class TenantConfig:
             anthropic_api_key=r["anthropic_api_key"],
             setup_complete=r["setup_complete"],
             active=r["active"],
-            master_percent=r.get("master_percent"),
-            tax_percent=r.get("tax_percent"),
+            master_percent=float(r["master_percent"]) if r.get("master_percent") is not None else None,
+            tax_percent=float(r["tax_percent"]) if r.get("tax_percent") is not None else None,
         )
 
     @property
