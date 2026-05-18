@@ -684,37 +684,48 @@ async def cmd_set_vip(message: Message) -> None:
     await message.answer(f"✅ VIP назначен: тенант #{tid}, действует до {until_str}")
     log.info("Admin set VIP: tenant %d until %s", tid, until_str)
 
-    await _notify_vip_granted(tid, until_str)
+    notified = await _notify_vip_granted(tid, until_str)
+    if not notified:
+        await message.answer(f"⚠️ Уведомить владельца тенанта #{tid} не получилось — бот не запущен или owner_tg_id не задан.")
 
 
-async def _notify_vip_granted(tenant_id: int, until_str: str) -> None:
-    from aria import runtime
-    bot = runtime.bots.get(tenant_id)
-    if not bot:
-        return
+async def _notify_vip_granted(tenant_id: int, until_str: str) -> bool:
+    from aiogram import Bot
+    from aiogram.client.default import DefaultBotProperties
+    from aiogram.enums import ParseMode
+
     tenant_row = await repo.get_tenant(tenant_id)
     if not tenant_row or not tenant_row.get("owner_tg_id"):
-        return
+        log.warning("VIP notify: tenant %d has no owner_tg_id", tenant_id)
+        return False
+
     owner_id = tenant_row["owner_tg_id"]
+    bot_token = tenant_row["bot_token"]
+
+    text = (
+        "👑 <b>Ваш бот получил VIP статус!</b>\n\n"
+        f"Действует до: <b>{until_str}</b>\n\n"
+        "<b>Что теперь доступно:</b>\n"
+        "• 📅 <b>Google Calendar</b> — записи синхронизируются с календарём в реальном времени\n"
+        "• ⏰ <b>Автонапоминания</b> — Aria сама напоминает клиентам о визите и следит за no-show\n"
+        "• 🔄 <b>Реактивация клиентов</b> — Aria уведомляет когда клиент давно не приходил\n"
+        "• 🧠 <b>Умный AI</b> — Aria помнит больше контекста, знает ваш каталог услуг "
+        "и постоянных клиентов — отвечает точнее и персональнее\n"
+        "• 📧 <b>Email мониторинг</b> — заявки из почты автоматически попадают в бота\n\n"
+        "Все функции уже активны. Просто пользуйся ботом как обычно 🚀"
+    )
     try:
-        await bot.send_message(
-            chat_id=owner_id,
-            text=(
-                "👑 <b>Ваш бот получил VIP статус!</b>\n\n"
-                f"Действует до: <b>{until_str}</b>\n\n"
-                "<b>Что теперь доступно:</b>\n"
-                "• 📅 <b>Google Calendar</b> — записи синхронизируются с календарём в реальном времени\n"
-                "• ⏰ <b>Автонапоминания</b> — Aria сама напоминает клиентам о визите и следит за no-show\n"
-                "• 🔄 <b>Реактивация клиентов</b> — Aria уведомляет когда клиент давно не приходил\n"
-                "• 🧠 <b>Умный AI</b> — Aria помнит больше контекста, знает ваш каталог услуг "
-                "и постоянных клиентов — отвечает точнее и персональнее\n"
-                "• 📧 <b>Email мониторинг</b> — заявки из почты автоматически попадают в бота\n\n"
-                "Все функции уже активны. Просто пользуйся ботом как обычно 🚀"
-            ),
-            parse_mode="HTML",
+        notify_bot = Bot(
+            token=bot_token,
+            default=DefaultBotProperties(parse_mode=ParseMode.HTML),
         )
+        async with notify_bot:
+            await notify_bot.send_message(chat_id=owner_id, text=text)
+        log.info("VIP grant notification sent: tenant %d owner %d", tenant_id, owner_id)
+        return True
     except Exception as exc:
         log.warning("VIP grant notification failed for tenant %d: %s", tenant_id, exc)
+        return False
 
 
 @router.message(Command("revoke_vip"))
