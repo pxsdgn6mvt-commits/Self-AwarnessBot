@@ -1137,7 +1137,12 @@ async def text_client(message: Message, state: FSMContext, tenant: TenantConfig)
                 svc_extras.append(f"{svc_info['duration_minutes']}{t('min_lbl', lang)}")
             svc_line = service + (" · " + " · ".join(svc_extras) if svc_extras else "")
 
-            gcal_note = " · Google Calendar 📅" if cal_id else ""
+            if cal_id:
+                gcal_note = " · Google Calendar 📅"
+            elif tenant.google_cal_id:
+                gcal_note = f"\n⚠️ {t('gcal_sync_failed', lang)}"
+            else:
+                gcal_note = ""
             result = (
                 f"✅ <b>{client_name}</b> — <b>{svc_line}</b>\n"
                 f"{date_str}, {time_str}{gcal_note}\n"

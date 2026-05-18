@@ -163,7 +163,24 @@ async def cmd_status(message: Message, tenant: TenantConfig, caller_id: int | No
     tz_val = tenant.timezone or "UTC"
 
     if creds and tenant.google_cal_id:
-        gcal_status = f"✅ Подключён\nID: <code>{tenant.google_cal_id}</code>"
+        from aria.services.booking import get_adapter, GoogleAdapter
+        adapter = get_adapter(tenant)
+        if not isinstance(adapter, GoogleAdapter):
+            gcal_status = (
+                f"⚠️ Ошибка инициализации (проверь credentials)\n"
+                f"ID: <code>{tenant.google_cal_id}</code>"
+            )
+        else:
+            ping_err = await adapter.ping()
+            if ping_err is None:
+                gcal_status = f"✅ Работает\nID: <code>{tenant.google_cal_id}</code>"
+            else:
+                short = ping_err[:120]
+                gcal_status = (
+                    f"⚠️ API недоступен:\n<code>{_html.escape(short)}</code>\n"
+                    f"ID: <code>{tenant.google_cal_id}</code>\n\n"
+                    "Проверь, что сервисный аккаунт добавлен в календарь с правами «Вносить изменения»."
+                )
     elif tenant.google_cal_id:
         gcal_status = "⚠️ ID задан, нет credentials"
     else:

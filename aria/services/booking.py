@@ -67,6 +67,10 @@ def _is_working_day(tenant: "TenantConfig", d: date) -> bool:
 
 class BookingAdapter(ABC):
 
+    async def ping(self) -> str | None:
+        """Return None if OK, or an error string."""
+        return None
+
     @abstractmethod
     async def get_events(self, date_from: datetime, date_to: datetime) -> list[dict]: ...
 
@@ -168,6 +172,16 @@ class GoogleAdapter(BookingAdapter):
         )
         self._svc = build("calendar", "v3", credentials=creds)
         self._cal = tenant.google_cal_id
+
+    def _ping_sync(self) -> None:
+        self._svc.calendars().get(calendarId=self._cal).execute()
+
+    async def ping(self) -> str | None:
+        try:
+            await asyncio.to_thread(self._ping_sync)
+            return None
+        except Exception as exc:
+            return str(exc)
 
     def _list_events_sync(self, tmin: str, tmax: str) -> list[dict]:
         return (
@@ -287,10 +301,13 @@ class GoogleAdapter(BookingAdapter):
             return
         end_dt = new_dt + timedelta(minutes=self._t.slot_minutes)
         tz_name = self._t.timezone or "UTC"
-        await asyncio.to_thread(self._patch_sync, calendar_event_id, {
-            "start": {"dateTime": new_dt.isoformat(), "timeZone": tz_name},
-            "end": {"dateTime": end_dt.isoformat(), "timeZone": tz_name},
-        })
+        try:
+            await asyncio.to_thread(self._patch_sync, calendar_event_id, {
+                "start": {"dateTime": new_dt.isoformat(), "timeZone": tz_name},
+                "end": {"dateTime": end_dt.isoformat(), "timeZone": tz_name},
+            })
+        except Exception as exc:
+            log.warning("Tenant %d: GCal patch failed for event %s (%s)", self._t.id, calendar_event_id, exc)
 
     async def delete_event(self, booking_id: int, calendar_event_id: Optional[str]) -> None:
         if not calendar_event_id:

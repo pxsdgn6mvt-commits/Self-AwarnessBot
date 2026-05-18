@@ -352,6 +352,7 @@ T: dict[str, dict[str, str]] = {
     "reset_reply":    {"ru": "История очищена. Начнём заново — чем могу помочь?", "en": "History cleared. Let's start fresh — how can I help?", "fi": "Historia tyhjennetty. Aloitetaan alusta — miten voin auttaa?"},
     "rate_limit":     {"ru": "Слишком много сообщений подряд. Подожди минуту.", "en": "Too many messages in a row. Please wait a minute.", "fi": "Liikaa viestejä peräkkäin. Odota hetki."},
     "ai_error":       {"ru": "Что-то пошло не так. Попробуй ещё раз.", "en": "Something went wrong. Please try again.", "fi": "Jokin meni pieleen. Yritä uudelleen."},
+    "gcal_sync_failed": {"ru": "Запись в боте сохранена, но в Google Calendar не попала — проверь /status", "en": "Saved in bot, but Google Calendar sync failed — check /status", "fi": "Tallennettu bottiin, mutta Google Calendar -synkronointi epäonnistui — katso /status"},
     "cat_items_hdr":  {"ru": "📂 <b>{name}</b> — {n} услуг(а)\n\nНажмите 🗑 рядом с услугой, чтобы удалить.", "en": "📂 <b>{name}</b> — {n} service(s)\n\nTap 🗑 next to a service to delete it.", "fi": "📂 <b>{name}</b> — {n} palvelu(a)\n\nNapauta 🗑 palvelun vieressä poistaaksesi."},
 }
 
