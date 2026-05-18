@@ -326,13 +326,12 @@ class GoogleAdapter(BookingAdapter):
 def get_adapter(tenant: "TenantConfig") -> BookingAdapter:
     if tenant.id not in _adapters:
         cal_id = tenant.google_cal_id
-        # Per-tenant credentials take priority; fall back to platform service account
         creds_json = tenant.google_cal_credentials
         if not creds_json:
             from aria.config import settings
             creds_json = settings.GOOGLE_CALENDAR_CREDENTIALS
 
-        if creds_json and cal_id:
+        if creds_json and cal_id and tenant.is_vip_active:
             try:
                 _adapters[tenant.id] = GoogleAdapter(tenant, creds_json)
                 log.info("Tenant %d: Google Calendar adapter (cal=%s)", tenant.id, cal_id)
@@ -340,7 +339,9 @@ def get_adapter(tenant: "TenantConfig") -> BookingAdapter:
                 log.warning("Tenant %d: Google Calendar init failed (%s), using local", tenant.id, exc)
                 _adapters[tenant.id] = LocalAdapter(tenant)
         else:
-            if cal_id:
+            if cal_id and not tenant.is_vip_active:
+                log.info("Tenant %d: Google Calendar skipped — VIP required", tenant.id)
+            elif cal_id:
                 log.warning("Tenant %d: google_cal_id set but no service account configured", tenant.id)
             _adapters[tenant.id] = LocalAdapter(tenant)
             log.info("Tenant %d: local Postgres adapter", tenant.id)

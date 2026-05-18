@@ -82,7 +82,7 @@ async def cmd_start(message: Message, state: FSMContext, tenant: TenantConfig) -
             "• /list_bots — список активных ботов\n"
             "• /add_bot — добавить новый бот\n"
             "• /broadcast &lt;текст&gt; — рассылка всем владельцам\n"
-            "• /set_vip &lt;tid&gt; &lt;uid&gt; [дней] — назначить VIP",
+            "• /set_vip &lt;tid&gt; [дней] — назначить VIP тенанту",
             reply_markup=ADMIN_KB,
         )
     else:

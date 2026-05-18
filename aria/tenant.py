@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Optional
 
 
@@ -30,6 +31,8 @@ class TenantConfig:
     reminder_hours_before: int
     daily_summary_hour: int
     owner_lang: str
+    is_vip: bool
+    vip_until: Optional[datetime]
 
     @classmethod
     def from_record(cls, r: dict) -> "TenantConfig":
@@ -56,6 +59,8 @@ class TenantConfig:
             reminder_hours_before=int(r.get("reminder_hours_before") or 2),
             daily_summary_hour=int(r.get("daily_summary_hour") or 20),
             owner_lang=r.get("owner_lang") or "ru",
+            is_vip=bool(r.get("is_vip", False)),
+            vip_until=r.get("vip_until"),
         )
 
     @property
@@ -69,3 +74,11 @@ class TenantConfig:
 
     def is_owner(self, user_id: int) -> bool:
         return self.owner_tg_id is not None and self.owner_tg_id == user_id
+
+    @property
+    def is_vip_active(self) -> bool:
+        if not self.is_vip:
+            return False
+        if self.vip_until is None:
+            return True
+        return self.vip_until > datetime.now(timezone.utc)

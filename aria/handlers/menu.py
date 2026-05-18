@@ -672,10 +672,16 @@ async def cb_adm_vip_help(callback: CallbackQuery) -> None:
         await callback.answer("Нет доступа.", show_alert=True)
         return
     await callback.message.answer(
-        "Назначить VIP:\n"
-        "<code>/set_vip &lt;tenant_id&gt; &lt;user_id&gt; [дней]</code>\n\n"
-        "Пример: <code>/set_vip 1 123456789 30</code>\n"
-        "Без дней — бессрочно.",
+        "Назначить VIP тенанту:\n"
+        "<code>/set_vip &lt;tenant_id&gt; [дней]</code>\n\n"
+        "Пример: <code>/set_vip 1 30</code>\n"
+        "Без дней — бессрочно.\n\n"
+        "<b>VIP включает:</b>\n"
+        "• Google Calendar синхронизация\n"
+        "• Автонапоминания клиентам\n"
+        "• Реактивация спящих клиентов\n"
+        "• Расширенный AI контекст (100 сообщений)\n"
+        "• Мониторинг email",
         parse_mode="HTML",
     )
     await callback.answer()
@@ -687,8 +693,8 @@ async def cb_adm_revoke_help(callback: CallbackQuery) -> None:
         await callback.answer("Нет доступа.", show_alert=True)
         return
     await callback.message.answer(
-        "Отозвать VIP:\n"
-        "<code>/revoke_vip &lt;tenant_id&gt; &lt;user_id&gt;</code>",
+        "Отозвать VIP у тенанта:\n"
+        "<code>/revoke_vip &lt;tenant_id&gt;</code>",
         parse_mode="HTML",
     )
     await callback.answer()

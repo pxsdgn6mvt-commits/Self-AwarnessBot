@@ -659,29 +659,30 @@ async def cmd_set_vip(message: Message) -> None:
         return
 
     parts = message.text.split()
-    if len(parts) < 3:
+    if len(parts) < 2:
         await message.answer(
-            "Использование: /set_vip <tenant_id> <user_id> [дней]\n"
-            "Пример: /set_vip 1 123456789 30"
+            "Использование: /set_vip <tenant_id> [дней]\n"
+            "Пример: /set_vip 1 30\n"
+            "Без дней — бессрочно."
         )
         return
 
     try:
-        tid     = int(parts[1])
-        user_id = int(parts[2])
-        days    = int(parts[3]) if len(parts) > 3 else None
+        tid  = int(parts[1])
+        days = int(parts[2]) if len(parts) > 2 else None
     except ValueError:
-        await message.answer("Неверный формат. Пример: /set_vip 1 123456789 30")
+        await message.answer("Неверный формат. Пример: /set_vip 1 30")
         return
 
     vip_until = datetime.now(timezone.utc) + timedelta(days=days) if days else None
-    await repo.set_client_vip(tid, user_id, True, vip_until)
+    await repo.set_tenant_vip(tid, True, vip_until)
+
+    from aria.services.booking import invalidate_adapter
+    invalidate_adapter(tid)
 
     until_str = vip_until.strftime("%d.%m.%Y") if vip_until else "бессрочно"
-    await message.answer(
-        f"✅ VIP назначен: user {user_id} в тенанте #{tid}, действует до {until_str}"
-    )
-    log.info("Admin set VIP: tenant %d user %d until %s", tid, user_id, until_str)
+    await message.answer(f"✅ VIP назначен: тенант #{tid}, действует до {until_str}")
+    log.info("Admin set VIP: tenant %d until %s", tid, until_str)
 
 
 @router.message(Command("revoke_vip"))
@@ -690,17 +691,20 @@ async def cmd_revoke_vip(message: Message) -> None:
         return
 
     parts = message.text.split()
-    if len(parts) < 3:
-        await message.answer("Использование: /revoke_vip <tenant_id> <user_id>")
+    if len(parts) < 2:
+        await message.answer("Использование: /revoke_vip <tenant_id>")
         return
 
     try:
-        tid     = int(parts[1])
-        user_id = int(parts[2])
+        tid = int(parts[1])
     except ValueError:
         await message.answer("Неверный формат.")
         return
 
-    await repo.set_client_vip(tid, user_id, False, None)
-    await message.answer(f"✅ VIP отозван: user {user_id} в тенанте #{tid}")
-    log.info("Admin revoked VIP: tenant %d user %d", tid, user_id)
+    await repo.set_tenant_vip(tid, False, None)
+
+    from aria.services.booking import invalidate_adapter
+    invalidate_adapter(tid)
+
+    await message.answer(f"✅ VIP отозван: тенант #{tid}")
+    log.info("Admin revoked VIP: tenant %d", tid)

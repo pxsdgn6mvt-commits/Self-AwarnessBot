@@ -28,6 +28,15 @@ log = logging.getLogger(__name__)
 
 _scheduler: AsyncIOScheduler | None = None
 
+
+def _is_tenant_vip(t: dict) -> bool:
+    if not t.get("is_vip"):
+        return False
+    vip_until = t.get("vip_until")
+    if vip_until is None:
+        return True
+    return vip_until > datetime.now(timezone.utc)
+
 # In-memory dedup for daily summaries: (tenant_id, local_date_str)
 _summary_sent: set[tuple[int, str]] = set()
 
@@ -95,6 +104,8 @@ async def _run_reminder_scan(bots_getter: Callable[[], dict[int, Any]]) -> None:
         bot = bots.get(tid)
         if not bot:
             continue
+        if not _is_tenant_vip(t):
+            continue
         owner_id = t["owner_tg_id"]
         hours_before = int(t.get("reminder_hours_before") or 2)
         within_minutes = hours_before * 60 + 15
@@ -121,6 +132,8 @@ async def _run_daily_summary(bots_getter: Callable[[], dict[int, Any]]) -> None:
         tid = t["id"]
         bot = bots.get(tid)
         if not bot:
+            continue
+        if not _is_tenant_vip(t):
             continue
         owner_id = t["owner_tg_id"]
         tz_str = t.get("timezone") or "UTC"
@@ -218,7 +231,9 @@ def schedule_reminder_job(
     bot: Any,
     tenant: "TenantConfig",
 ) -> None:
-    """Schedule a per-booking reminder X hours before appointment (from tenant settings)."""
+    """Schedule a per-booking reminder X hours before appointment (VIP only)."""
+    if not tenant.is_vip_active:
+        return
     hours = getattr(tenant, "reminder_hours_before", 2) or 2
     remind_at_utc = scheduled_at - timedelta(hours=hours)
 
@@ -243,7 +258,9 @@ def schedule_noshow_job(
     bot: Any,
     tenant: "TenantConfig",
 ) -> None:
-    """Schedule a no-show check 2 hours after the appointment."""
+    """Schedule a no-show check 2 hours after the appointment (VIP only)."""
+    if not tenant.is_vip_active:
+        return
     check_at = scheduled_at + timedelta(hours=2)
     if check_at <= datetime.now(timezone.utc):
         return
@@ -311,6 +328,8 @@ async def _run_reactivation(bots_getter: Callable[[], dict[int, Any]]) -> None:
         tid = t["id"]
         bot = bots.get(tid)
         if not bot:
+            continue
+        if not _is_tenant_vip(t):
             continue
         owner_id = t["owner_tg_id"]
         lang = t.get("owner_lang") or "ru"

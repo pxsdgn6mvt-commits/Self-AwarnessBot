@@ -42,6 +42,14 @@ _bots: dict[int, Bot] = {}
 _tasks: dict[int, asyncio.Task] = {}
 
 
+def _is_tenant_vip_row(row: dict) -> bool:
+    from datetime import datetime, timezone
+    if not row.get("is_vip"):
+        return False
+    vip_until = row.get("vip_until")
+    return vip_until is None or vip_until > datetime.now(timezone.utc)
+
+
 # ── Shared Dispatcher ─────────────────────────────────────────────────────────
 
 def _build_dispatcher() -> Dispatcher:
@@ -78,7 +86,7 @@ async def _configure_bot(bot: Bot, dp: Dispatcher, tenant_id: int) -> None:
             await set_commands(bot, row["owner_tg_id"])
         else:
             await set_commands(bot)
-        if row and row.get("email_user") and row.get("email_host"):
+        if row and row.get("email_user") and row.get("email_host") and _is_tenant_vip_row(row):
             from aria.services.email_monitor import start_email_job
             start_email_job(tenant_id, bot)
     except Exception:

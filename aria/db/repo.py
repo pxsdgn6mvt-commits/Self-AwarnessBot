@@ -125,6 +125,39 @@ async def set_tenant_active(tenant_id: int, active: bool) -> None:
         )
 
 
+async def set_tenant_vip(
+    tenant_id: int, is_vip: bool, vip_until: Optional[datetime] = None
+) -> None:
+    async with _p().acquire() as conn:
+        await conn.execute(
+            "UPDATE aria_tenants SET is_vip=$2, vip_until=$3 WHERE id=$1",
+            tenant_id, is_vip, vip_until,
+        )
+
+
+async def get_vip_context(tenant_id: int) -> dict:
+    """Fetch enriched context for VIP tenant's AI prompt."""
+    async with _p().acquire() as conn:
+        client_rows = await conn.fetch(
+            """SELECT notes FROM aria_clients
+               WHERE tenant_id=$1 AND notes IS NOT NULL AND notes <> ''
+               LIMIT 30""",
+            tenant_id,
+        )
+        service_rows = await conn.fetch(
+            """SELECT sc.name AS category, si.name, si.price, si.duration_minutes
+               FROM aria_service_items si
+               JOIN aria_service_categories sc ON sc.id = si.category_id
+               WHERE sc.tenant_id=$1
+               ORDER BY sc.position, si.position""",
+            tenant_id,
+        )
+    return {
+        "client_notes": [r["notes"] for r in client_rows],
+        "services": [dict(r) for r in service_rows],
+    }
+
+
 # ── Clients ───────────────────────────────────────────────────────────────────
 
 async def upsert_client(tenant_id: int, user_id: int, lang: str = "en") -> None:

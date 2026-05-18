@@ -17,7 +17,8 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-MAX_HISTORY    = 40
+MAX_HISTORY     = 40
+MAX_HISTORY_VIP = 100
 MAX_TOOL_ROUNDS = 5
 
 _clients: dict[str, anthropic.AsyncAnthropic] = {}
@@ -38,17 +39,21 @@ _STYLE_LINES = {
 }
 
 
-def _build_system_prompt(tenant: "TenantConfig", style: str = "casual") -> str:  # upgraded
+def _build_system_prompt(
+    tenant: "TenantConfig",
+    style: str = "casual",
+    vip_context: Optional[dict] = None,
+) -> str:
     from aria.config import settings
     has_creds = bool(tenant.google_cal_credentials or settings.GOOGLE_CALENDAR_CREDENTIALS)
-    if has_creds and tenant.google_cal_id:
+    if has_creds and tenant.google_cal_id and tenant.is_vip_active:
         calendar_line = f"Календарь: Google Calendar (ID: {tenant.google_cal_id}) — синхронизирован"
     else:
         calendar_line = "Календарь: локальное хранение (Google Calendar не подключён)"
 
     style_line = _STYLE_LINES.get(style, _STYLE_LINES["casual"])
 
-    return f"""Ты — Aria, персональный AI-администратор {tenant.owner_name} в {tenant.salon_name}.
+    base = f"""Ты — Aria, персональный AI-администратор {tenant.owner_name} в {tenant.salon_name}.
 
 РОЛЬ:
 Помогаешь {tenant.owner_name} управлять записями клиентов. Она твой руководитель.
@@ -87,6 +92,41 @@ def _build_system_prompt(tenant: "TenantConfig", style: str = "casual") -> str: 
 {calendar_line}
 Часовой пояс: {tenant.timezone}
 Сегодня: {{TODAY}}"""
+
+    if vip_context:
+        sections: list[str] = []
+
+        services = vip_context.get("services", [])
+        if services:
+            lines = []
+            current_cat = None
+            for s in services:
+                if s["category"] != current_cat:
+                    current_cat = s["category"]
+                    lines.append(f"\n{current_cat}:")
+                price_str = f"{int(s['price'])}₽" if s.get("price") else ""
+                dur_str = f"{s['duration_minutes']} мин" if s.get("duration_minutes") else ""
+                meta = ", ".join(filter(None, [price_str, dur_str]))
+                lines.append(f"  — {s['name']}" + (f" ({meta})" if meta else ""))
+            sections.append("КАТАЛОГ УСЛУГ:" + "".join(lines))
+
+        notes = vip_context.get("client_notes", [])
+        if notes:
+            note_lines = "\n".join(f"  — {n}" for n in notes)
+            sections.append(f"ЗАМЕТКИ О КЛИЕНТАХ:\n{note_lines}")
+
+        if sections:
+            vip_block = "\n\nVIP КОНТЕКСТ:\n" + "\n\n".join(sections)
+            vip_block += (
+                "\n\nДОПОЛНИТЕЛЬНЫЕ ИНСТРУКЦИИ (VIP):\n"
+                "— Знай постоянных клиентов по именам и предпочтениям\n"
+                "— При записи учитывай историю и предпочтения конкретного клиента\n"
+                "— Предлагай подходящие услуги исходя из каталога и заметок\n"
+                "— Если клиент упоминался в заметках — используй эти знания"
+            )
+            base += vip_block
+
+    return base
 
 
 # ── Tools ─────────────────────────────────────────────────────────────────────
@@ -337,13 +377,23 @@ async def chat(
 ) -> str:
     client = _get_client(tenant.effective_api_key)
 
+    is_vip = tenant.is_vip_active
+    max_history = MAX_HISTORY_VIP if is_vip else MAX_HISTORY
+
     history = await repo.load_history(tenant.id, user_id)
     history.append({"role": "user", "content": user_text})
-    history = _trim_history(history, MAX_HISTORY)
+    history = _trim_history(history, max_history)
+
+    vip_context: Optional[dict] = None
+    if is_vip:
+        try:
+            vip_context = await repo.get_vip_context(tenant.id)
+        except Exception:
+            pass
 
     from zoneinfo import ZoneInfo
     tenant_tz = ZoneInfo(tenant.timezone or "UTC")
-    system_prompt = _build_system_prompt(tenant, style=style).replace(
+    system_prompt = _build_system_prompt(tenant, style=style, vip_context=vip_context).replace(
         "{TODAY}", datetime.now(tenant_tz).strftime("%Y-%m-%d %A")
     )
 
