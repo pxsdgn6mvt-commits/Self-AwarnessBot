@@ -23,6 +23,7 @@ from aiogram.types import (
 import aria.db.repo as repo
 from aria.config import settings
 from aria.filters import SetupDone
+from aria.i18n import t
 from aria.tenant import TenantConfig
 
 log = logging.getLogger(__name__)
@@ -52,7 +53,7 @@ class CatalogueSG(StatesGroup):
 
 # ── Service catalogue (categories / subcategories) ────────────────────────────
 
-async def _categories_kb(tenant_id: int) -> InlineKeyboardMarkup:
+async def _categories_kb(tenant_id: int, lang: str = "ru") -> InlineKeyboardMarkup:
     cats = await repo.get_categories(tenant_id)
     rows: list[list[InlineKeyboardButton]] = [
         [
@@ -61,12 +62,12 @@ async def _categories_kb(tenant_id: int) -> InlineKeyboardMarkup:
         ]
         for c in cats
     ]
-    rows.append([InlineKeyboardButton(text="➕ Добавить категорию", callback_data="adm:addcat")])
-    rows.append([InlineKeyboardButton(text="◀️ Назад", callback_data="adm:main")])
+    rows.append([InlineKeyboardButton(text=t("cat_add_btn", lang), callback_data="adm:addcat")])
+    rows.append([InlineKeyboardButton(text=t("btn_back", lang),    callback_data="adm:main")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-async def _items_kb(category_id: int, tenant_id: int) -> InlineKeyboardMarkup:
+async def _items_kb(category_id: int, tenant_id: int, lang: str = "ru") -> InlineKeyboardMarkup:
     items = await repo.get_items(category_id)
     rows: list[list[InlineKeyboardButton]] = []
     for it in items:
@@ -74,27 +75,29 @@ async def _items_kb(category_id: int, tenant_id: int) -> InlineKeyboardMarkup:
         if it["price"] is not None:
             parts.append(f"{int(it['price'])}€")
         if it["duration_minutes"] is not None:
-            parts.append(f"{it['duration_minutes']}мин")
+            parts.append(f"{it['duration_minutes']}{t('min_lbl', lang)}")
         label = " · ".join(parts)
         rows.append([InlineKeyboardButton(text=label, callback_data="adm:noop")])
         rows.append([
-            InlineKeyboardButton(text="✏️ Изменить", callback_data=f"adm:eitem:{it['id']}:{category_id}"),
-            InlineKeyboardButton(text="🗑 Удалить",  callback_data=f"adm:dsub:{it['id']}:{category_id}"),
+            InlineKeyboardButton(text=t("item_edit_btn", lang), callback_data=f"adm:eitem:{it['id']}:{category_id}"),
+            InlineKeyboardButton(text=t("item_del_btn",  lang), callback_data=f"adm:dsub:{it['id']}:{category_id}"),
         ])
-    rows.append([InlineKeyboardButton(text="➕ Добавить услугу", callback_data=f"adm:addsub:{category_id}")])
-    rows.append([InlineKeyboardButton(text="◀️ Назад", callback_data="adm:services")])
+    rows.append([InlineKeyboardButton(text=t("item_add_btn", lang), callback_data=f"adm:addsub:{category_id}")])
+    rows.append([InlineKeyboardButton(text=t("btn_back", lang),     callback_data="adm:services")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 @router.callback_query(F.data == "adm:services", SetupDone())
 async def show_services(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
     if not tenant.is_owner(callback.from_user.id):
-        await callback.answer("Нет доступа.", show_alert=True)
+        await callback.answer(t("no_access", tenant.owner_lang or "ru"), show_alert=True)
         return
+    lang = tenant.owner_lang or "ru"
     await state.clear()
     await callback.message.edit_text(
-        "👩‍💼 <b>Управление услугами</b>\n\nНажмите на категорию или добавьте новую.",
-        reply_markup=await _categories_kb(tenant.id),
+        t("cat_mgmt_title", lang),
+        reply_markup=await _categories_kb(tenant.id, lang),
+        parse_mode="HTML",
     )
     await callback.answer()
 
@@ -102,40 +105,43 @@ async def show_services(callback: CallbackQuery, state: FSMContext, tenant: Tena
 @router.callback_query(F.data == "adm:addcat", SetupDone())
 async def prompt_add_category(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
     if not tenant.is_owner(callback.from_user.id):
-        await callback.answer("Нет доступа.", show_alert=True)
+        await callback.answer(t("no_access", tenant.owner_lang or "ru"), show_alert=True)
         return
+    lang = tenant.owner_lang or "ru"
     await state.set_state(CatalogueSG.add_category)
-    await state.update_data(tenant_id=tenant.id)
-    await callback.message.answer("Введите название новой категории:")
+    await state.update_data(tenant_id=tenant.id, lang=lang)
+    await callback.message.answer(t("cat_prompt", lang))
     await callback.answer()
 
 
 @router.message(CatalogueSG.add_category)
 async def save_category(message: Message, state: FSMContext) -> None:
     name = message.text.strip()
-    if not name:
-        await message.answer("Название не может быть пустым. Попробуйте снова:")
-        return
     data = await state.get_data()
+    lang = data.get("lang", "ru")
     tenant_id = data.get("tenant_id", 1)
+    if not name:
+        await message.answer(t("cat_not_empty", lang))
+        return
     await repo.add_category(tenant_id, name)
     await state.clear()
     await message.answer(
-        f"✅ Категория «{name}» добавлена.",
-        reply_markup=await _categories_kb(tenant_id),
+        t("cat_added", lang).format(name=name),
+        reply_markup=await _categories_kb(tenant_id, lang),
     )
 
 
 @router.callback_query(F.data.startswith("adm:dcat:"), SetupDone())
 async def delete_category(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
     if not tenant.is_owner(callback.from_user.id):
-        await callback.answer("Нет доступа.", show_alert=True)
+        await callback.answer(t("no_access", tenant.owner_lang or "ru"), show_alert=True)
         return
+    lang = tenant.owner_lang or "ru"
     await repo.delete_category(int(callback.data.split(":")[-1]))
     await state.clear()
     await callback.message.edit_text(
-        "🗑 Категория удалена.",
-        reply_markup=await _categories_kb(tenant.id),
+        t("cat_deleted", lang),
+        reply_markup=await _categories_kb(tenant.id, lang),
     )
     await callback.answer()
 
@@ -143,19 +149,21 @@ async def delete_category(callback: CallbackQuery, state: FSMContext, tenant: Te
 @router.callback_query(F.data.startswith("adm:cat:"), SetupDone())
 async def show_category(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
     if not tenant.is_owner(callback.from_user.id):
-        await callback.answer("Нет доступа.", show_alert=True)
+        await callback.answer(t("no_access", tenant.owner_lang or "ru"), show_alert=True)
         return
+    lang = tenant.owner_lang or "ru"
     await state.clear()
     cat_id = int(callback.data.split(":")[-1])
     cats = await repo.get_categories(tenant.id)
     cat = next((c for c in cats if c["id"] == cat_id), None)
     if not cat:
-        await callback.answer("Категория не найдена.")
+        await callback.answer(t("not_found", lang))
         return
     items = await repo.get_items(cat_id)
     await callback.message.edit_text(
-        f"📂 <b>{cat['name']}</b> — {len(items)} услуг(а)\n\nНажмите 🗑 рядом с услугой, чтобы удалить.",
-        reply_markup=await _items_kb(cat_id, tenant.id),
+        t("cat_items_hdr", lang).format(name=cat["name"], n=len(items)),
+        reply_markup=await _items_kb(cat_id, tenant.id, lang),
+        parse_mode="HTML",
     )
     await callback.answer()
 
@@ -163,61 +171,56 @@ async def show_category(callback: CallbackQuery, state: FSMContext, tenant: Tena
 @router.callback_query(F.data.startswith("adm:addsub:"), SetupDone())
 async def prompt_add_item(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
     if not tenant.is_owner(callback.from_user.id):
-        await callback.answer("Нет доступа.", show_alert=True)
+        await callback.answer(t("no_access", tenant.owner_lang or "ru"), show_alert=True)
         return
+    lang = tenant.owner_lang or "ru"
     cat_id = int(callback.data.split(":")[-1])
     cats = await repo.get_categories(tenant.id)
     cat = next((c for c in cats if c["id"] == cat_id), None)
     cat_name = cat["name"] if cat else "?"
     await state.set_state(CatalogueSG.add_item)
-    await state.update_data(category_id=cat_id, category_name=cat_name, tenant_id=tenant.id)
-    await callback.message.answer(f"Введите название услуги для «{cat_name}»:")
+    await state.update_data(category_id=cat_id, category_name=cat_name, tenant_id=tenant.id, lang=lang)
+    await callback.message.answer(t("item_prompt", lang).format(cat=cat_name))
     await callback.answer()
 
 
 @router.message(CatalogueSG.add_item, F.text.func(lambda x: not x.startswith("/")))
 async def save_item_name(message: Message, state: FSMContext) -> None:
     name = message.text.strip()
+    data = await state.get_data()
+    lang = data.get("lang", "ru")
     if not name:
-        await message.answer("Название не может быть пустым. Попробуйте снова:")
+        await message.answer(t("cat_not_empty", lang))
         return
     await state.update_data(item_name=name)
     await state.set_state(CatalogueSG.add_price)
-    await message.answer(
-        f"💰 Цена услуги «{name}» (например: <code>50</code>)\n"
-        "Или /skip чтобы не указывать.",
-        parse_mode="HTML",
-    )
+    await message.answer(t("price_prompt", lang).format(name=name), parse_mode="HTML")
 
 
 @router.message(CatalogueSG.add_price, Command("skip"))
 async def skip_price(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    lang = data.get("lang", "ru")
     await state.update_data(item_price=None)
     await state.set_state(CatalogueSG.add_duration)
-    await message.answer(
-        "⏱ Длительность в минутах (например: <code>60</code>)\n"
-        "Или /skip чтобы не указывать.",
-        parse_mode="HTML",
-    )
+    await message.answer(t("dur_prompt", lang), parse_mode="HTML")
 
 
 @router.message(CatalogueSG.add_price, F.text.func(lambda x: not x.startswith("/")))
 async def save_item_price(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    lang = data.get("lang", "ru")
     text = message.text.strip().replace(",", ".")
     try:
         price = float(text)
         if price < 0:
             raise ValueError
     except ValueError:
-        await message.answer("Введите число, например <code>50</code>, или /skip:", parse_mode="HTML")
+        await message.answer(t("price_bad", lang), parse_mode="HTML")
         return
     await state.update_data(item_price=price)
     await state.set_state(CatalogueSG.add_duration)
-    await message.answer(
-        "⏱ Длительность в минутах (например: <code>60</code>)\n"
-        "Или /skip чтобы не указывать.",
-        parse_mode="HTML",
-    )
+    await message.answer(t("dur_prompt", lang), parse_mode="HTML")
 
 
 @router.message(CatalogueSG.add_duration, Command("skip"))
@@ -227,165 +230,172 @@ async def skip_duration(message: Message, state: FSMContext) -> None:
 
 @router.message(CatalogueSG.add_duration, F.text.func(lambda x: not x.startswith("/")))
 async def save_item_duration(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    lang = data.get("lang", "ru")
     try:
         duration = int(message.text.strip())
         if duration <= 0:
             raise ValueError
     except ValueError:
-        await message.answer("Введите целое число минут, например <code>60</code>, или /skip:", parse_mode="HTML")
+        await message.answer(t("dur_bad", lang), parse_mode="HTML")
         return
     await _finish_add_item(message, state, duration=duration)
 
 
 async def _finish_add_item(message: Message, state: FSMContext, duration: int | None) -> None:
     data = await state.get_data()
+    lang  = data.get("lang", "ru")
     name  = data["item_name"]
     price = data.get("item_price")
     await repo.add_item(data["category_id"], name, price=price, duration_minutes=duration)
     await state.clear()
-    parts = [f"✅ Услуга «{name}» добавлена"]
+    parts = [t("item_added", lang).format(name=name)]
     if price is not None:
-        parts.append(f"Цена: {int(price)}€")
+        parts.append(f"{t('item_price_lbl', lang)}: {int(price)}€")
     if duration is not None:
-        parts.append(f"Длительность: {duration} мин")
+        parts.append(f"{t('min_lbl', lang)}: {duration}")
     await message.answer(
         "\n".join(parts),
-        reply_markup=await _items_kb(data["category_id"], data.get("tenant_id", 1)),
+        reply_markup=await _items_kb(data["category_id"], data.get("tenant_id", 1), lang),
     )
 
 
 @router.callback_query(F.data.startswith("adm:dsub:"), SetupDone())
 async def delete_item(callback: CallbackQuery, tenant: TenantConfig) -> None:
     if not tenant.is_owner(callback.from_user.id):
-        await callback.answer("Нет доступа.", show_alert=True)
+        await callback.answer(t("no_access", tenant.owner_lang or "ru"), show_alert=True)
         return
+    lang = tenant.owner_lang or "ru"
     parts = callback.data.split(":")
     await repo.delete_item(int(parts[2]))
     await callback.message.edit_reply_markup(
-        reply_markup=await _items_kb(int(parts[3]), tenant.id)
+        reply_markup=await _items_kb(int(parts[3]), tenant.id, lang)
     )
-    await callback.answer("Услуга удалена")
+    await callback.answer(t("item_deleted", lang))
 
 
 @router.callback_query(F.data.startswith("adm:eitem:"), SetupDone())
 async def prompt_edit_item(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
     if not tenant.is_owner(callback.from_user.id):
-        await callback.answer("Нет доступа.", show_alert=True)
+        await callback.answer(t("no_access", tenant.owner_lang or "ru"), show_alert=True)
         return
+    lang = tenant.owner_lang or "ru"
     parts = callback.data.split(":")
     item_id, cat_id = int(parts[2]), int(parts[3])
     items = await repo.get_items(cat_id)
     item = next((i for i in items if i["id"] == item_id), None)
     if not item:
-        await callback.answer("Услуга не найдена.")
+        await callback.answer(t("not_found", lang))
         return
     label_parts = [item["name"]]
     if item["price"] is not None:
-        label_parts.append(f"цена: {int(item['price'])}€")
+        label_parts.append(f"{t('item_price_lbl', lang)}: {int(item['price'])}€")
     if item["duration_minutes"] is not None:
-        label_parts.append(f"{item['duration_minutes']} мин")
+        label_parts.append(f"{item['duration_minutes']} {t('min_lbl', lang)}")
     info = ", ".join(label_parts)
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="💰 Цена",   callback_data=f"adm:eprice:{item_id}:{cat_id}"),
-            InlineKeyboardButton(text="⏱ Длит.",   callback_data=f"adm:edur:{item_id}:{cat_id}"),
+            InlineKeyboardButton(text=f"💰 {t('item_price_lbl', lang)}", callback_data=f"adm:eprice:{item_id}:{cat_id}"),
+            InlineKeyboardButton(text=f"⏱ {t('item_dur_lbl',   lang)}", callback_data=f"adm:edur:{item_id}:{cat_id}"),
         ],
-        [InlineKeyboardButton(text="◀️ Назад", callback_data=f"adm:cat:{cat_id}")],
+        [InlineKeyboardButton(text=t("btn_back", lang), callback_data=f"adm:cat:{cat_id}")],
     ])
-    await callback.message.edit_text(f"✏️ <b>{info}</b>\n\nЧто редактировать?", reply_markup=kb)
+    await callback.message.edit_text(
+        f"✏️ <b>{info}</b>\n\n{t('item_edit_what', lang)}",
+        reply_markup=kb,
+        parse_mode="HTML",
+    )
     await callback.answer()
 
 
 @router.callback_query(F.data.startswith("adm:eprice:"), SetupDone())
 async def prompt_edit_price(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
     if not tenant.is_owner(callback.from_user.id):
-        await callback.answer("Нет доступа.", show_alert=True)
+        await callback.answer(t("no_access", tenant.owner_lang or "ru"), show_alert=True)
         return
+    lang = tenant.owner_lang or "ru"
     parts = callback.data.split(":")
     item_id, cat_id = int(parts[2]), int(parts[3])
     await state.set_state(CatalogueSG.edit_price)
-    await state.update_data(edit_item_id=item_id, edit_cat_id=cat_id, tenant_id=tenant.id)
-    await callback.message.answer(
-        "💰 Введи новую цену (например: <code>50</code>)\n"
-        "Или /skip чтобы убрать цену.",
-        parse_mode="HTML",
-    )
+    await state.update_data(edit_item_id=item_id, edit_cat_id=cat_id, tenant_id=tenant.id, lang=lang)
+    await callback.message.answer(t("price_edit_prompt", lang), parse_mode="HTML")
     await callback.answer()
 
 
 @router.message(CatalogueSG.edit_price, Command("skip"))
 async def skip_edit_price(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
+    lang = data.get("lang", "ru")
     await repo.update_item_price(data["edit_item_id"], None)
     await state.clear()
     await message.answer(
-        "✅ Цена удалена.",
-        reply_markup=await _items_kb(data["edit_cat_id"], data.get("tenant_id", 1)),
+        t("price_deleted", lang),
+        reply_markup=await _items_kb(data["edit_cat_id"], data.get("tenant_id", 1), lang),
     )
 
 
 @router.message(CatalogueSG.edit_price, F.text.func(lambda x: not x.startswith("/")))
 async def save_edit_price(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    lang = data.get("lang", "ru")
     text = message.text.strip().replace(",", ".")
     try:
         price = float(text)
         if price < 0:
             raise ValueError
     except ValueError:
-        await message.answer("Введите число, например <code>50</code>, или /skip:", parse_mode="HTML")
+        await message.answer(t("price_bad", lang), parse_mode="HTML")
         return
-    data = await state.get_data()
     await repo.update_item_price(data["edit_item_id"], price)
     await state.clear()
     await message.answer(
-        f"✅ Цена обновлена: {int(price)}€",
-        reply_markup=await _items_kb(data["edit_cat_id"], data.get("tenant_id", 1)),
+        f"{t('price_updated', lang)} {int(price)}€",
+        reply_markup=await _items_kb(data["edit_cat_id"], data.get("tenant_id", 1), lang),
     )
 
 
 @router.callback_query(F.data.startswith("adm:edur:"), SetupDone())
 async def prompt_edit_duration(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
     if not tenant.is_owner(callback.from_user.id):
-        await callback.answer("Нет доступа.", show_alert=True)
+        await callback.answer(t("no_access", tenant.owner_lang or "ru"), show_alert=True)
         return
+    lang = tenant.owner_lang or "ru"
     parts = callback.data.split(":")
     item_id, cat_id = int(parts[2]), int(parts[3])
     await state.set_state(CatalogueSG.edit_duration)
-    await state.update_data(edit_item_id=item_id, edit_cat_id=cat_id, tenant_id=tenant.id)
-    await callback.message.answer(
-        "⏱ Введи длительность в минутах (например: <code>60</code>)\n"
-        "Или /skip чтобы убрать.",
-        parse_mode="HTML",
-    )
+    await state.update_data(edit_item_id=item_id, edit_cat_id=cat_id, tenant_id=tenant.id, lang=lang)
+    await callback.message.answer(t("dur_prompt", lang), parse_mode="HTML")
     await callback.answer()
 
 
 @router.message(CatalogueSG.edit_duration, Command("skip"))
 async def skip_edit_duration(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
+    lang = data.get("lang", "ru")
     await repo.update_item_duration(data["edit_item_id"], None)
     await state.clear()
     await message.answer(
-        "✅ Длительность удалена.",
-        reply_markup=await _items_kb(data["edit_cat_id"], data.get("tenant_id", 1)),
+        t("dur_deleted", lang),
+        reply_markup=await _items_kb(data["edit_cat_id"], data.get("tenant_id", 1), lang),
     )
 
 
 @router.message(CatalogueSG.edit_duration, F.text.func(lambda x: not x.startswith("/")))
 async def save_edit_duration(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    lang = data.get("lang", "ru")
     try:
         duration = int(message.text.strip())
         if duration <= 0:
             raise ValueError
     except ValueError:
-        await message.answer("Введите целое число минут, например <code>60</code>, или /skip:", parse_mode="HTML")
+        await message.answer(t("dur_bad", lang), parse_mode="HTML")
         return
-    data = await state.get_data()
     await repo.update_item_duration(data["edit_item_id"], duration)
     await state.clear()
     await message.answer(
-        f"✅ Длительность обновлена: {duration} мин",
-        reply_markup=await _items_kb(data["edit_cat_id"], data.get("tenant_id", 1)),
+        f"{t('dur_updated', lang)} {duration} {t('min_lbl', lang)}",
+        reply_markup=await _items_kb(data["edit_cat_id"], data.get("tenant_id", 1), lang),
     )
 
 
@@ -397,17 +407,18 @@ async def noop(callback: CallbackQuery) -> None:
 @router.callback_query(F.data == "adm:main", SetupDone())
 async def show_main_admin(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
     if not tenant.is_owner(callback.from_user.id):
-        await callback.answer("Нет доступа.", show_alert=True)
+        await callback.answer(t("no_access", tenant.owner_lang or "ru"), show_alert=True)
         return
+    lang = tenant.owner_lang or "ru"
     await state.clear()
     from aria.handlers.menu import _admin_inline_kb, _owner_settings_kb, _is_admin_bot
     if _is_admin_bot(tenant, callback.from_user.id):
         kb = _admin_inline_kb()
         text = "👑 <b>Управление платформой</b>"
     else:
-        kb = _owner_settings_kb()
-        text = "⚙️ <b>Настройки</b>"
-    await callback.message.edit_text(text, reply_markup=kb)
+        kb = _owner_settings_kb(lang)
+        text = t("settings_title", lang)
+    await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
     await callback.answer()
 
 

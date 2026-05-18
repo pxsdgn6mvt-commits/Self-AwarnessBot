@@ -69,6 +69,7 @@ def _lang_kb() -> InlineKeyboardMarkup:
 
 @router.message(CommandStart(), SetupDone())
 async def cmd_start(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
+    await state.clear()
     await repo.upsert_client(tenant.id, message.from_user.id,
                               message.from_user.language_code or "ru")
     await repo.clear_history(tenant.id, message.from_user.id)
