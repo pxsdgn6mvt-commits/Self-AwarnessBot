@@ -488,6 +488,45 @@ async def process_broadcast_text(message: Message, state: FSMContext) -> None:
     await message.answer(f"✅ Отправлено: {sent}, ошибок: {failed}")
 
 
+# ── /tenant_info ─────────────────────────────────────────────────────────────
+
+@router.message(Command("tenant_info"))
+async def cmd_tenant_info(message: Message) -> None:
+    if not _is_admin(message.from_user.id):
+        return
+    parts = message.text.split()
+    if len(parts) < 2:
+        await message.answer("Использование: /tenant_info <tenant_id>")
+        return
+    try:
+        tid = int(parts[1])
+    except ValueError:
+        await message.answer("Неверный ID.")
+        return
+
+    row = await repo.get_tenant(tid)
+    if not row:
+        await message.answer(f"Тенант #{tid} не найден.")
+        return
+
+    token = row["bot_token"]
+    token_display = f"{token[:10]}...{token[-4:]}"
+    owner_id = row["owner_tg_id"] or "—"
+    is_vip = row.get("is_vip", False)
+    vip_until = row.get("vip_until")
+    vip_str = ("бессрочно" if vip_until is None else vip_until.strftime("%d.%m.%Y")) if is_vip else "нет"
+
+    await message.answer(
+        f"<b>Тенант #{tid}</b>\n\n"
+        f"Салон: {row['salon_name']}\n"
+        f"Токен: <code>{token_display}</code>\n"
+        f"owner_tg_id: <code>{owner_id}</code>\n"
+        f"setup_complete: {row['setup_complete']}\n"
+        f"VIP: {vip_str}",
+        parse_mode="HTML",
+    )
+
+
 # ── /add_bot ──────────────────────────────────────────────────────────────────
 
 @router.message(Command("add_bot"))
@@ -684,9 +723,11 @@ async def cmd_set_vip(message: Message) -> None:
     await message.answer(f"✅ VIP назначен: тенант #{tid}, действует до {until_str}")
     log.info("Admin set VIP: tenant %d until %s", tid, until_str)
 
-    notified, notify_err = await _notify_vip_granted(tid, until_str)
-    if not notified:
-        await message.answer(f"⚠️ Уведомить владельца тенанта #{tid} не получилось:\n<code>{notify_err}</code>", parse_mode="HTML")
+    notified, notify_detail = await _notify_vip_granted(tid, until_str)
+    if notified:
+        await message.answer(f"📨 Уведомление отправлено: {notify_detail}", parse_mode="HTML")
+    else:
+        await message.answer(f"⚠️ Уведомить владельца тенанта #{tid} не получилось:\n<code>{notify_detail}</code>", parse_mode="HTML")
 
 
 async def _notify_vip_granted(tenant_id: int, until_str: str) -> tuple[bool, str]:
@@ -721,9 +762,10 @@ async def _notify_vip_granted(tenant_id: int, until_str: str) -> tuple[bool, str
             default=DefaultBotProperties(parse_mode=ParseMode.HTML),
         )
         async with notify_bot:
+            me = await notify_bot.get_me()
             await notify_bot.send_message(chat_id=owner_id, text=text)
-        log.info("VIP grant notification sent: tenant %d owner %d", tenant_id, owner_id)
-        return True, ""
+        log.info("VIP grant notification sent via @%s: tenant %d owner %d", me.username, tenant_id, owner_id)
+        return True, f"отправлено через @{me.username}"
     except Exception as exc:
         log.warning("VIP grant notification failed for tenant %d: %s", tenant_id, exc)
         return False, str(exc)
