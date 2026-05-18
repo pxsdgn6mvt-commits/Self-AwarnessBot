@@ -371,7 +371,10 @@ def _dashboard_kb(active: str) -> InlineKeyboardMarkup:
         )
         for p, lbl in periods
     ]
-    return InlineKeyboardMarkup(inline_keyboard=[btns])
+    return InlineKeyboardMarkup(inline_keyboard=[
+        btns,
+        [InlineKeyboardButton(text="📊 Аналитика", callback_data="dash:analytics")],
+    ])
 
 
 async def _day_dashboard(tenant: TenantConfig) -> str:
@@ -483,6 +486,44 @@ async def _build_dashboard(tenant: TenantConfig, period: str) -> str:
     return await _day_dashboard(tenant)
 
 
+async def _analytics_text(tenant: TenantConfig) -> str:
+    from zoneinfo import ZoneInfo
+    now = datetime.now(ZoneInfo(tenant.timezone or "UTC"))
+    _MON_FULL = ["Январь","Февраль","Март","Апрель","Май","Июнь",
+                 "Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"]
+    lines = [f"📊 <b>Аналитика — {_MON_FULL[now.month - 1]} {now.year}</b>\n"]
+
+    services = await repo.get_service_stats(tenant.id, limit=5)
+    if services:
+        lines.append("<b>Топ услуги:</b>")
+        for i, s in enumerate(services, 1):
+            rev = int(s["revenue"])
+            rev_str = f" · {rev}€" if rev > 0 else ""
+            lines.append(f"{i}. {s['service']} — {s['visits']} раз{rev_str}")
+    else:
+        lines.append("Нет данных по услугам")
+
+    lines.append("")
+
+    clients = await repo.get_client_stats(tenant.id, limit=5)
+    if clients:
+        lines.append("<b>Топ клиенты:</b>")
+        for i, c in enumerate(clients, 1):
+            spent = int(c["total_spent"])
+            spent_str = f" · {spent}€" if spent > 0 else ""
+            lines.append(f"{i}. {c['client_name']} — {c['visits']} визит{spent_str}")
+    else:
+        lines.append("Нет данных по клиентам")
+
+    return "\n".join(lines)
+
+
+def _analytics_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="◀️ Назад к дашборду", callback_data="dash:day")],
+    ])
+
+
 # ── Dashboard handlers ────────────────────────────────────────────────────────
 
 @router.message(F.text == "📊 Дашборд", SetupDone(), StateFilter("*"))
@@ -497,6 +538,11 @@ async def quick_dashboard(message: Message, state: FSMContext, tenant: TenantCon
 @router.callback_query(F.data.startswith("dash:"), SetupDone())
 async def cb_dashboard_period(callback: CallbackQuery, tenant: TenantConfig) -> None:
     period = callback.data[len("dash:"):]
+    if period == "analytics":
+        text = await _analytics_text(tenant)
+        await callback.message.edit_text(text, reply_markup=_analytics_kb(), parse_mode="HTML")
+        await callback.answer()
+        return
     if period not in ("day", "week", "month"):
         await callback.answer()
         return

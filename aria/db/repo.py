@@ -421,6 +421,30 @@ async def get_period_stats(tenant_id: int, dt_from: datetime, dt_to: datetime) -
         return dict(row) if row else {"total": 0, "paid_count": 0, "expected": 0, "received": 0}
 
 
+async def get_service_stats(tenant_id: int, limit: int = 5) -> list[asyncpg.Record]:
+    """Returns services sorted by booking count with revenue."""
+    async with _p().acquire() as conn:
+        return await conn.fetch(
+            """
+            SELECT
+                b.service,
+                COUNT(*)                                              AS visits,
+                COALESCE(SUM(si.price) FILTER (WHERE b.paid=TRUE), 0) AS revenue
+            FROM aria_bookings b
+            LEFT JOIN aria_service_items si
+                ON LOWER(si.name) = LOWER(b.service)
+               AND si.category_id IN (
+                       SELECT id FROM aria_service_categories WHERE tenant_id = $1
+                   )
+            WHERE b.tenant_id = $1 AND b.status IN ('confirmed','pending','completed')
+            GROUP BY b.service
+            ORDER BY visits DESC
+            LIMIT $2
+            """,
+            tenant_id, limit,
+        )
+
+
 async def get_client_stats(tenant_id: int, limit: int = 50) -> list[asyncpg.Record]:
     """Returns clients sorted by visit count with basic stats."""
     async with _p().acquire() as conn:
