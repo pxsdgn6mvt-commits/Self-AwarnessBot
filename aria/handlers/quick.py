@@ -55,6 +55,14 @@ MAIN_KB = ReplyKeyboardMarkup(
     is_persistent=True,
 )
 
+# All persistent reply-keyboard texts — FSM handlers exclude these so keyboard
+# buttons are never swallowed as data input regardless of active state.
+MAIN_KB_TEXTS: frozenset[str] = frozenset({
+    "📅 Сегодня", "📅 Завтра", "➕ Новая запись", "📋 Ближайшие",
+    "📊 Дашборд", "⚙️ Настройки", "📱 Меню", "📱 Управление",
+    "📋 Список ботов", "➕ Добавить бота", "📣 Рассылка",
+})
+
 
 # ── FSM ───────────────────────────────────────────────────────────────────────
 
@@ -875,7 +883,7 @@ async def cb_date(callback: CallbackQuery, state: FSMContext, tenant: TenantConf
     await callback.answer()
 
 
-@router.message(QuickBook.date)
+@router.message(QuickBook.date, ~F.text.in_(MAIN_KB_TEXTS))
 async def text_date(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
     raw = message.text.strip()
     date_str: str | None = None
@@ -978,7 +986,7 @@ async def cb_time(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
-@router.message(QuickBook.time)
+@router.message(QuickBook.time, ~F.text.in_(MAIN_KB_TEXTS))
 async def text_time(message: Message, state: FSMContext) -> None:
     raw = message.text.strip()
     data = await state.get_data()
@@ -1037,7 +1045,7 @@ async def text_time(message: Message, state: FSMContext) -> None:
 
 
 # Step 4 — client name → create booking
-@router.message(QuickBook.client)
+@router.message(QuickBook.client, ~F.text.in_(MAIN_KB_TEXTS))
 async def text_client(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
     client_name = message.text.strip()
     data = await state.get_data()

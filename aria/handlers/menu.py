@@ -23,6 +23,7 @@ from aiogram.types import (
 import aria.db.repo as repo
 from aria.config import settings
 from aria.filters import SetupDone
+from aria.handlers.quick import MAIN_KB_TEXTS
 from aria.services.booking import get_adapter
 from aria.tenant import TenantConfig
 
@@ -637,7 +638,7 @@ async def skip_master_percent(message: Message, state: FSMContext) -> None:
     await message.answer("✅ Доля мастера удалена.")
 
 
-@router.message(IncomeSettings.master_percent, F.text.func(lambda x: not x.startswith("/")))
+@router.message(IncomeSettings.master_percent, ~F.text.in_(MAIN_KB_TEXTS), F.text.func(lambda x: not x.startswith("/")))
 async def save_master_percent(message: Message, state: FSMContext) -> None:
     text = message.text.strip().replace("%", "").replace(",", ".")
     try:
@@ -682,7 +683,7 @@ async def skip_tax_percent(message: Message, state: FSMContext) -> None:
     await message.answer("✅ Налог удалён.")
 
 
-@router.message(IncomeSettings.tax_percent, F.text.func(lambda x: not x.startswith("/")))
+@router.message(IncomeSettings.tax_percent, ~F.text.in_(MAIN_KB_TEXTS), F.text.func(lambda x: not x.startswith("/")))
 async def save_tax_percent(message: Message, state: FSMContext) -> None:
     text = message.text.strip().replace("%", "").replace(",", ".")
     try:

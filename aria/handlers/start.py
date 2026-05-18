@@ -17,7 +17,7 @@ import aria.db.repo as repo
 from aria.config import settings as _settings
 from aria.filters import SetupDone
 from aria.handlers.menu import ADMIN_KB, _is_admin_bot
-from aria.handlers.quick import MAIN_KB
+from aria.handlers.quick import MAIN_KB, MAIN_KB_TEXTS
 from aria.middleware import TenantMiddleware
 from aria.services.booking import invalidate_adapter
 from aria.tenant import TenantConfig
@@ -240,7 +240,7 @@ def _extract_cal_id(text: str) -> str:
     return text.strip()
 
 
-@router.message(OwnerSettings.waiting_cal_id)
+@router.message(OwnerSettings.waiting_cal_id, ~F.text.in_(MAIN_KB_TEXTS))
 async def process_set_cal(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
     text = message.text.strip()
     if text.lower() in ("убрать", "удалить", "нет", "no", "-"):
@@ -284,7 +284,7 @@ async def cb_set_tz(callback: CallbackQuery, state: FSMContext, tenant: TenantCo
     await callback.answer(f"✓ {tz}")
 
 
-@router.message(OwnerSettings.waiting_tz)
+@router.message(OwnerSettings.waiting_tz, ~F.text.in_(MAIN_KB_TEXTS))
 async def text_set_tz(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
     from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
     tz = message.text.strip()

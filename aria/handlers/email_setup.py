@@ -15,6 +15,7 @@ from aiogram.types import (
 
 import aria.db.repo as repo
 from aria.filters import SetupDone
+from aria.handlers.quick import MAIN_KB_TEXTS
 from aria.middleware import TenantMiddleware
 from aria.services.email_monitor import (
     check_email, detect_imap_host, start_email_job, stop_email_job,
@@ -339,7 +340,7 @@ async def cb_filter_cancel(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer("Отменено.")
 
 
-@router.message(EmailFilter.value)
+@router.message(EmailFilter.value, ~F.text.in_(MAIN_KB_TEXTS))
 async def step_filter_value(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
     data = await state.get_data()
     filter_type = data.get("pending_filter_type", "keywords")
@@ -357,7 +358,7 @@ async def step_filter_value(message: Message, state: FSMContext, tenant: TenantC
 
 # ── Setup FSM steps ───────────────────────────────────────────────────────────
 
-@router.message(EmailSetup.address)
+@router.message(EmailSetup.address, ~F.text.in_(MAIN_KB_TEXTS))
 async def step_address(message: Message, state: FSMContext) -> None:
     log.info("step_address called: %r", message.text[:40] if message.text else "")
     addr = message.text.strip()
@@ -421,7 +422,7 @@ async def cb_change_host(callback: CallbackQuery, state: FSMContext) -> None:
     )
 
 
-@router.message(EmailSetup.host)
+@router.message(EmailSetup.host, ~F.text.in_(MAIN_KB_TEXTS))
 async def step_host(message: Message, state: FSMContext) -> None:
     host = message.text.strip()
     await state.update_data(host=host)
@@ -434,7 +435,7 @@ async def step_host(message: Message, state: FSMContext) -> None:
     )
 
 
-@router.message(EmailSetup.password)
+@router.message(EmailSetup.password, ~F.text.in_(MAIN_KB_TEXTS))
 async def step_password(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
     password = message.text.strip()
     data = await state.get_data()
