@@ -63,20 +63,26 @@ def _owner_settings_kb() -> InlineKeyboardMarkup:
     """Settings panel for salon owner bots — no back button."""
     return InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="🕐 Часовой пояс",    callback_data="cfg:tz"),
-            InlineKeyboardButton(text="📅 Google Calendar", callback_data="cfg:cal"),
+            InlineKeyboardButton(text="📋 Услуги и категории", callback_data="adm:services"),
+            InlineKeyboardButton(text="👤 Клиенты",            callback_data="cfg:clients"),
         ],
         [
-            InlineKeyboardButton(text="📧 Email",            callback_data="cfg:email"),
-            InlineKeyboardButton(text="📊 Статус",           callback_data="cfg:status"),
+            InlineKeyboardButton(text="💼 Доходы мастера",     callback_data="cfg:income"),
+            InlineKeyboardButton(text="⏰ Напоминания",         callback_data="cfg:reminders"),
         ],
-        [InlineKeyboardButton(text="📋 Услуги и категории",  callback_data="adm:services")],
-        [InlineKeyboardButton(text="💼 Доходы мастера",      callback_data="cfg:income")],
-        [InlineKeyboardButton(text="⏰ Напоминания",          callback_data="cfg:reminders")],
-        [InlineKeyboardButton(text="👤 Клиенты",             callback_data="cfg:clients")],
-        [InlineKeyboardButton(text="🗑 Сбросить историю",    callback_data="cfg:reset_chat")],
-        [InlineKeyboardButton(text="❓ Помощь",              callback_data="cfg:help")],
-        [InlineKeyboardButton(text="✖️ Закрыть",             callback_data="menu:close")],
+        [
+            InlineKeyboardButton(text="🕐 Часовой пояс",       callback_data="cfg:tz"),
+            InlineKeyboardButton(text="📅 Google Calendar",     callback_data="cfg:cal"),
+        ],
+        [
+            InlineKeyboardButton(text="📧 Email",               callback_data="cfg:email"),
+            InlineKeyboardButton(text="📊 Статус",              callback_data="cfg:status"),
+        ],
+        [
+            InlineKeyboardButton(text="❓ Помощь",              callback_data="cfg:help"),
+            InlineKeyboardButton(text="🗑 Сбросить историю",    callback_data="cfg:reset_chat"),
+        ],
+        [InlineKeyboardButton(text="✖️ Закрыть",                callback_data="menu:close")],
     ])
 
 
