@@ -146,16 +146,18 @@ async def _run_daily_summary(bots_getter: Callable[[], dict[int, Any]]) -> None:
                     text="📋 Завтра записей нет — свободный день! 🎉",
                 )
             else:
-                from datetime import date as _d
-                _MON = ["янв","фев","мар","апр","май","июн","июл","авг","сен","окт","ноя","дек"]
+                _MON  = ["янв","фев","мар","апр","май","июн","июл","авг","сен","окт","ноя","дек"]
                 _DAYS = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"]
                 tomorrow = (now_local + timedelta(days=1)).date()
                 day_hdr = f"{_DAYS[tomorrow.weekday()]} {tomorrow.day} {_MON[tomorrow.month - 1]}"
+                client_names = [b["client_name"] for b in bookings]
+                statuses = await repo.get_client_statuses_batch(tid, client_names)
                 lines = [f"📋 <b>Завтра ({day_hdr}) — {len(bookings)} зап.</b>"]
                 for b in bookings:
                     t_str = _local_time_str(b["scheduled_at"], tz_str)
                     paid_mark = " ✅" if b.get("paid") else ""
-                    lines.append(f"• {t_str} — {b['client_name']}, {b['service']}{paid_mark}")
+                    status = statuses.get(b["client_name"].lower(), "🆕")
+                    lines.append(f"• {t_str} — {status} {b['client_name']}, {b['service']}{paid_mark}")
                 await bot.send_message(
                     chat_id=owner_id,
                     text="\n".join(lines),

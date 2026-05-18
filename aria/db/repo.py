@@ -390,6 +390,21 @@ async def get_slots_on_date(tenant_id: int, date_str: str) -> list[datetime]:
 
 
 
+# ── Client status ─────────────────────────────────────────────────────────────
+
+def client_status_emoji(visits: int, no_show: int, cancelled: int) -> str:
+    """Return status emoji(s) based on visit and incident counts."""
+    risky   = no_show >= 2 or cancelled >= 3
+    regular = visits >= 3
+    if risky and regular:
+        return "⭐⚠️"
+    if risky:
+        return "⚠️"
+    if regular:
+        return "⭐"
+    return "🆕"
+
+
 # ── Dashboard & analytics ─────────────────────────────────────────────────────
 
 async def get_today_stats(tenant_id: int, date_str: str) -> dict:
@@ -488,25 +503,81 @@ async def get_service_stats(tenant_id: int, limit: int = 5) -> list[asyncpg.Reco
 
 
 async def get_client_stats(tenant_id: int, limit: int = 50) -> list[asyncpg.Record]:
-    """Returns clients sorted by visit count with basic stats."""
+    """Returns clients sorted by visit count with status counts."""
     async with _p().acquire() as conn:
         return await conn.fetch(
             """
             SELECT
                 client_name,
-                COUNT(*)                                           AS visits,
-                MAX(scheduled_at)                                  AS last_visit,
-                COUNT(*) FILTER (WHERE paid = TRUE)               AS paid_visits,
-                COALESCE(SUM(si.price) FILTER (WHERE paid=TRUE), 0) AS total_spent
+                COUNT(*) FILTER (WHERE b.status IN ('confirmed','pending','completed')) AS visits,
+                MAX(scheduled_at) FILTER (WHERE b.status IN ('confirmed','pending','completed')) AS last_visit,
+                COUNT(*) FILTER (WHERE paid = TRUE)                AS paid_visits,
+                COALESCE(SUM(si.price) FILTER (WHERE paid=TRUE), 0) AS total_spent,
+                COUNT(*) FILTER (WHERE b.status = 'no_show')       AS no_show_count,
+                COUNT(*) FILTER (WHERE b.status = 'cancelled')     AS cancelled_count
             FROM aria_bookings b
             LEFT JOIN aria_service_items si
                 ON LOWER(si.name) = LOWER(b.service)
                AND si.category_id IN (
                        SELECT id FROM aria_service_categories WHERE tenant_id = $1
                    )
-            WHERE b.tenant_id = $1 AND b.status IN ('confirmed','pending','completed')
+            WHERE b.tenant_id = $1
             GROUP BY client_name
+            HAVING COUNT(*) FILTER (WHERE b.status IN ('confirmed','pending','completed')) > 0
             ORDER BY visits DESC
+            LIMIT $2
+            """,
+            tenant_id, limit,
+        )
+
+
+async def get_client_statuses_batch(tenant_id: int, client_names: list[str]) -> dict[str, str]:
+    """Returns {client_name_lower: status_emoji} for a list of names."""
+    if not client_names:
+        return {}
+    lower_names = [n.lower() for n in client_names]
+    async with _p().acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT
+                client_name,
+                COUNT(*) FILTER (WHERE status IN ('confirmed','pending','completed')) AS visits,
+                COUNT(*) FILTER (WHERE status = 'no_show')   AS no_show_count,
+                COUNT(*) FILTER (WHERE status = 'cancelled') AS cancelled_count
+            FROM aria_bookings
+            WHERE tenant_id=$1 AND LOWER(client_name) = ANY($2::text[])
+            GROUP BY client_name
+            """,
+            tenant_id, lower_names,
+        )
+    result: dict[str, str] = {
+        row["client_name"].lower(): client_status_emoji(
+            int(row["visits"]), int(row["no_show_count"]), int(row["cancelled_count"])
+        )
+        for row in rows
+    }
+    for name in client_names:
+        result.setdefault(name.lower(), "🆕")
+    return result
+
+
+async def get_risky_clients(tenant_id: int, limit: int = 5) -> list[asyncpg.Record]:
+    """Clients with 2+ no-shows or 3+ cancellations, sorted by risk score."""
+    async with _p().acquire() as conn:
+        return await conn.fetch(
+            """
+            SELECT
+                client_name,
+                COUNT(*) FILTER (WHERE status = 'no_show')   AS no_show_count,
+                COUNT(*) FILTER (WHERE status = 'cancelled') AS cancelled_count,
+                COUNT(*) FILTER (WHERE status IN ('confirmed','pending','completed')) AS visits
+            FROM aria_bookings
+            WHERE tenant_id=$1
+            GROUP BY client_name
+            HAVING COUNT(*) FILTER (WHERE status = 'no_show')   >= 2
+                OR COUNT(*) FILTER (WHERE status = 'cancelled') >= 3
+            ORDER BY (COUNT(*) FILTER (WHERE status = 'no_show') * 2
+                    + COUNT(*) FILTER (WHERE status = 'cancelled')) DESC
             LIMIT $2
             """,
             tenant_id, limit,

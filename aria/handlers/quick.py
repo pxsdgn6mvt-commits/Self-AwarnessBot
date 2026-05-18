@@ -355,12 +355,16 @@ _DAY_SHORT = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"]
 _DAY_FULL  = ["Понедельник","Вторник","Среда","Четверг","Пятница","Суббота","Воскресенье"]
 
 
-def _income_block(tenant: TenantConfig, expected: float, received: float) -> list[str]:
+def _income_block(
+    tenant: TenantConfig, expected: float, received: float, paid_count: int = 0
+) -> list[str]:
     lines: list[str] = []
     if expected > 0:
         lines.append(f"💰 Ожидается: <b>{int(expected)}€</b>")
     if received > 0:
         lines.append(f"✅ Оплачено: <b>{int(received)}€</b>")
+        if paid_count > 1:
+            lines.append(f"   💳 Средний чек: <b>{received / paid_count:.0f}€</b>")
         if tenant.master_percent is not None:
             cut = received * tenant.master_percent / 100
             lines.append(f"   👤 Доля ({int(tenant.master_percent)}%): <b>{cut:.0f}€</b>")
@@ -422,7 +426,7 @@ async def _day_dashboard(tenant: TenantConfig) -> str:
     else:
         lines.append("⏰ Записей до конца дня нет")
 
-    lines += _income_block(tenant, float(stats["expected"]), float(stats["received"]))
+    lines += _income_block(tenant, float(stats["expected"]), float(stats["received"]), int(stats["paid_count"]))
 
     if free_slots:
         slots_str = "  ".join(free_slots[:6]) + (f" +{len(free_slots)-6}" if len(free_slots) > 6 else "")
@@ -452,7 +456,7 @@ async def _week_dashboard(tenant: TenantConfig) -> str:
     date_range = f"{monday.day}–{sunday.day} {_MON_RU[monday.month - 1]}"
     lines = [f"📆 <b>Неделя — {date_range}</b>\n"]
     lines.append(f"📋 Записей: <b>{stats['total']}</b>")
-    lines += _income_block(tenant, float(stats["expected"]), float(stats["received"]))
+    lines += _income_block(tenant, float(stats["expected"]), float(stats["received"]), int(stats["paid_count"]))
 
     day_parts = [f"{_DAY_SHORT[i]} {by_day.get((monday + timedelta(days=i)).isoformat(), 0)}"
                  for i in range(7)]
@@ -482,7 +486,7 @@ async def _month_dashboard(tenant: TenantConfig) -> str:
     lines.append(f"📋 Записей: <b>{total}</b>")
     if total > 0 and weeks > 0:
         lines.append(f"   ≈ {round(total / weeks)} в неделю")
-    lines += _income_block(tenant, float(stats["expected"]), float(stats["received"]))
+    lines += _income_block(tenant, float(stats["expected"]), float(stats["received"]), int(stats["paid_count"]))
     return "\n".join(lines)
 
 
@@ -519,9 +523,22 @@ async def _analytics_text(tenant: TenantConfig) -> str:
         for i, c in enumerate(clients, 1):
             spent = int(c["total_spent"])
             spent_str = f" · {spent}€" if spent > 0 else ""
-            lines.append(f"{i}. {c['client_name']} — {c['visits']} визит{spent_str}")
+            status = repo.client_status_emoji(int(c["visits"]), int(c["no_show_count"]), int(c["cancelled_count"]))
+            lines.append(f"{i}. {status} {c['client_name']} — {c['visits']} визит{spent_str}")
     else:
         lines.append("Нет данных по клиентам")
+
+    risky = await repo.get_risky_clients(tenant.id, limit=5)
+    if risky:
+        lines.append("")
+        lines.append("<b>⚠️ Рискованные клиенты:</b>")
+        for c in risky:
+            parts = []
+            if c["no_show_count"]:
+                parts.append(f"неявок: {c['no_show_count']}")
+            if c["cancelled_count"]:
+                parts.append(f"отмен: {c['cancelled_count']}")
+            lines.append(f"• {c['client_name']} — {', '.join(parts)}")
 
     return "\n".join(lines)
 

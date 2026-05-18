@@ -435,7 +435,8 @@ async def cb_clients_list(callback: CallbackQuery, tenant: TenantConfig) -> None
     rows = []
     for c in clients[:20]:
         last = c["last_visit"].strftime("%-d %b") if c["last_visit"] else "—"
-        label = f"👤 {c['client_name']}  ({c['visits']} визит·{last})"
+        status = repo.client_status_emoji(int(c["visits"]), int(c["no_show_count"]), int(c["cancelled_count"]))
+        label = f"{status} {c['client_name']}  ({c['visits']} визит·{last})"
         import urllib.parse
         safe = urllib.parse.quote(c["client_name"])
         rows.append([InlineKeyboardButton(text=label, callback_data=f"cfg:client:{safe}")])
@@ -461,20 +462,28 @@ async def cb_client_card(callback: CallbackQuery, tenant: TenantConfig) -> None:
 
     from zoneinfo import ZoneInfo
     tz = ZoneInfo(tenant.timezone or "UTC")
-    visits = len(bookings)
-    paid_count = sum(1 for b in bookings if b.get("paid"))
+    visits       = sum(1 for b in bookings if b["status"] in ("confirmed", "pending", "completed"))
+    paid_count   = sum(1 for b in bookings if b.get("paid"))
+    no_show_count  = sum(1 for b in bookings if b["status"] == "no_show")
+    cancelled_count = sum(1 for b in bookings if b["status"] == "cancelled")
     last = bookings[0]["scheduled_at"].astimezone(tz).strftime("%-d %B %Y")
     services: dict[str, int] = {}
     for b in bookings:
-        svc = b["service"]
-        services[svc] = services.get(svc, 0) + 1
+        if b["status"] in ("confirmed", "pending", "completed"):
+            svc = b["service"]
+            services[svc] = services.get(svc, 0) + 1
     top_services = sorted(services.items(), key=lambda x: x[1], reverse=True)[:3]
     notes_list = [b["notes"] for b in bookings if b.get("notes")]
 
-    lines = [f"👤 <b>{client_name}</b>\n"]
+    status = repo.client_status_emoji(visits, no_show_count, cancelled_count)
+    lines = [f"👤 <b>{client_name}</b> {status}\n"]
     lines.append(f"📋 Визитов: {visits}")
     lines.append(f"📅 Последний: {last}")
     lines.append(f"✅ Оплачено: {paid_count} из {visits}")
+    if no_show_count:
+        lines.append(f"🚫 Неявок: {no_show_count}")
+    if cancelled_count:
+        lines.append(f"❌ Отмен: {cancelled_count}")
     if top_services:
         svc_str = ", ".join(f"{s} ({n})" for s, n in top_services)
         lines.append(f"💅 Услуги: {svc_str}")
