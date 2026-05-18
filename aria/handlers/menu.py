@@ -60,7 +60,6 @@ def _is_admin_bot(tenant: TenantConfig, user_id: int) -> bool:
 # ── Keyboard builders ─────────────────────────────────────────────────────────
 
 def _owner_settings_kb() -> InlineKeyboardMarkup:
-    """Settings panel for salon owner bots — no back button."""
     return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="📋 Услуги и категории", callback_data="adm:services"),
@@ -71,18 +70,25 @@ def _owner_settings_kb() -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="⏰ Напоминания",         callback_data="cfg:reminders"),
         ],
         [
-            InlineKeyboardButton(text="🕐 Часовой пояс",       callback_data="cfg:tz"),
-            InlineKeyboardButton(text="📅 Google Calendar",     callback_data="cfg:cal"),
-        ],
-        [
-            InlineKeyboardButton(text="📧 Email",               callback_data="cfg:email"),
-            InlineKeyboardButton(text="📊 Статус",              callback_data="cfg:status"),
-        ],
-        [
             InlineKeyboardButton(text="❓ Помощь",              callback_data="cfg:help"),
-            InlineKeyboardButton(text="🗑 Сбросить историю",    callback_data="cfg:reset_chat"),
+            InlineKeyboardButton(text="⚙️ Интеграции",          callback_data="cfg:integrations"),
         ],
         [InlineKeyboardButton(text="✖️ Закрыть",                callback_data="menu:close")],
+    ])
+
+
+def _integrations_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="🕐 Часовой пояс",    callback_data="cfg:tz"),
+            InlineKeyboardButton(text="📅 Google Calendar", callback_data="cfg:cal"),
+        ],
+        [
+            InlineKeyboardButton(text="📧 Email",            callback_data="cfg:email"),
+            InlineKeyboardButton(text="📊 Статус",           callback_data="cfg:status"),
+        ],
+        [InlineKeyboardButton(text="🗑 Сбросить историю",    callback_data="cfg:reset_chat")],
+        [InlineKeyboardButton(text="◀️ Назад",               callback_data="menu:settings")],
     ])
 
 
@@ -199,8 +205,9 @@ async def _show_week(message: Message, tenant: TenantConfig, offset_weeks: int =
 
 # ── Entry points: reply keyboard buttons ──────────────────────────────────────
 
-@router.message(F.text.in_({"📱 Меню", "⚙️ Настройки"}), SetupDone())
-async def cmd_menu(message: Message, tenant: TenantConfig) -> None:
+@router.message(F.text.in_({"📱 Меню", "⚙️ Настройки"}), SetupDone(), StateFilter("*"))
+async def cmd_menu(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
+    await state.clear()
     if _is_admin_bot(tenant, message.from_user.id):
         await message.answer("👑 <b>Управление платформой</b>", reply_markup=_admin_inline_kb())
     else:
@@ -285,6 +292,15 @@ async def cb_sched_upcoming(callback: CallbackQuery, tenant: TenantConfig) -> No
 
 # ── Settings callbacks ────────────────────────────────────────────────────────
 
+@router.callback_query(F.data == "cfg:integrations", SetupDone())
+async def cb_cfg_integrations(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    if not tenant.is_owner(callback.from_user.id):
+        await callback.answer("Нет доступа.", show_alert=True)
+        return
+    await callback.message.edit_text("⚙️ <b>Интеграции</b>", reply_markup=_integrations_kb())
+    await callback.answer()
+
+
 @router.callback_query(F.data == "cfg:tz", SetupDone())
 async def cb_cfg_tz(callback: CallbackQuery, tenant: TenantConfig) -> None:
     if not tenant.is_owner(callback.from_user.id):
@@ -339,10 +355,15 @@ async def cb_cfg_cal(callback: CallbackQuery, state: FSMContext, tenant: TenantC
     except Exception:
         pass
     await callback.message.answer(
-        "Введи ID Google Календаря.\n\n"
-        "Найти: calendar.google.com → ⚙️ → нужный календарь → «Идентификатор календаря».\n\n"
-        "Напиши <b>убрать</b> чтобы отключить."
-        + svc_hint
+        "📅 <b>Google Календарь</b>\n\n"
+        "Как найти нужный ID:\n"
+        "1. Открой <a href=\"https://calendar.google.com\">calendar.google.com</a>\n"
+        "2. Рядом с нужным календарём нажми <b>⋮ → Настройки</b>\n"
+        "3. Прокрути вниз до раздела <b>«Интеграция календаря»</b>\n"
+        "4. Скопируй строку <b>«Идентификатор календаря»</b>\n\n"
+        "Он выглядит как: <code>твой@gmail.com</code> или <code>xxx@group.calendar.google.com</code>\n\n"
+        "Вставь его сюда 👇\n"
+        "_(или напиши <b>убрать</b> чтобы отключить)_"
     )
     await callback.answer()
 

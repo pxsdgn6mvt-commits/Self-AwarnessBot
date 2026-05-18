@@ -392,20 +392,23 @@ def _password_hint(addr: str) -> str:
     domain = addr.split("@")[-1].lower()
     if "gmail" in domain:
         return (
-            "⚠️ <b>Gmail:</b> нужен App Password, не обычный пароль.\n"
-            "myaccount.google.com → Безопасность → Пароли приложений"
+            "⚠️ <b>Gmail:</b> нужен App Password — обычный пароль не подойдёт.\n"
+            "<a href=\"https://myaccount.google.com/apppasswords\">Создать App Password</a> "
+            "(Аккаунт Google → Безопасность → Пароли приложений)"
         )
     if "yandex" in domain or "ya.ru" in domain:
         return (
-            "⚠️ <b>Яндекс:</b> включи IMAP и создай пароль приложения:\n"
-            "passport.yandex.ru → Безопасность → Пароли приложений"
+            "⚠️ <b>Яндекс:</b> нужен пароль приложения, не основной.\n"
+            "<a href=\"https://passport.yandex.ru/profile/security\">Создать пароль</a> "
+            "(Безопасность → Пароли приложений)"
         )
     if any(d in domain for d in ("mail.ru", "bk.ru", "list.ru", "inbox.ru")):
         return (
-            "⚠️ <b>Mail.ru:</b> включи IMAP и создай пароль приложения:\n"
-            "Настройки почты → Безопасность → Пароли для внешних приложений"
+            "⚠️ <b>Mail.ru:</b> нужен пароль для внешних приложений.\n"
+            "<a href=\"https://account.mail.ru/user/2-step-auth/passwords/\">Создать пароль</a> "
+            "(Настройки → Безопасность)"
         )
-    return "⚠️ Используй пароль приложения если включена двухфакторная аутентификация."
+    return "⚠️ Если включена двухфакторная аутентификация — используй пароль приложения."
 
 
 @router.callback_query(F.data == "email_setup:change_host", EmailSetup.password)
@@ -465,14 +468,15 @@ async def step_password(message: Message, state: FSMContext, tenant: TenantConfi
     extra = ""
     if "gmail" in domain:
         extra = (
-            "\n\n⚠️ <b>Gmail:</b> если письма не приходят — нужен App Password:\n"
-            "myaccount.google.com → Безопасность → Пароли приложений\n"
-            "Нажми «✏️ Изменить» и введи App Password вместо обычного."
+            "\n\n⚠️ <b>Gmail:</b> если письма не приходят — нужен App Password.\n"
+            "<a href=\"https://myaccount.google.com/apppasswords\">Создать App Password</a> "
+            "и нажать «✏️ Изменить» чтобы ввести его."
         )
     elif "yandex" in domain or "ya.ru" in domain:
         extra = (
-            "\n\n⚠️ <b>Яндекс:</b> если письма не приходят — включи IMAP и создай пароль приложения:\n"
-            "passport.yandex.ru → Безопасность → Пароли приложений"
+            "\n\n⚠️ <b>Яндекс:</b> если письма не приходят — нужен пароль приложения.\n"
+            "<a href=\"https://passport.yandex.ru/profile/security\">Создать пароль</a> "
+            "и нажать «✏️ Изменить»."
         )
 
     await message.answer(

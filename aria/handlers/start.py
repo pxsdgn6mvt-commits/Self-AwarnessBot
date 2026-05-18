@@ -211,20 +211,17 @@ async def cmd_set_cal(message: Message, state: FSMContext, tenant: TenantConfig)
         except Exception:
             pass
 
-    svc_hint = (
-        f"\n\nУбедись, что ты поделился(ась) этим календарём с сервисным аккаунтом:\n"
-        f"<code>{svc_email}</code>\n(права: «Вносить изменения в мероприятия»)"
-        if svc_email else ""
-    )
-
     await state.set_state(OwnerSettings.waiting_cal_id)
     await message.answer(
-        "Введи ID Google Календаря.\n\n"
-        "Найти: calendar.google.com → ⚙️ → нужный календарь → "
-        "«Идентификатор календаря» (выглядит как <code>xxx@group.calendar.google.com</code> "
-        "или твой Gmail-адрес).\n\n"
-        "Напиши <b>убрать</b> чтобы отключить Google Calendar."
-        + svc_hint
+        "📅 <b>Google Календарь</b>\n\n"
+        "Как найти нужный ID:\n"
+        "1. Открой <a href=\"https://calendar.google.com\">calendar.google.com</a>\n"
+        "2. Рядом с нужным календарём нажми <b>⋮ → Настройки</b>\n"
+        "3. Прокрути вниз до раздела <b>«Интеграция календаря»</b>\n"
+        "4. Скопируй строку <b>«Идентификатор календаря»</b>\n\n"
+        "Он выглядит как: <code>твой@gmail.com</code> или <code>xxx@group.calendar.google.com</code>\n\n"
+        "Вставь его сюда 👇\n"
+        "_(или напиши <b>убрать</b> чтобы отключить)_"
     )
 
 
