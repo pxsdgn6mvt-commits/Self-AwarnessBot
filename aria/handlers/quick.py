@@ -159,12 +159,17 @@ def _schedule_text_and_kb(
 
 
 def _booking_card_text(booking: dict) -> str:
-    paid  = booking.get("paid") or False
-    notes = booking.get("notes")
-    lines = [
+    paid   = booking.get("paid") or False
+    notes  = booking.get("notes")
+    status = booking.get("status", "confirmed")
+    lines  = [
         f"📌 <b>{booking['client_name']}</b>",
         f"Услуга: {booking['service']}",
     ]
+    if status == "completed":
+        lines.append("✅ Пришёл")
+    elif status == "no_show":
+        lines.append("🚫 Не пришёл")
     if paid:
         lines.append("💰 Оплачено ✅")
     if notes:
@@ -172,19 +177,24 @@ def _booking_card_text(booking: dict) -> str:
     return "\n".join(lines)
 
 
-def _booking_card_kb(booking_id: int, paid: bool, date_str: str) -> InlineKeyboardMarkup:
+def _booking_card_kb(booking_id: int, paid: bool, date_str: str, status: str = "confirmed") -> InlineKeyboardMarkup:
     pay_label = "✅ Оплачено" if paid else "💰 Оплата"
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="✏️ Перенести", callback_data=f"bk_reschedule:{booking_id}"),
-            InlineKeyboardButton(text="❌ Отменить",  callback_data=f"del_booking:{booking_id}"),
-        ],
-        [
-            InlineKeyboardButton(text=pay_label,      callback_data=f"bk_paid:{booking_id}"),
-            InlineKeyboardButton(text="📝 Заметка",   callback_data=f"bk_note:{booking_id}"),
-        ],
-        [InlineKeyboardButton(text="◀️ К списку дня", callback_data=f"bk_list|{date_str}")],
+    rows = []
+    if status not in ("completed", "no_show"):
+        rows.append([
+            InlineKeyboardButton(text="✅ Пришёл",    callback_data=f"bk_arrived:{booking_id}"),
+            InlineKeyboardButton(text="🚫 Не пришёл", callback_data=f"bk_noshow:{booking_id}"),
+        ])
+    rows.append([
+        InlineKeyboardButton(text="✏️ Перенести", callback_data=f"bk_reschedule:{booking_id}"),
+        InlineKeyboardButton(text="❌ Отменить",  callback_data=f"del_booking:{booking_id}"),
     ])
+    rows.append([
+        InlineKeyboardButton(text=pay_label,    callback_data=f"bk_paid:{booking_id}"),
+        InlineKeyboardButton(text="📝 Заметка", callback_data=f"bk_note:{booking_id}"),
+    ])
+    rows.append([InlineKeyboardButton(text="◀️ К списку дня", callback_data=f"bk_list|{date_str}")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 async def _delete_old_info(bot: Bot, chat_id: int) -> None:
@@ -508,22 +518,12 @@ async def cb_booking_card(callback: CallbackQuery, tenant: TenantConfig) -> None
     if not booking or booking["status"] == "cancelled":
         await callback.answer("Запись не найдена или уже отменена.", show_alert=True)
         return
-    from zoneinfo import ZoneInfo
-    tz = ZoneInfo(tenant.timezone or "UTC")
-    dt_local = booking["scheduled_at"].astimezone(tz)
-    paid = booking.get("paid") or False
-    notes = booking.get("notes")
-    lines = [
-        f"📌 <b>{dt_local.strftime('%H:%M')} — {booking['client_name']}</b>",
-        f"Услуга: {booking['service']}",
-    ]
-    if paid:
-        lines.append("💰 Оплачено ✅")
-    if notes:
-        lines.append(f"📝 {notes}")
+    paid   = booking.get("paid") or False
+    status = booking.get("status", "confirmed")
     await callback.message.edit_text(
-        "\n".join(lines),
-        reply_markup=_booking_card_kb(booking["id"], paid, date_str),
+        _booking_card_text(dict(booking)),
+        reply_markup=_booking_card_kb(booking["id"], paid, date_str, status),
+        parse_mode="HTML",
     )
     await callback.answer()
 
@@ -573,10 +573,62 @@ async def cb_booking_paid(callback: CallbackQuery, tenant: TenantConfig) -> None
                 if btn.callback_data and btn.callback_data.startswith("bk_list|"):
                     date_str = btn.callback_data[len("bk_list|"):]
     booking = await repo.get_booking(booking_id)
+    status  = booking.get("status", "confirmed") if booking else "confirmed"
     try:
         await callback.message.edit_text(
             _booking_card_text(dict(booking)),
-            reply_markup=_booking_card_kb(booking_id, new_paid, date_str),
+            reply_markup=_booking_card_kb(booking_id, new_paid, date_str, status),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data.startswith("bk_arrived:"), SetupDone())
+async def cb_booking_arrived(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    if not tenant.is_owner(callback.from_user.id):
+        await callback.answer("Нет доступа.", show_alert=True)
+        return
+    booking_id = int(callback.data.split(":")[1])
+    await repo.update_booking_status(booking_id, "completed")
+    await callback.answer("✅ Отмечено — пришёл")
+    booking  = await repo.get_booking(booking_id)
+    date_str = ""
+    if callback.message.reply_markup:
+        for row in callback.message.reply_markup.inline_keyboard:
+            for btn in row:
+                if btn.callback_data and btn.callback_data.startswith("bk_list|"):
+                    date_str = btn.callback_data[len("bk_list|"):]
+    try:
+        await callback.message.edit_text(
+            _booking_card_text(dict(booking)),
+            reply_markup=_booking_card_kb(booking_id, booking.get("paid") or False, date_str, "completed"),
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data.startswith("bk_noshow:"), SetupDone())
+async def cb_booking_noshow(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    if not tenant.is_owner(callback.from_user.id):
+        await callback.answer("Нет доступа.", show_alert=True)
+        return
+    booking_id = int(callback.data.split(":")[1])
+    await repo.update_booking_status(booking_id, "no_show")
+    await callback.answer("🚫 Отмечено — не пришёл")
+    booking  = await repo.get_booking(booking_id)
+    date_str = ""
+    if callback.message.reply_markup:
+        for row in callback.message.reply_markup.inline_keyboard:
+            for btn in row:
+                if btn.callback_data and btn.callback_data.startswith("bk_list|"):
+                    date_str = btn.callback_data[len("bk_list|"):]
+    try:
+        await callback.message.edit_text(
+            _booking_card_text(dict(booking)),
+            reply_markup=_booking_card_kb(booking_id, booking.get("paid") or False, date_str, "no_show"),
+            parse_mode="HTML",
         )
     except Exception:
         pass
