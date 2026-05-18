@@ -9,13 +9,10 @@ from aiogram.types import BotCommand, BotCommandScopeChat, BotCommandScopeDefaul
 
 log = logging.getLogger(__name__)
 
-_DEFAULT = [
-    BotCommand(command="start",  description="Начать / главное меню"),
-    BotCommand(command="help",   description="Список команд и примеры"),
-    BotCommand(command="reset",  description="Очистить историю диалога"),
-]
-
-_OWNER_EXTRA = [
+_OWNER = [
+    BotCommand(command="start",         description="Главное меню"),
+    BotCommand(command="help",          description="Справка и примеры"),
+    BotCommand(command="reset",         description="Очистить историю диалога"),
     BotCommand(command="status",        description="Статус бота, GCal и почты"),
     BotCommand(command="connect_email", description="Подключить email-уведомления"),
     BotCommand(command="test_cal",      description="Проверить подключение к GCal"),
@@ -24,12 +21,11 @@ _OWNER_EXTRA = [
     BotCommand(command="cancel",        description="Отменить текущую операцию"),
 ]
 
-_OWNER = _DEFAULT + _OWNER_EXTRA
-
 
 async def set_commands(bot: Bot, owner_tg_id: Optional[int] = None) -> None:
     try:
-        await bot.set_my_commands(_DEFAULT, scope=BotCommandScopeDefault())
+        # Clients see no command menu — keyboard buttons are sufficient
+        await bot.delete_my_commands(scope=BotCommandScopeDefault())
         if owner_tg_id:
             await bot.set_my_commands(_OWNER, scope=BotCommandScopeChat(chat_id=owner_tg_id))
         log.info("Bot commands set (owner_tg_id=%s)", owner_tg_id)
