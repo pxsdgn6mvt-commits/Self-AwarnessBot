@@ -238,7 +238,7 @@ async def quick_upcoming(message: Message, state: FSMContext, tenant: TenantConf
     adapter = get_adapter(tenant)
     events  = await adapter.get_events(
         datetime.now(timezone.utc),
-        datetime.now(timezone.utc) + timedelta(days=30),
+        datetime.now(timezone.utc) + timedelta(days=14),
     )
     if not events:
         await _delete_old_info(message.bot, message.chat.id)
