@@ -684,20 +684,21 @@ async def cmd_set_vip(message: Message) -> None:
     await message.answer(f"✅ VIP назначен: тенант #{tid}, действует до {until_str}")
     log.info("Admin set VIP: tenant %d until %s", tid, until_str)
 
-    notified = await _notify_vip_granted(tid, until_str)
+    notified, notify_err = await _notify_vip_granted(tid, until_str)
     if not notified:
-        await message.answer(f"⚠️ Уведомить владельца тенанта #{tid} не получилось — бот не запущен или owner_tg_id не задан.")
+        await message.answer(f"⚠️ Уведомить владельца тенанта #{tid} не получилось:\n<code>{notify_err}</code>", parse_mode="HTML")
 
 
-async def _notify_vip_granted(tenant_id: int, until_str: str) -> bool:
+async def _notify_vip_granted(tenant_id: int, until_str: str) -> tuple[bool, str]:
     from aiogram import Bot
     from aiogram.client.default import DefaultBotProperties
     from aiogram.enums import ParseMode
 
     tenant_row = await repo.get_tenant(tenant_id)
-    if not tenant_row or not tenant_row.get("owner_tg_id"):
-        log.warning("VIP notify: tenant %d has no owner_tg_id", tenant_id)
-        return False
+    if not tenant_row:
+        return False, f"тенант #{tenant_id} не найден в БД"
+    if not tenant_row.get("owner_tg_id"):
+        return False, "owner_tg_id не задан (владелец ни разу не писал боту?)"
 
     owner_id = tenant_row["owner_tg_id"]
     bot_token = tenant_row["bot_token"]
@@ -722,10 +723,10 @@ async def _notify_vip_granted(tenant_id: int, until_str: str) -> bool:
         async with notify_bot:
             await notify_bot.send_message(chat_id=owner_id, text=text)
         log.info("VIP grant notification sent: tenant %d owner %d", tenant_id, owner_id)
-        return True
+        return True, ""
     except Exception as exc:
         log.warning("VIP grant notification failed for tenant %d: %s", tenant_id, exc)
-        return False
+        return False, str(exc)
 
 
 @router.message(Command("revoke_vip"))
