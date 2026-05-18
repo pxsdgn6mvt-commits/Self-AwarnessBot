@@ -458,11 +458,14 @@ async def _week_dashboard(tenant: TenantConfig) -> str:
     dt_to     = datetime(sunday.year, sunday.month, sunday.day, 23, 59, tzinfo=tz).astimezone(timezone.utc)
 
     stats  = await repo.get_period_stats(tenant.id, dt_from, dt_to)
-    events = await get_adapter(tenant).get_events(dt_from, dt_to)
     by_day: dict[str, int] = {}
-    for e in events:
-        d = e.get("date", "")
-        by_day[d] = by_day.get(d, 0) + 1
+    try:
+        events = await get_adapter(tenant).get_events(dt_from, dt_to)
+        for e in events:
+            d = e.get("date", "")
+            by_day[d] = by_day.get(d, 0) + 1
+    except Exception:
+        log.exception("_week_dashboard: get_events failed for tenant %d", tenant.id)
 
     date_range = f"{monday.day}–{sunday.day} {MON_GENITIVE[lang][monday.month - 1]}"
     lines = [f"📆 <b>{t('dash_week', lang)} — {date_range}</b>\n"]
@@ -582,8 +585,11 @@ async def cb_dashboard_period(callback: CallbackQuery, tenant: TenantConfig) -> 
     if period not in ("day", "week", "month"):
         await callback.answer()
         return
-    text = await _build_dashboard(tenant, period)
-    await callback.message.edit_text(text, reply_markup=_dashboard_kb(period, lang), parse_mode="HTML")
+    try:
+        text = await _build_dashboard(tenant, period)
+        await callback.message.edit_text(text, reply_markup=_dashboard_kb(period, lang), parse_mode="HTML")
+    except Exception:
+        log.exception("cb_dashboard_period failed for tenant %d period=%s", tenant.id, period)
     await callback.answer()
 
 
