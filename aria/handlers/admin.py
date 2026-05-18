@@ -684,6 +684,38 @@ async def cmd_set_vip(message: Message) -> None:
     await message.answer(f"✅ VIP назначен: тенант #{tid}, действует до {until_str}")
     log.info("Admin set VIP: tenant %d until %s", tid, until_str)
 
+    await _notify_vip_granted(tid, until_str)
+
+
+async def _notify_vip_granted(tenant_id: int, until_str: str) -> None:
+    from aria import runtime
+    bot = runtime.bots.get(tenant_id)
+    if not bot:
+        return
+    tenant_row = await repo.get_tenant(tenant_id)
+    if not tenant_row or not tenant_row.get("owner_tg_id"):
+        return
+    owner_id = tenant_row["owner_tg_id"]
+    try:
+        await bot.send_message(
+            chat_id=owner_id,
+            text=(
+                "👑 <b>Ваш бот получил VIP статус!</b>\n\n"
+                f"Действует до: <b>{until_str}</b>\n\n"
+                "<b>Что теперь доступно:</b>\n"
+                "• 📅 <b>Google Calendar</b> — записи синхронизируются с календарём в реальном времени\n"
+                "• ⏰ <b>Автонапоминания</b> — Aria сама напоминает клиентам о визите и следит за no-show\n"
+                "• 🔄 <b>Реактивация клиентов</b> — Aria уведомляет когда клиент давно не приходил\n"
+                "• 🧠 <b>Умный AI</b> — Aria помнит больше контекста, знает ваш каталог услуг "
+                "и постоянных клиентов — отвечает точнее и персональнее\n"
+                "• 📧 <b>Email мониторинг</b> — заявки из почты автоматически попадают в бота\n\n"
+                "Все функции уже активны. Просто пользуйся ботом как обычно 🚀"
+            ),
+            parse_mode="HTML",
+        )
+    except Exception as exc:
+        log.warning("VIP grant notification failed for tenant %d: %s", tenant_id, exc)
+
 
 @router.message(Command("revoke_vip"))
 async def cmd_revoke_vip(message: Message) -> None:
@@ -708,3 +740,16 @@ async def cmd_revoke_vip(message: Message) -> None:
 
     await message.answer(f"✅ VIP отозван: тенант #{tid}")
     log.info("Admin revoked VIP: tenant %d", tid)
+
+    from aria import runtime
+    bot = runtime.bots.get(tid)
+    if bot:
+        tenant_row = await repo.get_tenant(tid)
+        if tenant_row and tenant_row.get("owner_tg_id"):
+            try:
+                await bot.send_message(
+                    chat_id=tenant_row["owner_tg_id"],
+                    text="ℹ️ VIP статус вашего бота был деактивирован.",
+                )
+            except Exception as exc:
+                log.warning("VIP revoke notification failed for tenant %d: %s", tid, exc)
