@@ -27,6 +27,8 @@ class TenantConfig:
     active: bool
     master_percent: Optional[float]
     tax_percent: Optional[float]
+    reminder_hours_before: int
+    daily_summary_hour: int
 
     @classmethod
     def from_record(cls, r: dict) -> "TenantConfig":
@@ -50,6 +52,8 @@ class TenantConfig:
             active=r["active"],
             master_percent=float(r["master_percent"]) if r.get("master_percent") is not None else None,
             tax_percent=float(r["tax_percent"]) if r.get("tax_percent") is not None else None,
+            reminder_hours_before=int(r.get("reminder_hours_before") or 2),
+            daily_summary_hour=int(r.get("daily_summary_hour") or 20),
         )
 
     @property

@@ -72,6 +72,7 @@ def _owner_settings_kb() -> InlineKeyboardMarkup:
         ],
         [InlineKeyboardButton(text="📋 Услуги и категории",  callback_data="adm:services")],
         [InlineKeyboardButton(text="💼 Доходы мастера",      callback_data="cfg:income")],
+        [InlineKeyboardButton(text="⏰ Напоминания",          callback_data="cfg:reminders")],
         [InlineKeyboardButton(text="👤 Клиенты",             callback_data="cfg:clients")],
         [InlineKeyboardButton(text="🗑 Сбросить историю",    callback_data="cfg:reset_chat")],
         [InlineKeyboardButton(text="❓ Помощь",              callback_data="cfg:help")],
@@ -469,7 +470,8 @@ async def cb_cfg_help(callback: CallbackQuery) -> None:
         "➕ <b>Новая запись</b> — пошаговый мастер записи\n"
         "📋 <b>Ближайшие</b> — все записи на 14 дней вперёд\n"
         "📊 <b>Дашборд</b> — статистика за день / неделю / месяц\n"
-        "⚙️ <b>Настройки</b> — услуги, часы работы, % мастера\n\n"
+        "⚙️ <b>Настройки</b> — услуги, часы работы, % мастера\n"
+        "⏰ <b>Напоминания</b> — за сколько часов до записи + сводка на завтра\n\n"
         "<b>Просто напиши мне:</b>\n"
         "• «запиши Катю на ресницы 20 мая в 14:00»\n"
         "• «перенеси Катю с 20 мая на 21-е в 15:00»\n"
@@ -669,3 +671,76 @@ async def save_tax_percent(message: Message, state: FSMContext) -> None:
     TenantMiddleware.invalidate(data["bot_token"])
     await state.clear()
     await message.answer(f"✅ Налог: <b>{int(pct)}%</b>", parse_mode="HTML")
+
+
+# ── Reminder settings ─────────────────────────────────────────────────────────
+
+def _reminders_kb(hours_before: int, summary_hour: int) -> InlineKeyboardMarkup:
+    _HOURS = [1, 2, 3, 4]
+    hour_row = [
+        InlineKeyboardButton(
+            text=f"{'✓ ' if h == hours_before else ''}{h}ч",
+            callback_data=f"cfg:rem_h:{h}",
+        )
+        for h in _HOURS
+    ]
+    _SUMMARY_HOURS = [17, 18, 19, 20, 21, 22]
+    sum_rows = [
+        [
+            InlineKeyboardButton(
+                text=f"{'✓ ' if h == summary_hour else ''}{h}:00",
+                callback_data=f"cfg:rem_s:{h}",
+            )
+            for h in _SUMMARY_HOURS[i:i+3]
+        ]
+        for i in range(0, len(_SUMMARY_HOURS), 3)
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=[
+        hour_row,
+        *sum_rows,
+        [InlineKeyboardButton(text="◀️ Назад", callback_data="menu:settings")],
+    ])
+
+
+@router.callback_query(F.data == "cfg:reminders", SetupDone())
+async def cb_cfg_reminders(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    if not tenant.is_owner(callback.from_user.id):
+        await callback.answer("Нет доступа.", show_alert=True)
+        return
+    hours = tenant.reminder_hours_before or 2
+    summary_hour = tenant.daily_summary_hour or 20
+    await callback.message.edit_text(
+        "⏰ <b>Напоминания</b>\n\n"
+        "<b>За сколько часов напоминать о записи:</b>\n\n"
+        "<b>Когда присылать сводку на завтра:</b>",
+        reply_markup=_reminders_kb(hours, summary_hour),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("cfg:rem_h:"), SetupDone())
+async def cb_cfg_rem_hours(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    if not tenant.is_owner(callback.from_user.id):
+        await callback.answer("Нет доступа.", show_alert=True)
+        return
+    hours = int(callback.data.split(":")[-1])
+    await repo.update_tenant(tenant.id, reminder_hours_before=hours)
+    from aria.middleware import TenantMiddleware
+    TenantMiddleware.invalidate(tenant.bot_token)
+    summary_hour = tenant.daily_summary_hour or 20
+    await callback.message.edit_reply_markup(reply_markup=_reminders_kb(hours, summary_hour))
+    await callback.answer(f"✓ Напоминание за {hours} ч")
+
+
+@router.callback_query(F.data.startswith("cfg:rem_s:"), SetupDone())
+async def cb_cfg_rem_summary(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    if not tenant.is_owner(callback.from_user.id):
+        await callback.answer("Нет доступа.", show_alert=True)
+        return
+    hour = int(callback.data.split(":")[-1])
+    await repo.update_tenant(tenant.id, daily_summary_hour=hour)
+    from aria.middleware import TenantMiddleware
+    TenantMiddleware.invalidate(tenant.bot_token)
+    hours_before = tenant.reminder_hours_before or 2
+    await callback.message.edit_reply_markup(reply_markup=_reminders_kb(hours_before, hour))
+    await callback.answer(f"✓ Сводка в {hour}:00")

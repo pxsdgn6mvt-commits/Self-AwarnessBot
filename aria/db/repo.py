@@ -197,7 +197,8 @@ async def list_active_owner_bots() -> list[asyncpg.Record]:
     async with _p().acquire() as conn:
         return await conn.fetch(
             """
-            SELECT id, owner_tg_id, salon_name, bot_token
+            SELECT id, owner_tg_id, salon_name, bot_token, timezone,
+                   reminder_hours_before, daily_summary_hour
             FROM aria_tenants
             WHERE active=TRUE AND setup_complete=TRUE AND owner_tg_id IS NOT NULL
             ORDER BY id
@@ -288,6 +289,47 @@ async def mark_noshow_check_sent(booking_id: int) -> None:
     async with _p().acquire() as conn:
         await conn.execute(
             "UPDATE aria_bookings SET noshow_check_sent=TRUE WHERE id=$1", booking_id
+        )
+
+
+async def get_pending_reminders(tenant_id: int, within_minutes: int) -> list[asyncpg.Record]:
+    """Bookings whose reminder is overdue or due within within_minutes — reminder not yet sent."""
+    now = datetime.now(timezone.utc)
+    upper = now + timedelta(minutes=within_minutes)
+    async with _p().acquire() as conn:
+        return await conn.fetch(
+            """
+            SELECT * FROM aria_bookings
+            WHERE tenant_id=$1
+              AND reminder_sent = FALSE
+              AND status IN ('confirmed', 'pending')
+              AND scheduled_at > $2
+              AND scheduled_at <= $3
+            ORDER BY scheduled_at ASC
+            """,
+            tenant_id, now, upper,
+        )
+
+
+async def get_bookings_for_tomorrow(tenant_id: int, tz_str: str) -> list[asyncpg.Record]:
+    """All confirmed/pending bookings for tomorrow in the tenant's local timezone."""
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo(tz_str or "UTC")
+    now_local = datetime.now(tz)
+    tomorrow = (now_local + timedelta(days=1)).date()
+    dt_from = datetime(tomorrow.year, tomorrow.month, tomorrow.day, 0, 0, tzinfo=tz).astimezone(timezone.utc)
+    dt_to   = datetime(tomorrow.year, tomorrow.month, tomorrow.day, 23, 59, 59, tzinfo=tz).astimezone(timezone.utc)
+    async with _p().acquire() as conn:
+        return await conn.fetch(
+            """
+            SELECT * FROM aria_bookings
+            WHERE tenant_id=$1
+              AND scheduled_at >= $2
+              AND scheduled_at <= $3
+              AND status IN ('confirmed', 'pending')
+            ORDER BY scheduled_at ASC
+            """,
+            tenant_id, dt_from, dt_to,
         )
 
 

@@ -29,7 +29,7 @@ from aria.handlers import admin, chat, email_setup, menu, quick, start
 from aria.handlers.setup import router as setup_router
 from aria.middleware import TenantMiddleware
 from aria.services.commands import set_commands
-from aria.services.scheduler import get_scheduler, schedule_daily_reactivation
+from aria.services.scheduler import get_scheduler, schedule_daily_reactivation, schedule_owner_reminders
 
 logging.basicConfig(
     level=logging.INFO,
@@ -216,6 +216,7 @@ async def main() -> None:
     await _ensure_initial_tenant()
     get_scheduler().start()
     schedule_daily_reactivation(lambda: _bots)
+    schedule_owner_reminders(lambda: _bots)
 
     dp = _build_dispatcher()
 
