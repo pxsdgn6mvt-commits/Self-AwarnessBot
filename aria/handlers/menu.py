@@ -459,7 +459,7 @@ async def cb_cfg_test_cal(callback: CallbackQuery, tenant: TenantConfig) -> None
 async def cb_cfg_reset_chat(callback: CallbackQuery, tenant: TenantConfig) -> None:
     lang = tenant.owner_lang or "ru"
     await repo.clear_history(tenant.id, callback.from_user.id)
-    await callback.answer(t("toast_paid", lang) if lang != "ru" else "История очищена ✅", show_alert=True)
+    await callback.answer(t("history_cleared", lang), show_alert=True)
 
 
 @router.callback_query(F.data == "cfg:status", SetupDone())

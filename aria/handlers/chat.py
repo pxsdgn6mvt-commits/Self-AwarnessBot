@@ -18,6 +18,7 @@ from aiogram.types import Message
 from typing import Optional
 
 import aria.db.repo as repo
+from aria.i18n import t
 from aria.services.ai import chat
 from aria.tenant import TenantConfig
 
@@ -138,7 +139,8 @@ async def handle_message(message: Message, bot: Bot, state: FSMContext, tenant: 
     user_id = message.from_user.id
 
     if not _check_rate_limit(user_id):
-        await message.answer("Слишком много сообщений подряд. Подожди минуту.")
+        lang = (tenant.owner_lang or "ru") if tenant else "ru"
+        await message.answer(t("rate_limit", lang))
         return
 
     # ── Rule-based bypass: no tokens for simple schedule queries ──────────────
@@ -170,6 +172,6 @@ async def handle_message(message: Message, bot: Bot, state: FSMContext, tenant: 
         )
     except Exception as exc:
         log.exception("AI error for tenant %d user %d: %s", tenant.id, user_id, exc)
-        reply = "Что-то пошло не так. Попробуй ещё раз."
+        reply = t("ai_error", tenant.owner_lang or "ru")
 
     await message.answer(reply)

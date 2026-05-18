@@ -348,6 +348,10 @@ T: dict[str, dict[str, str]] = {
     "dur_deleted":    {"ru": "✅ Длительность удалена.", "en": "✅ Duration removed.", "fi": "✅ Kesto poistettu."},
     "dur_updated":    {"ru": "✅ Длительность обновлена:", "en": "✅ Duration updated:", "fi": "✅ Kesto päivitetty:"},
     "min_lbl":        {"ru": "мин",     "en": "min",     "fi": "min"},
+    "history_cleared":{"ru": "История очищена ✅", "en": "History cleared ✅", "fi": "Historia tyhjennetty ✅"},
+    "reset_reply":    {"ru": "История очищена. Начнём заново — чем могу помочь?", "en": "History cleared. Let's start fresh — how can I help?", "fi": "Historia tyhjennetty. Aloitetaan alusta — miten voin auttaa?"},
+    "rate_limit":     {"ru": "Слишком много сообщений подряд. Подожди минуту.", "en": "Too many messages in a row. Please wait a minute.", "fi": "Liikaa viestejä peräkkäin. Odota hetki."},
+    "ai_error":       {"ru": "Что-то пошло не так. Попробуй ещё раз.", "en": "Something went wrong. Please try again.", "fi": "Jokin meni pieleen. Yritä uudelleen."},
     "cat_items_hdr":  {"ru": "📂 <b>{name}</b> — {n} услуг(а)\n\nНажмите 🗑 рядом с услугой, чтобы удалить.", "en": "📂 <b>{name}</b> — {n} service(s)\n\nTap 🗑 next to a service to delete it.", "fi": "📂 <b>{name}</b> — {n} palvelu(a)\n\nNapauta 🗑 palvelun vieressä poistaaksesi."},
 }
 

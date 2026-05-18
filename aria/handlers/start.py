@@ -18,6 +18,7 @@ from aria.config import settings as _settings
 from aria.filters import SetupDone
 from aria.handlers.menu import ADMIN_KB, _is_admin_bot
 from aria.handlers.quick import MAIN_KB_TEXTS, get_main_kb
+from aria.i18n import t as _t
 from aria.middleware import TenantMiddleware
 from aria.services.booking import invalidate_adapter
 from aria.tenant import TenantConfig
@@ -111,8 +112,9 @@ async def cb_start_lang(callback: CallbackQuery, tenant: TenantConfig) -> None:
 async def cmd_reset(message: Message, tenant: TenantConfig) -> None:
     if not tenant:
         return
+    lang = (tenant.owner_lang or "ru") if tenant.is_owner(message.from_user.id) else "ru"
     await repo.clear_history(tenant.id, message.from_user.id)
-    await message.answer("История очищена. Начнём заново — чем могу помочь?")
+    await message.answer(_t("reset_reply", lang))
 
 
 @router.message(Command("help"))

@@ -212,7 +212,12 @@ async def setup_google_cal(message: Message, state: FSMContext, tenant: TenantCo
     await state.clear()
     await set_commands(message.bot, message.from_user.id)
 
-    from aria.handlers.quick import MAIN_KB
+    from aria.handlers.quick import get_main_kb
+    # Use Telegram language_code as initial lang; owner can change later in Settings
+    lang = (message.from_user.language_code or "ru")[:2]
+    if lang not in ("ru", "en", "fi"):
+        lang = "ru"
+    await repo.update_tenant(tenant.id, owner_lang=lang)
     await message.answer(
         f"✅ Готово! Бот настроен для <b>{data['salon_name']}</b>.\n\n"
         f"Используй кнопки внизу или просто пиши:\n"
@@ -220,6 +225,6 @@ async def setup_google_cal(message: Message, state: FSMContext, tenant: TenantCo
         f"• «запиши Катю на {data['services'].split(',')[0].strip()} 20 мая в 14:00»\n"
         f"• «что на этой неделе?»\n\n"
         "Нажми 🎛 рядом с полем ввода — там все команды.",
-        reply_markup=MAIN_KB,
+        reply_markup=get_main_kb(lang),
     )
     log.info("Tenant %d setup complete: %s tz=%s", tenant.id, data["salon_name"], data.get("timezone", "UTC"))

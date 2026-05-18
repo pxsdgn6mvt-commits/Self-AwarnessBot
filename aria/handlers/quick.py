@@ -103,7 +103,7 @@ def _items_for_booking_kb(items: list, lang: str = "ru") -> InlineKeyboardMarkup
         if it.get("price") is not None:
             extras.append(f"{int(it['price'])}€")
         if it.get("duration_minutes") is not None:
-            extras.append(f"{it['duration_minutes']}мин")
+            extras.append(f"{it['duration_minutes']}{t('min_lbl', lang)}")
         if extras:
             label += " · " + " · ".join(extras)
         rows.append([InlineKeyboardButton(text=label, callback_data=f"qb_svc:{it['name']}")])
@@ -1128,7 +1128,7 @@ async def text_client(message: Message, state: FSMContext, tenant: TenantConfig)
             if svc_info and svc_info["price"] is not None:
                 svc_extras.append(f"{int(svc_info['price'])}€")
             if svc_info and svc_info["duration_minutes"] is not None:
-                svc_extras.append(f"{svc_info['duration_minutes']}мин")
+                svc_extras.append(f"{svc_info['duration_minutes']}{t('min_lbl', lang)}")
             svc_line = service + (" · " + " · ".join(svc_extras) if svc_extras else "")
 
             gcal_note = " · Google Calendar 📅" if cal_id else ""
