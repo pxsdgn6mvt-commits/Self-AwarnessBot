@@ -30,6 +30,10 @@ from aiogram.types import (
 
 import aria.db.repo as repo
 from aria.filters import SetupDone
+from aria.i18n import (
+    T, DAY_FULL, DAY_SHORT, MON_GENITIVE, MON_SHORT, MON_FULL,
+    all_variants, fmt_date, fmt_time_label, t,
+)
 from aria.services.booking import get_adapter, parse_datetime
 from aria.tenant import TenantConfig
 
@@ -45,23 +49,27 @@ _last_info_msg: dict[int, int] = {}  # chat_id → message_id
 
 # ── Persistent reply keyboard ─────────────────────────────────────────────────
 
-MAIN_KB = ReplyKeyboardMarkup(
-    keyboard=[
-        [KeyboardButton(text="📅 Сегодня"),      KeyboardButton(text="📅 Завтра")],
-        [KeyboardButton(text="➕ Новая запись"),  KeyboardButton(text="📋 Ближайшие")],
-        [KeyboardButton(text="📊 Дашборд"),       KeyboardButton(text="⚙️ Настройки")],
-    ],
-    resize_keyboard=True,
-    is_persistent=True,
-)
+def get_main_kb(lang: str = "ru") -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text=t("btn_today", lang)),    KeyboardButton(text=t("btn_tomorrow", lang))],
+            [KeyboardButton(text=t("btn_new", lang)),      KeyboardButton(text=t("btn_upcoming", lang))],
+            [KeyboardButton(text=t("btn_dashboard", lang)),KeyboardButton(text=t("btn_settings", lang))],
+        ],
+        resize_keyboard=True,
+        is_persistent=True,
+    )
 
-# All persistent reply-keyboard texts — FSM handlers exclude these so keyboard
-# buttons are never swallowed as data input regardless of active state.
-MAIN_KB_TEXTS: frozenset[str] = frozenset({
-    "📅 Сегодня", "📅 Завтра", "➕ Новая запись", "📋 Ближайшие",
-    "📊 Дашборд", "⚙️ Настройки", "📱 Меню", "📱 Управление",
-    "📋 Список ботов", "➕ Добавить бота", "📣 Рассылка",
-})
+MAIN_KB = get_main_kb("ru")
+
+# All persistent reply-keyboard texts across all languages — FSM handlers
+# exclude these so buttons are never swallowed as data input.
+MAIN_KB_TEXTS: frozenset[str] = frozenset(
+    all_variants("btn_today") | all_variants("btn_tomorrow") |
+    all_variants("btn_new") | all_variants("btn_upcoming") |
+    all_variants("btn_dashboard") | all_variants("btn_settings") |
+    {"📱 Меню", "📱 Управление", "📋 Список ботов", "➕ Добавить бота", "📣 Рассылка"}
+)
 
 
 # ── FSM ───────────────────────────────────────────────────────────────────────
@@ -81,13 +89,13 @@ class QuickEdit(StatesGroup):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _cats_kb(cats: list) -> InlineKeyboardMarkup:
+def _cats_kb(cats: list, lang: str = "ru") -> InlineKeyboardMarkup:
     rows = [[InlineKeyboardButton(text=c["name"], callback_data=f"qb_cat:{c['id']}")] for c in cats]
-    rows.append([InlineKeyboardButton(text="❌ Отмена", callback_data="qb_cancel")])
+    rows.append([InlineKeyboardButton(text=t("btn_cancel_act", lang), callback_data="qb_cancel")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def _items_for_booking_kb(items: list) -> InlineKeyboardMarkup:
+def _items_for_booking_kb(items: list, lang: str = "ru") -> InlineKeyboardMarkup:
     rows = []
     for it in items:
         label = it["name"]
@@ -99,28 +107,31 @@ def _items_for_booking_kb(items: list) -> InlineKeyboardMarkup:
         if extras:
             label += " · " + " · ".join(extras)
         rows.append([InlineKeyboardButton(text=label, callback_data=f"qb_svc:{it['name']}")])
-    rows.append([InlineKeyboardButton(text="◀️ Назад", callback_data="qb_back_cats")])
-    rows.append([InlineKeyboardButton(text="❌ Отмена", callback_data="qb_cancel")])
+    rows.append([InlineKeyboardButton(text=t("btn_back", lang), callback_data="qb_back_cats")])
+    rows.append([InlineKeyboardButton(text=t("btn_cancel_act", lang), callback_data="qb_cancel")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def _date_kb(tenant: TenantConfig) -> InlineKeyboardMarkup:
     from zoneinfo import ZoneInfo
+    lang = tenant.owner_lang or "ru"
     tz = ZoneInfo(tenant.timezone or "UTC")
     today = datetime.now(tz).date()
     rows = []
     for i in range(5):
         d = today + timedelta(days=i)
-        label = {0: "Сегодня", 1: "Завтра"}.get(i, "") or ""
-        label = f"{label} {d.strftime('%-d %b')}".strip()
+        prefix = {0: t("lbl_today", lang), 1: t("lbl_tomorrow", lang)}.get(i, "")
+        date_part = fmt_date(d.day, d.month - 1, lang)
+        label = f"{prefix} {date_part}".strip() if prefix else date_part
         rows.append([InlineKeyboardButton(text=label, callback_data=f"qb_date:{d.isoformat()}")])
-    rows.append([InlineKeyboardButton(text="📝 Другая дата", callback_data="qb_date:custom")])
-    rows.append([InlineKeyboardButton(text="❌ Отмена", callback_data="qb_cancel")])
+    rows.append([InlineKeyboardButton(text=t("other_date", lang), callback_data="qb_date:custom")])
+    rows.append([InlineKeyboardButton(text=t("btn_cancel_act", lang), callback_data="qb_cancel")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 async def _time_kb(tenant: TenantConfig, date_str: str) -> InlineKeyboardMarkup:
     from zoneinfo import ZoneInfo
+    lang = tenant.owner_lang or "ru"
     tz = ZoneInfo(tenant.timezone or "UTC")
     booked_dts = await repo.get_slots_on_date(tenant.id, date_str)
     booked = {dt.astimezone(tz).strftime("%H:%M") for dt in booked_dts}
@@ -133,16 +144,16 @@ async def _time_kb(tenant: TenantConfig, date_str: str) -> InlineKeyboardMarkup:
         total = h * 60 + m + tenant.slot_minutes
         h, m = divmod(total, 60)
     rows = [buttons[i:i+3] for i in range(0, len(buttons), 3)]
-    rows.append([InlineKeyboardButton(text="📝 Другое время", callback_data="qb_time:custom")])
-    rows.append([InlineKeyboardButton(text="❌ Отмена", callback_data="qb_cancel")])
+    rows.append([InlineKeyboardButton(text=t("other_time", lang), callback_data="qb_time:custom")])
+    rows.append([InlineKeyboardButton(text=t("btn_cancel_act", lang), callback_data="qb_cancel")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def _schedule_text_and_kb(
-    events: list[dict], date_label: str, date_str: str = ""
+    events: list[dict], date_label: str, date_str: str = "", lang: str = "ru"
 ) -> tuple[str, InlineKeyboardMarkup | None]:
     if not events:
-        return f"📅 {date_label}\n\nЗаписей нет.", None
+        return f"📅 {date_label}\n\n{t('no_bookings', lang)}", None
 
     lines = [f"📅 <b>{date_label}</b>\n"]
     sel_btns: list[InlineKeyboardButton] = []
@@ -162,46 +173,46 @@ def _schedule_text_and_kb(
             )
 
     rows = [sel_btns[i:i+2] for i in range(0, len(sel_btns), 2)]
-    rows.append([InlineKeyboardButton(text="➕ Добавить запись", callback_data="qb_start")])
+    rows.append([InlineKeyboardButton(text=t("add_booking", lang), callback_data="qb_start")])
     return "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def _booking_card_text(booking: dict) -> str:
+def _booking_card_text(booking: dict, lang: str = "ru") -> str:
     paid   = booking.get("paid") or False
     notes  = booking.get("notes")
     status = booking.get("status", "confirmed")
     lines  = [
         f"📌 <b>{booking['client_name']}</b>",
-        f"Услуга: {booking['service']}",
+        f"{t('service_label', lang)}: {booking['service']}",
     ]
     if status == "completed":
-        lines.append("✅ Пришёл")
+        lines.append(t("arrived_mark", lang))
     elif status == "no_show":
-        lines.append("🚫 Не пришёл")
+        lines.append(t("noshow_mark", lang))
     if paid:
-        lines.append("💰 Оплачено ✅")
+        lines.append(t("paid_mark", lang))
     if notes:
         lines.append(f"📝 {notes}")
     return "\n".join(lines)
 
 
-def _booking_card_kb(booking_id: int, paid: bool, date_str: str, status: str = "confirmed") -> InlineKeyboardMarkup:
-    pay_label = "✅ Оплачено" if paid else "💰 Оплата"
+def _booking_card_kb(booking_id: int, paid: bool, date_str: str, status: str = "confirmed", lang: str = "ru") -> InlineKeyboardMarkup:
+    pay_label = t("btn_paid_done", lang) if paid else t("btn_pay", lang)
     rows = []
     if status not in ("completed", "no_show"):
         rows.append([
-            InlineKeyboardButton(text="✅ Пришёл",    callback_data=f"bk_arrived:{booking_id}"),
-            InlineKeyboardButton(text="🚫 Не пришёл", callback_data=f"bk_noshow:{booking_id}"),
+            InlineKeyboardButton(text=t("btn_arrived", lang),  callback_data=f"bk_arrived:{booking_id}"),
+            InlineKeyboardButton(text=t("btn_noshow", lang),   callback_data=f"bk_noshow:{booking_id}"),
         ])
     rows.append([
-        InlineKeyboardButton(text="✏️ Перенести", callback_data=f"bk_reschedule:{booking_id}"),
-        InlineKeyboardButton(text="❌ Отменить",  callback_data=f"del_booking:{booking_id}"),
+        InlineKeyboardButton(text=t("btn_reschedule", lang),   callback_data=f"bk_reschedule:{booking_id}"),
+        InlineKeyboardButton(text=t("btn_cancel_bk", lang),    callback_data=f"del_booking:{booking_id}"),
     ])
     rows.append([
-        InlineKeyboardButton(text=pay_label,    callback_data=f"bk_paid:{booking_id}"),
-        InlineKeyboardButton(text="📝 Заметка", callback_data=f"bk_note:{booking_id}"),
+        InlineKeyboardButton(text=pay_label,                   callback_data=f"bk_paid:{booking_id}"),
+        InlineKeyboardButton(text=t("btn_note", lang),         callback_data=f"bk_note:{booking_id}"),
     ])
-    rows.append([InlineKeyboardButton(text="◀️ К списку дня", callback_data=f"bk_list|{date_str}")])
+    rows.append([InlineKeyboardButton(text=t("btn_back_day", lang), callback_data=f"bk_list|{date_str}")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -218,6 +229,7 @@ async def _delete_old_info(bot: Bot, chat_id: int) -> None:
 
 async def _show_schedule(message: Message, tenant: TenantConfig, days_offset: int = 0) -> None:
     from zoneinfo import ZoneInfo
+    lang = tenant.owner_lang or "ru"
     tz_str = tenant.timezone or "UTC"
     tz = ZoneInfo(tz_str)
     target = (datetime.now(tz) + timedelta(days=days_offset)).date()
@@ -227,32 +239,32 @@ async def _show_schedule(message: Message, tenant: TenantConfig, days_offset: in
     adapter = get_adapter(tenant)
     events  = await adapter.get_events(dt_from, dt_to)
 
-    labels = {0: "Сегодня", 1: "Завтра"}
-    date_label = f"{labels.get(days_offset, '')} {target.strftime('%-d %B')}".strip()
-    text, kb = _schedule_text_and_kb(events, date_label, target.isoformat())
+    prefix = {0: t("lbl_today", lang), 1: t("lbl_tomorrow", lang)}.get(days_offset, "")
+    date_part = fmt_date(target.day, target.month - 1, lang)
+    date_label = f"{prefix} {date_part}".strip() if prefix else date_part
+    text, kb = _schedule_text_and_kb(events, date_label, target.isoformat(), lang)
 
     await _delete_old_info(message.bot, message.chat.id)
     sent = await message.answer(text, reply_markup=kb)
     _last_info_msg[message.chat.id] = sent.message_id
 
 
-@router.message(F.text == "📅 Сегодня", SetupDone(), StateFilter("*"))
+@router.message(F.text.in_(all_variants("btn_today")), SetupDone(), StateFilter("*"))
 async def quick_today(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
     await state.clear()
     await _show_schedule(message, tenant, 0)
 
 
-@router.message(F.text == "📅 Завтра", SetupDone(), StateFilter("*"))
+@router.message(F.text.in_(all_variants("btn_tomorrow")), SetupDone(), StateFilter("*"))
 async def quick_tomorrow(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
     await state.clear()
     await _show_schedule(message, tenant, 1)
 
 
-@router.message(F.text == "📋 Ближайшие", SetupDone(), StateFilter("*"))
+@router.message(F.text.in_(all_variants("btn_upcoming")), SetupDone(), StateFilter("*"))
 async def quick_upcoming(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
     await state.clear()
-    from zoneinfo import ZoneInfo
-    tz = ZoneInfo(tenant.timezone or "UTC")
+    lang = tenant.owner_lang or "ru"
     adapter = get_adapter(tenant)
     events  = await adapter.get_events(
         datetime.now(timezone.utc),
@@ -260,14 +272,11 @@ async def quick_upcoming(message: Message, state: FSMContext, tenant: TenantConf
     )
     if not events:
         await _delete_old_info(message.bot, message.chat.id)
-        sent = await message.answer("📋 Ближайших записей нет.")
+        sent = await message.answer(f"📋 {t('no_upcoming', lang)}")
         _last_info_msg[message.chat.id] = sent.message_id
         return
 
-    _MON = ["янв","фев","мар","апр","май","июн","июл","авг","сен","окт","ноя","дек"]
-    _DAYS = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"]
-
-    lines = ["📋 <b>Ближайшие записи</b>\n"]
+    lines = [f"📋 <b>{t('upcoming_title', lang)}</b>\n"]
     sel_btns: list[InlineKeyboardButton] = []
     prev_date = ""
     for e in events[:20]:
@@ -279,7 +288,7 @@ async def quick_upcoming(message: Message, state: FSMContext, tenant: TenantConf
             from datetime import date as _d
             try:
                 d = _d.fromisoformat(date_str)
-                day_hdr = f"{_DAYS[d.weekday()]} {d.day} {_MON[d.month - 1]}"
+                day_hdr = f"{DAY_SHORT[lang][d.weekday()]} {fmt_date(d.day, d.month - 1, lang)}"
             except ValueError:
                 day_hdr = date_str
             lines.append(f"\n📅 <b>{day_hdr}</b>")
@@ -294,7 +303,7 @@ async def quick_upcoming(message: Message, state: FSMContext, tenant: TenantConf
             )
 
     rows = [sel_btns[i:i+2] for i in range(0, len(sel_btns), 2)]
-    rows.append([InlineKeyboardButton(text="➕ Добавить запись", callback_data="qb_start")])
+    rows.append([InlineKeyboardButton(text=t("add_booking", lang), callback_data="qb_start")])
     kb = InlineKeyboardMarkup(inline_keyboard=rows)
 
     await _delete_old_info(message.bot, message.chat.id)
@@ -306,18 +315,19 @@ async def quick_upcoming(message: Message, state: FSMContext, tenant: TenantConf
 
 @router.callback_query(F.data.startswith("del_booking:"), SetupDone())
 async def cb_cancel_booking(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    lang = tenant.owner_lang or "ru"
     if not tenant.is_owner(callback.from_user.id):
-        await callback.answer("Нет доступа.", show_alert=True)
+        await callback.answer(t("no_access", lang), show_alert=True)
         return
 
     try:
         booking_id = int(callback.data.split(":")[1])
     except ValueError:
-        await callback.answer("Запись не найдена в системе.", show_alert=True)
+        await callback.answer(t("not_found_system", lang), show_alert=True)
         return
     booking = await repo.get_booking(booking_id)
     if not booking or booking["status"] == "cancelled":
-        await callback.answer("Запись уже отменена или не найдена.", show_alert=True)
+        await callback.answer(t("already_cancelled", lang), show_alert=True)
         await callback.message.edit_reply_markup(reply_markup=None)
         return
 
@@ -328,8 +338,7 @@ async def cb_cancel_booking(callback: CallbackQuery, tenant: TenantConfig) -> No
     from aria.services.scheduler import cancel_booking_jobs
     cancel_booking_jobs(booking_id)
 
-    await callback.answer("✅ Запись отменена")
-    # keep ◀️ К списку дня button if we're in card view
+    await callback.answer(t("toast_cancelled", lang))
     back_btn = None
     if callback.message.reply_markup:
         for row in callback.message.reply_markup.inline_keyboard:
@@ -338,9 +347,10 @@ async def cb_cancel_booking(callback: CallbackQuery, tenant: TenantConfig) -> No
                     back_btn = btn
                     break
     new_kb = InlineKeyboardMarkup(inline_keyboard=[[back_btn]]) if back_btn else None
+    cancelled_line = {"ru": f"❌ <i>Запись #{booking_id} отменена</i>", "en": f"❌ <i>Booking #{booking_id} cancelled</i>", "fi": f"❌ <i>Varaus #{booking_id} peruutettu</i>"}.get(lang, f"❌ <i>#{booking_id}</i>")
     try:
         await callback.message.edit_text(
-            callback.message.text + f"\n\n❌ <i>Запись #{booking_id} отменена</i>",
+            callback.message.text + f"\n\n{cancelled_line}",
             reply_markup=new_kb,
         )
     except Exception:
@@ -349,33 +359,28 @@ async def cb_cancel_booking(callback: CallbackQuery, tenant: TenantConfig) -> No
 
 # ── Dashboard helpers ─────────────────────────────────────────────────────────
 
-_MON_RU   = ["января","февраля","марта","апреля","мая","июня",
-              "июля","августа","сентября","октября","ноября","декабря"]
-_DAY_SHORT = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"]
-_DAY_FULL  = ["Понедельник","Вторник","Среда","Четверг","Пятница","Суббота","Воскресенье"]
-
-
 def _income_block(
     tenant: TenantConfig, expected: float, received: float, paid_count: int = 0
 ) -> list[str]:
+    lang = tenant.owner_lang or "ru"
     lines: list[str] = []
     if expected > 0:
-        lines.append(f"💰 Ожидается: <b>{int(expected)}€</b>")
+        lines.append(f"{t('income_expected', lang)}: <b>{int(expected)}€</b>")
     if received > 0:
-        lines.append(f"✅ Оплачено: <b>{int(received)}€</b>")
+        lines.append(f"{t('income_paid', lang)}: <b>{int(received)}€</b>")
         if paid_count > 1:
-            lines.append(f"   💳 Средний чек: <b>{received / paid_count:.0f}€</b>")
+            lines.append(f"   {t('avg_check', lang)}: <b>{received / paid_count:.0f}€</b>")
         if tenant.master_percent is not None:
             cut = received * tenant.master_percent / 100
-            lines.append(f"   👤 Доля ({int(tenant.master_percent)}%): <b>{cut:.0f}€</b>")
+            lines.append(f"   {t('master_share', lang)} ({int(tenant.master_percent)}%): <b>{cut:.0f}€</b>")
             if tenant.tax_percent is not None:
                 net = cut * (1 - tenant.tax_percent / 100)
-                lines.append(f"   🧾 Чистыми ({int(tenant.tax_percent)}%): <b>{net:.0f}€</b>")
+                lines.append(f"   {t('net_income', lang)} ({int(tenant.tax_percent)}%): <b>{net:.0f}€</b>")
     return lines
 
 
-def _dashboard_kb(active: str) -> InlineKeyboardMarkup:
-    periods = [("day", "📅 День"), ("week", "📆 Неделя"), ("month", "🗓 Месяц")]
+def _dashboard_kb(active: str, lang: str = "ru") -> InlineKeyboardMarkup:
+    periods = [("day", t("dash_day", lang)), ("week", t("dash_week", lang)), ("month", t("dash_month", lang))]
     btns = [
         InlineKeyboardButton(
             text=f"{lbl} ✓" if p == active else lbl,
@@ -385,16 +390,17 @@ def _dashboard_kb(active: str) -> InlineKeyboardMarkup:
     ]
     return InlineKeyboardMarkup(inline_keyboard=[
         btns,
-        [InlineKeyboardButton(text="📊 Аналитика", callback_data="dash:analytics")],
+        [InlineKeyboardButton(text=t("dash_analytics", lang), callback_data="dash:analytics")],
     ])
 
 
 async def _day_dashboard(tenant: TenantConfig) -> str:
     from zoneinfo import ZoneInfo
+    lang = tenant.owner_lang or "ru"
     tz = ZoneInfo(tenant.timezone or "UTC")
     now_local = datetime.now(tz)
     date_str  = now_local.strftime("%Y-%m-%d")
-    day_label = f"{_DAY_FULL[now_local.weekday()]}, {now_local.day} {_MON_RU[now_local.month - 1]}"
+    day_label = f"{DAY_FULL[lang][now_local.weekday()]}, {fmt_date(now_local.day, now_local.month - 1, lang)}"
 
     stats          = await repo.get_today_stats(tenant.id, date_str)
     bookings_today = await repo.get_bookings_for_date(tenant.id, date_str)
@@ -411,34 +417,39 @@ async def _day_dashboard(tenant: TenantConfig) -> str:
         tot = h * 60 + m + tenant.slot_minutes
         h, m = divmod(tot, 60)
 
+    h_u = t("in_h", lang)
+    m_u = t("in_min", lang)
     lines = [f"📅 <b>{day_label}</b>\n"]
-    lines.append(f"📋 Записей: <b>{stats['total']}</b>")
+    lines.append(f"{t('bookings_count', lang)}: <b>{stats['total']}</b>")
 
     if next_b:
         t_str = next_b["scheduled_at"].astimezone(tz).strftime("%H:%M")
         mins  = int((next_b["scheduled_at"].astimezone(tz) - now_local).total_seconds() / 60)
         if mins >= 60:
             h_d, m_d = divmod(mins, 60)
-            diff = f"{h_d}ч {m_d}мин" if m_d else f"{h_d}ч"
+            diff = f"{h_d}{h_u} {m_d}{m_u}" if m_d else f"{h_d}{h_u}"
         else:
-            diff = f"{mins} мин"
-        lines.append(f"⏰ Следующий: <b>{next_b['client_name']}</b> в {t_str} (через {diff})")
+            diff = f"{mins} {m_u}"
+        at_word = {"ru": "в", "en": "at", "fi": "klo"}.get(lang, "at")
+        in_word = {"ru": f"через {diff}", "en": f"in {diff}", "fi": f"{diff} päästä"}.get(lang, f"in {diff}")
+        lines.append(f"{t('next_client', lang)}: <b>{next_b['client_name']}</b> {at_word} {t_str} ({in_word})")
     else:
-        lines.append("⏰ Записей до конца дня нет")
+        lines.append(t("no_more_today", lang))
 
     lines += _income_block(tenant, float(stats["expected"]), float(stats["received"]), int(stats["paid_count"]))
 
     if free_slots:
         slots_str = "  ".join(free_slots[:6]) + (f" +{len(free_slots)-6}" if len(free_slots) > 6 else "")
-        lines.append(f"\n🕐 Свободно: {slots_str}")
+        lines.append(f"\n{t('free_slots_lbl', lang)}: {slots_str}")
     else:
-        lines.append("\n🔴 Свободных окон нет")
+        lines.append(f"\n{t('no_free_slots', lang)}")
 
     return "\n".join(lines)
 
 
 async def _week_dashboard(tenant: TenantConfig) -> str:
     from zoneinfo import ZoneInfo
+    lang = tenant.owner_lang or "ru"
     tz = ZoneInfo(tenant.timezone or "UTC")
     now_local = datetime.now(tz)
     monday    = now_local.date() - timedelta(days=now_local.weekday())
@@ -453,12 +464,12 @@ async def _week_dashboard(tenant: TenantConfig) -> str:
         d = e.get("date", "")
         by_day[d] = by_day.get(d, 0) + 1
 
-    date_range = f"{monday.day}–{sunday.day} {_MON_RU[monday.month - 1]}"
-    lines = [f"📆 <b>Неделя — {date_range}</b>\n"]
-    lines.append(f"📋 Записей: <b>{stats['total']}</b>")
+    date_range = f"{monday.day}–{sunday.day} {MON_GENITIVE[lang][monday.month - 1]}"
+    lines = [f"📆 <b>{t('dash_week', lang)} — {date_range}</b>\n"]
+    lines.append(f"{t('bookings_count', lang)}: <b>{stats['total']}</b>")
     lines += _income_block(tenant, float(stats["expected"]), float(stats["received"]), int(stats["paid_count"]))
 
-    day_parts = [f"{_DAY_SHORT[i]} {by_day.get((monday + timedelta(days=i)).isoformat(), 0)}"
+    day_parts = [f"{DAY_SHORT[lang][i]} {by_day.get((monday + timedelta(days=i)).isoformat(), 0)}"
                  for i in range(7)]
     lines.append("\n" + "  ·  ".join(day_parts))
     return "\n".join(lines)
@@ -466,6 +477,7 @@ async def _week_dashboard(tenant: TenantConfig) -> str:
 
 async def _month_dashboard(tenant: TenantConfig) -> str:
     from zoneinfo import ZoneInfo
+    lang = tenant.owner_lang or "ru"
     tz = ZoneInfo(tenant.timezone or "UTC")
     now_local  = datetime.now(tz)
     first      = now_local.date().replace(day=1)
@@ -480,12 +492,10 @@ async def _month_dashboard(tenant: TenantConfig) -> str:
     total  = int(stats["total"])
     weeks  = round(last.day / 7, 1)
 
-    _MON_FULL = ["Январь","Февраль","Март","Апрель","Май","Июнь",
-                 "Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"]
-    lines = [f"🗓 <b>{_MON_FULL[now_local.month - 1]} {now_local.year}</b>\n"]
-    lines.append(f"📋 Записей: <b>{total}</b>")
+    lines = [f"🗓 <b>{MON_FULL[lang][now_local.month - 1]} {now_local.year}</b>\n"]
+    lines.append(f"{t('bookings_count', lang)}: <b>{total}</b>")
     if total > 0 and weeks > 0:
-        lines.append(f"   ≈ {round(total / weeks)} в неделю")
+        lines.append(f"   ≈ {round(total / weeks)} {t('per_week', lang)}")
     lines += _income_block(tenant, float(stats["expected"]), float(stats["received"]), int(stats["paid_count"]))
     return "\n".join(lines)
 
@@ -500,79 +510,80 @@ async def _build_dashboard(tenant: TenantConfig, period: str) -> str:
 
 async def _analytics_text(tenant: TenantConfig) -> str:
     from zoneinfo import ZoneInfo
+    lang = tenant.owner_lang or "ru"
     now = datetime.now(ZoneInfo(tenant.timezone or "UTC"))
-    _MON_FULL = ["Январь","Февраль","Март","Апрель","Май","Июнь",
-                 "Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"]
-    lines = [f"📊 <b>Аналитика — {_MON_FULL[now.month - 1]} {now.year}</b>\n"]
+    lines = [f"📊 <b>{t('dash_analytics', lang)} — {MON_FULL[lang][now.month - 1]} {now.year}</b>\n"]
 
     services = await repo.get_service_stats(tenant.id, limit=5)
     if services:
-        lines.append("<b>Топ услуги:</b>")
+        lines.append(f"<b>{t('top_services', lang)}</b>")
         for i, s in enumerate(services, 1):
             rev = int(s["revenue"])
             rev_str = f" · {rev}€" if rev > 0 else ""
-            lines.append(f"{i}. {s['service']} — {s['visits']} раз{rev_str}")
+            lines.append(f"{i}. {s['service']} — {s['visits']} {t('visits_short', lang)}{rev_str}")
     else:
-        lines.append("Нет данных по услугам")
+        lines.append(t("no_data_svc", lang))
 
     lines.append("")
 
     clients = await repo.get_client_stats(tenant.id, limit=5)
     if clients:
-        lines.append("<b>Топ клиенты:</b>")
+        lines.append(f"<b>{t('top_clients', lang)}</b>")
         for i, c in enumerate(clients, 1):
             spent = int(c["total_spent"])
             spent_str = f" · {spent}€" if spent > 0 else ""
             status = repo.client_status_emoji(int(c["visits"]), int(c["no_show_count"]), int(c["cancelled_count"]))
-            lines.append(f"{i}. {status} {c['client_name']} — {c['visits']} визит{spent_str}")
+            lines.append(f"{i}. {status} {c['client_name']} — {c['visits']} {t('visits_short', lang)}{spent_str}")
     else:
-        lines.append("Нет данных по клиентам")
+        lines.append(t("no_data_cli", lang))
 
     risky = await repo.get_risky_clients(tenant.id, limit=5)
     if risky:
         lines.append("")
-        lines.append("<b>⚠️ Рискованные клиенты:</b>")
+        lines.append(f"<b>{t('risky_clients', lang)}</b>")
         for c in risky:
             parts = []
             if c["no_show_count"]:
-                parts.append(f"неявок: {c['no_show_count']}")
+                parts.append(f"{t('noshows_label', lang)}: {c['no_show_count']}")
             if c["cancelled_count"]:
-                parts.append(f"отмен: {c['cancelled_count']}")
+                parts.append(f"{t('cancels_label', lang)}: {c['cancelled_count']}")
             lines.append(f"• {c['client_name']} — {', '.join(parts)}")
 
     return "\n".join(lines)
 
 
-def _analytics_kb() -> InlineKeyboardMarkup:
+def _analytics_kb(lang: str = "ru") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="◀️ Назад к дашборду", callback_data="dash:day")],
+        [InlineKeyboardButton(text=t("back_to_dash", lang), callback_data="dash:day")],
     ])
 
 
 # ── Dashboard handlers ────────────────────────────────────────────────────────
 
-@router.message(F.text == "📊 Дашборд", SetupDone(), StateFilter("*"))
+@router.message(F.text.in_(all_variants("btn_dashboard")), SetupDone(), StateFilter("*"))
 async def quick_dashboard(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
     await state.clear()
+    lang = tenant.owner_lang or "ru"
     text = await _build_dashboard(tenant, "day")
     await _delete_old_info(message.bot, message.chat.id)
-    sent = await message.answer(text, reply_markup=_dashboard_kb("day"), parse_mode="HTML")
+    sent = await message.answer(text, reply_markup=_dashboard_kb("day", lang), parse_mode="HTML")
     _last_info_msg[message.chat.id] = sent.message_id
 
 
 @router.callback_query(F.data.startswith("dash:"), SetupDone())
 async def cb_dashboard_period(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    lang = tenant.owner_lang or "ru"
     period = callback.data[len("dash:"):]
     if period == "analytics":
         text = await _analytics_text(tenant)
-        await callback.message.edit_text(text, reply_markup=_analytics_kb(), parse_mode="HTML")
+        await callback.message.edit_text(text, reply_markup=_analytics_kb(lang), parse_mode="HTML")
         await callback.answer()
         return
     if period not in ("day", "week", "month"):
         await callback.answer()
         return
     text = await _build_dashboard(tenant, period)
-    await callback.message.edit_text(text, reply_markup=_dashboard_kb(period), parse_mode="HTML")
+    await callback.message.edit_text(text, reply_markup=_dashboard_kb(period, lang), parse_mode="HTML")
     await callback.answer()
 
 
@@ -580,20 +591,21 @@ async def cb_dashboard_period(callback: CallbackQuery, tenant: TenantConfig) -> 
 
 @router.callback_query(F.data.startswith("bk_card:"), SetupDone())
 async def cb_booking_card(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    lang = tenant.owner_lang or "ru"
     if not tenant.is_owner(callback.from_user.id):
-        await callback.answer("Нет доступа.", show_alert=True)
+        await callback.answer(t("no_access", lang), show_alert=True)
         return
     rest = callback.data[len("bk_card:"):]
     bid_str, date_str = rest.split("|", 1)
     booking = await repo.get_booking(int(bid_str))
     if not booking or booking["status"] == "cancelled":
-        await callback.answer("Запись не найдена или уже отменена.", show_alert=True)
+        await callback.answer(t("already_cancelled", lang), show_alert=True)
         return
     paid   = booking.get("paid") or False
     status = booking.get("status", "confirmed")
     await callback.message.edit_text(
-        _booking_card_text(dict(booking)),
-        reply_markup=_booking_card_kb(booking["id"], paid, date_str, status),
+        _booking_card_text(dict(booking), lang),
+        reply_markup=_booking_card_kb(booking["id"], paid, date_str, status, lang),
         parse_mode="HTML",
     )
     await callback.answer()
@@ -603,6 +615,7 @@ async def cb_booking_card(callback: CallbackQuery, tenant: TenantConfig) -> None
 async def cb_back_to_list(callback: CallbackQuery, tenant: TenantConfig) -> None:
     from zoneinfo import ZoneInfo
     from datetime import date as _d
+    lang = tenant.owner_lang or "ru"
     date_str = callback.data[len("bk_list|"):]
     tz = ZoneInfo(tenant.timezone or "UTC")
     target  = _d.fromisoformat(date_str)
@@ -611,12 +624,10 @@ async def cb_back_to_list(callback: CallbackQuery, tenant: TenantConfig) -> None
     events  = await get_adapter(tenant).get_events(dt_from, dt_to)
     today = datetime.now(tz).date()
     diff  = (target - today).days
-    _MON = ["января","февраля","марта","апреля","мая","июня",
-            "июля","августа","сентября","октября","ноября","декабря"]
-    prefix = {0: "Сегодня", 1: "Завтра"}.get(diff) or \
-             ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"][target.weekday()]
-    date_label = f"{prefix} {target.day} {_MON[target.month - 1]}"
-    text, kb = _schedule_text_and_kb(events, date_label, date_str)
+    prefix = {0: t("lbl_today", lang), 1: t("lbl_tomorrow", lang)}.get(diff) or \
+             DAY_SHORT[lang][target.weekday()]
+    date_label = f"{prefix} {fmt_date(target.day, target.month - 1, lang)}"
+    text, kb = _schedule_text_and_kb(events, date_label, date_str, lang)
     await callback.message.edit_text(text, reply_markup=kb)
     await callback.answer()
 
@@ -625,17 +636,18 @@ async def cb_back_to_list(callback: CallbackQuery, tenant: TenantConfig) -> None
 
 @router.callback_query(F.data.startswith("bk_paid:"), SetupDone())
 async def cb_booking_paid(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    lang = tenant.owner_lang or "ru"
     if not tenant.is_owner(callback.from_user.id):
-        await callback.answer("Нет доступа.", show_alert=True)
+        await callback.answer(t("no_access", lang), show_alert=True)
         return
     booking_id = int(callback.data.split(":")[1])
     booking = await repo.get_booking(booking_id)
     if not booking:
-        await callback.answer("Запись не найдена.", show_alert=True)
+        await callback.answer(t("not_found", lang), show_alert=True)
         return
     new_paid = not (booking.get("paid") or False)
     await repo.set_booking_paid(booking_id, new_paid)
-    await callback.answer("✅ Оплачено" if new_paid else "↩️ Оплата отменена")
+    await callback.answer(t("toast_paid", lang) if new_paid else t("toast_unpaid", lang))
     # find date_str from ◀️ back button and refresh card
     date_str = ""
     if callback.message.reply_markup:
@@ -647,8 +659,8 @@ async def cb_booking_paid(callback: CallbackQuery, tenant: TenantConfig) -> None
     status  = booking.get("status", "confirmed") if booking else "confirmed"
     try:
         await callback.message.edit_text(
-            _booking_card_text(dict(booking)),
-            reply_markup=_booking_card_kb(booking_id, new_paid, date_str, status),
+            _booking_card_text(dict(booking), lang),
+            reply_markup=_booking_card_kb(booking_id, new_paid, date_str, status, lang),
             parse_mode="HTML",
         )
     except Exception:
@@ -657,12 +669,13 @@ async def cb_booking_paid(callback: CallbackQuery, tenant: TenantConfig) -> None
 
 @router.callback_query(F.data.startswith("bk_arrived:"), SetupDone())
 async def cb_booking_arrived(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    lang = tenant.owner_lang or "ru"
     if not tenant.is_owner(callback.from_user.id):
-        await callback.answer("Нет доступа.", show_alert=True)
+        await callback.answer(t("no_access", lang), show_alert=True)
         return
     booking_id = int(callback.data.split(":")[1])
     await repo.update_booking_status(booking_id, "completed")
-    await callback.answer("✅ Отмечено — пришёл")
+    await callback.answer(t("toast_arrived", lang))
     booking  = await repo.get_booking(booking_id)
     date_str = ""
     if callback.message.reply_markup:
@@ -672,8 +685,8 @@ async def cb_booking_arrived(callback: CallbackQuery, tenant: TenantConfig) -> N
                     date_str = btn.callback_data[len("bk_list|"):]
     try:
         await callback.message.edit_text(
-            _booking_card_text(dict(booking)),
-            reply_markup=_booking_card_kb(booking_id, booking.get("paid") or False, date_str, "completed"),
+            _booking_card_text(dict(booking), lang),
+            reply_markup=_booking_card_kb(booking_id, booking.get("paid") or False, date_str, "completed", lang),
             parse_mode="HTML",
         )
     except Exception:
@@ -682,12 +695,13 @@ async def cb_booking_arrived(callback: CallbackQuery, tenant: TenantConfig) -> N
 
 @router.callback_query(F.data.startswith("bk_noshow:"), SetupDone())
 async def cb_booking_noshow(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    lang = tenant.owner_lang or "ru"
     if not tenant.is_owner(callback.from_user.id):
-        await callback.answer("Нет доступа.", show_alert=True)
+        await callback.answer(t("no_access", lang), show_alert=True)
         return
     booking_id = int(callback.data.split(":")[1])
     await repo.update_booking_status(booking_id, "no_show")
-    await callback.answer("🚫 Отмечено — не пришёл")
+    await callback.answer(t("toast_noshow", lang))
     booking  = await repo.get_booking(booking_id)
     date_str = ""
     if callback.message.reply_markup:
@@ -697,8 +711,8 @@ async def cb_booking_noshow(callback: CallbackQuery, tenant: TenantConfig) -> No
                     date_str = btn.callback_data[len("bk_list|"):]
     try:
         await callback.message.edit_text(
-            _booking_card_text(dict(booking)),
-            reply_markup=_booking_card_kb(booking_id, booking.get("paid") or False, date_str, "no_show"),
+            _booking_card_text(dict(booking), lang),
+            reply_markup=_booking_card_kb(booking_id, booking.get("paid") or False, date_str, "no_show", lang),
             parse_mode="HTML",
         )
     except Exception:
@@ -707,99 +721,98 @@ async def cb_booking_noshow(callback: CallbackQuery, tenant: TenantConfig) -> No
 
 @router.callback_query(F.data.startswith("bk_note:"), SetupDone())
 async def cb_booking_note_prompt(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
+    lang = tenant.owner_lang or "ru"
     if not tenant.is_owner(callback.from_user.id):
-        await callback.answer("Нет доступа.", show_alert=True)
+        await callback.answer(t("no_access", lang), show_alert=True)
         return
     booking_id = int(callback.data.split(":")[1])
     await state.set_state(QuickEdit.note)
-    await state.update_data(booking_id=booking_id, msg_id=callback.message.message_id)
+    await state.update_data(booking_id=booking_id, msg_id=callback.message.message_id, lang=lang)
     await callback.answer()
-    await callback.message.answer(
-        "📝 Введи заметку для этой записи\n(или /skip чтобы отменить):"
-    )
+    await callback.message.answer(t("enter_note", lang), parse_mode="HTML")
 
 
 @router.message(QuickEdit.note, Command("skip"))
 async def cb_note_skip(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    lang = data.get("lang", "ru")
     await state.clear()
-    await message.answer("Отменено.")
+    await message.answer(t("cancelled_act", lang))
 
 
 @router.message(QuickEdit.note, F.text.func(lambda x: not x.startswith("/")))
 async def cb_note_save(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
+    lang = data.get("lang", "ru")
     await repo.set_booking_note(data["booking_id"], message.text.strip())
     await state.clear()
-    await message.answer("📝 Заметка сохранена.")
+    await message.answer(t("note_saved", lang))
 
 
 @router.callback_query(F.data.startswith("bk_reschedule:"), SetupDone())
 async def cb_booking_reschedule_prompt(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
+    lang = tenant.owner_lang or "ru"
     if not tenant.is_owner(callback.from_user.id):
-        await callback.answer("Нет доступа.", show_alert=True)
+        await callback.answer(t("no_access", lang), show_alert=True)
         return
     booking_id = int(callback.data.split(":")[1])
     await state.set_state(QuickEdit.reschedule)
-    await state.update_data(booking_id=booking_id, tenant_id=tenant.id)
+    await state.update_data(booking_id=booking_id, tenant_id=tenant.id, lang=lang)
     await callback.answer()
-    await callback.message.answer(
-        "✏️ Введи новую дату и время записи\n"
-        "Например: <code>20 мая 14:00</code>\n"
-        "Или /skip чтобы отменить.",
-        parse_mode="HTML",
-    )
+    await callback.message.answer(t("enter_reschedule", lang), parse_mode="HTML")
 
 
 @router.message(QuickEdit.reschedule, Command("skip"))
 async def cb_reschedule_skip(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    lang = data.get("lang", "ru")
     await state.clear()
-    await message.answer("Отменено.")
+    await message.answer(t("cancelled_act", lang))
 
 
 @router.message(QuickEdit.reschedule, F.text.func(lambda x: not x.startswith("/")))
 async def cb_reschedule_save(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
     data = await state.get_data()
+    lang = data.get("lang", "ru")
     booking_id = data["booking_id"]
     new_dt = parse_datetime(message.text.strip(), tenant)
     if new_dt is None:
-        await message.answer(
-            "Не удалось распознать дату. Попробуй ещё раз, например: <code>20 мая 14:00</code>\n"
-            "Или /skip чтобы отменить.",
-            parse_mode="HTML",
-        )
+        await message.answer(t("bad_reschedule", lang), parse_mode="HTML")
         return
     await repo.update_booking_time(booking_id, new_dt)
     await state.clear()
     from zoneinfo import ZoneInfo
     tz = ZoneInfo(tenant.timezone or "UTC")
-    formatted = new_dt.astimezone(tz).strftime("%-d %B %H:%M")
-    await message.answer(f"✅ Запись #{booking_id} перенесена на {formatted}.")
+    formatted = fmt_date(new_dt.astimezone(tz).day, new_dt.astimezone(tz).month - 1, lang) + \
+                " " + new_dt.astimezone(tz).strftime("%H:%M")
+    await message.answer(f"✅ #{booking_id} → {formatted}")
 
 
 # ── Guided booking wizard ─────────────────────────────────────────────────────
 
 async def _start_booking(message_or_query, state: FSMContext, tenant: TenantConfig) -> None:
+    lang = tenant.owner_lang or "ru"
     cats = await repo.get_categories(tenant.id)
     if cats:
         await state.set_state(QuickBook.category)
-        text = "➕ <b>Новая запись</b>\n\nВыбери категорию:"
-        kb   = _cats_kb(cats)
+        text = f"{t('new_booking', lang)}\n\n{t('choose_cat', lang)}"
+        kb   = _cats_kb(cats, lang)
     else:
         await state.set_state(QuickBook.service)
-        text = "➕ <b>Новая запись</b>\n\nВыбери услугу:"
+        text = f"{t('new_booking', lang)}\n\n{t('choose_svc', lang)}"
         names = [s.strip() for s in tenant.services.split(",") if s.strip()]
         rows  = [[InlineKeyboardButton(text=s, callback_data=f"qb_svc:{s}")] for s in names]
-        rows.append([InlineKeyboardButton(text="❌ Отмена", callback_data="qb_cancel")])
+        rows.append([InlineKeyboardButton(text=t("btn_cancel_act", lang), callback_data="qb_cancel")])
         kb = InlineKeyboardMarkup(inline_keyboard=rows)
     if isinstance(message_or_query, Message):
-        sent = await message_or_query.answer(text, reply_markup=kb)
+        sent = await message_or_query.answer(text, reply_markup=kb, parse_mode="HTML")
     else:
-        sent = await message_or_query.message.answer(text, reply_markup=kb)
+        sent = await message_or_query.message.answer(text, reply_markup=kb, parse_mode="HTML")
         await message_or_query.answer()
-    await state.update_data(wizard_msg_id=sent.message_id)
+    await state.update_data(wizard_msg_id=sent.message_id, lang=lang)
 
 
-@router.message(F.text == "➕ Новая запись", SetupDone(), StateFilter("*"))
+@router.message(F.text.in_(all_variants("btn_new")), SetupDone(), StateFilter("*"))
 async def quick_new(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
     if not tenant.is_owner(message.from_user.id):
         return
@@ -818,14 +831,17 @@ async def cb_qb_start(callback: CallbackQuery, state: FSMContext, tenant: Tenant
 
 @router.callback_query(F.data == "qb_cancel")
 async def cb_qb_cancel(callback: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    lang = data.get("lang", "ru")
     await state.clear()
-    await callback.message.edit_text("Отменено.", reply_markup=None)
+    await callback.message.edit_text(t("cancelled_act", lang), reply_markup=None)
     await callback.answer()
 
 
 # Step 0 — category chosen
 @router.callback_query(QuickBook.category, F.data.startswith("qb_cat:"))
 async def cb_category(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
+    lang = tenant.owner_lang or "ru"
     cat_id = int(callback.data[len("qb_cat:"):])
     cats   = await repo.get_categories(tenant.id)
     cat    = next((c for c in cats if c["id"] == cat_id), None)
@@ -834,21 +850,22 @@ async def cb_category(callback: CallbackQuery, state: FSMContext, tenant: Tenant
     await state.update_data(category=cat_name)
     await state.set_state(QuickBook.service)
     await callback.message.edit_text(
-        f"➕ <b>Новая запись</b>\n"
-        f"Категория: <b>{cat_name}</b>\n\n"
-        f"Выбери услугу:",
-        reply_markup=_items_for_booking_kb(items),
+        f"{t('new_booking', lang)}\n"
+        f"{t('cat_label', lang)}: <b>{cat_name}</b>\n\n"
+        f"{t('choose_svc', lang)}",
+        reply_markup=_items_for_booking_kb(items, lang),
     )
     await callback.answer()
 
 
 @router.callback_query(QuickBook.service, F.data == "qb_back_cats")
 async def cb_back_to_cats(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
+    lang = tenant.owner_lang or "ru"
     cats = await repo.get_categories(tenant.id)
     await state.set_state(QuickBook.category)
     await callback.message.edit_text(
-        "➕ <b>Новая запись</b>\n\nВыбери категорию:",
-        reply_markup=_cats_kb(cats),
+        f"{t('new_booking', lang)}\n\n{t('choose_cat', lang)}",
+        reply_markup=_cats_kb(cats, lang),
     )
     await callback.answer()
 
@@ -856,16 +873,17 @@ async def cb_back_to_cats(callback: CallbackQuery, state: FSMContext, tenant: Te
 # Step 1 — service chosen
 @router.callback_query(QuickBook.service, F.data.startswith("qb_svc:"))
 async def cb_service(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
+    lang = tenant.owner_lang or "ru"
     service  = callback.data[len("qb_svc:"):]
     data     = await state.get_data()
     category = data.get("category", "")
     await state.update_data(service=service)
     await state.set_state(QuickBook.date)
-    cat_line = f"Категория: <b>{category}</b>\n" if category else ""
+    cat_line = f"{t('cat_label', lang)}: <b>{category}</b>\n" if category else ""
     await callback.message.edit_text(
-        f"➕ <b>Новая запись</b>\n"
-        f"{cat_line}Услуга: <b>{service}</b>\n\n"
-        f"Выбери дату:",
+        f"{t('new_booking', lang)}\n"
+        f"{cat_line}{t('svc_label', lang)}: <b>{service}</b>\n\n"
+        f"{t('choose_date', lang)}",
         reply_markup=_date_kb(tenant),
     )
     await callback.answer()
@@ -874,16 +892,17 @@ async def cb_service(callback: CallbackQuery, state: FSMContext, tenant: TenantC
 # Step 2 — date chosen
 @router.callback_query(QuickBook.date, F.data.startswith("qb_date:"))
 async def cb_date(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
+    lang = tenant.owner_lang or "ru"
     value = callback.data[len("qb_date:"):]
     data  = await state.get_data()
     service = data.get("service", "")
 
     if value == "custom":
         await callback.message.edit_text(
-            f"➕ <b>Новая запись</b>\n"
-            f"Услуга: <b>{service}</b>\n\n"
-            f"Введи дату (например <code>20.05</code> или <code>2026-05-20</code>):",
-            reply_markup=None,
+            f"{t('new_booking', lang)}\n"
+            f"{t('svc_label', lang)}: <b>{service}</b>\n\n"
+            f"{t('bad_date', lang)}",
+            reply_markup=None, parse_mode="HTML",
         )
         await callback.answer()
         return
@@ -891,17 +910,18 @@ async def cb_date(callback: CallbackQuery, state: FSMContext, tenant: TenantConf
     await state.update_data(date=value)
     await state.set_state(QuickBook.time)
     await callback.message.edit_text(
-        f"➕ <b>Новая запись</b>\n"
-        f"Услуга: <b>{service}</b>\n"
-        f"Дата: <b>{value}</b>\n\n"
-        f"Выбери время:",
-        reply_markup=await _time_kb(tenant, value),
+        f"{t('new_booking', lang)}\n"
+        f"{t('svc_label', lang)}: <b>{service}</b>\n"
+        f"{t('date_label', lang)}: <b>{value}</b>\n\n"
+        f"{t('choose_time', lang)}",
+        reply_markup=await _time_kb(tenant, value), parse_mode="HTML",
     )
     await callback.answer()
 
 
 @router.message(QuickBook.date, ~F.text.in_(MAIN_KB_TEXTS))
 async def text_date(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
+    lang = tenant.owner_lang or "ru"
     raw = message.text.strip()
     date_str: str | None = None
     for fmt in ("%d.%m", "%d.%m.%Y", "%Y-%m-%d", "%d/%m", "%d/%m/%Y"):
@@ -929,15 +949,16 @@ async def text_date(message: Message, state: FSMContext, tenant: TenantConfig) -
                     chat_id=message.chat.id,
                     message_id=wizard_msg_id,
                     text=(
-                        f"➕ <b>Новая запись</b>\n"
-                        f"Услуга: <b>{service}</b>\n\n"
-                        f"Не понял дату. Попробуй <code>20.05</code>:"
+                        f"{t('new_booking', lang)}\n"
+                        f"{t('svc_label', lang)}: <b>{service}</b>\n\n"
+                        f"{t('bad_date', lang)}"
                     ),
+                    parse_mode="HTML",
                 )
                 return
             except Exception:
                 pass
-        await message.answer("Не понял дату. Попробуй <code>20.05</code>:")
+        await message.answer(t("bad_date", lang), parse_mode="HTML")
         return
 
     await state.update_data(date=date_str)
@@ -955,25 +976,27 @@ async def text_date(message: Message, state: FSMContext, tenant: TenantConfig) -
                 chat_id=message.chat.id,
                 message_id=wizard_msg_id,
                 text=(
-                    f"➕ <b>Новая запись</b>\n"
-                    f"Услуга: <b>{service}</b>\n"
-                    f"Дата: <b>{date_str}</b>\n\n"
-                    f"Выбери время:"
+                    f"{t('new_booking', lang)}\n"
+                    f"{t('svc_label', lang)}: <b>{service}</b>\n"
+                    f"{t('date_label', lang)}: <b>{date_str}</b>\n\n"
+                    f"{t('choose_time', lang)}"
                 ),
                 reply_markup=time_kb,
+                parse_mode="HTML",
             )
             return
         except Exception:
             pass
     await message.answer(
-        f"✅ Дата: <b>{date_str}</b>\n\nВыбери время:",
-        reply_markup=time_kb,
+        f"{t('date_label', lang)}: <b>{date_str}</b>\n\n{t('choose_time', lang)}",
+        reply_markup=time_kb, parse_mode="HTML",
     )
 
 
 # Step 3 — time chosen
 @router.callback_query(QuickBook.time, F.data.startswith("qb_time:"))
-async def cb_time(callback: CallbackQuery, state: FSMContext) -> None:
+async def cb_time(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
+    lang  = tenant.owner_lang or "ru"
     value = callback.data[len("qb_time:"):]
     data  = await state.get_data()
     service  = data.get("service", "")
@@ -981,11 +1004,12 @@ async def cb_time(callback: CallbackQuery, state: FSMContext) -> None:
 
     if value == "custom":
         await callback.message.edit_text(
-            f"➕ <b>Новая запись</b>\n"
-            f"Услуга: <b>{service}</b>\n"
-            f"Дата: <b>{date_str}</b>\n\n"
-            f"Введи время (например <code>14:30</code>):",
+            f"{t('new_booking', lang)}\n"
+            f"{t('svc_label', lang)}: <b>{service}</b>\n"
+            f"{t('date_label', lang)}: <b>{date_str}</b>\n\n"
+            f"{t('bad_time', lang)}",
             reply_markup=None,
+            parse_mode="HTML",
         )
         await callback.answer()
         return
@@ -993,18 +1017,20 @@ async def cb_time(callback: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(time=value)
     await state.set_state(QuickBook.client)
     await callback.message.edit_text(
-        f"➕ <b>Новая запись</b>\n"
-        f"Услуга: <b>{service}</b>\n"
-        f"Дата: <b>{date_str}</b>\n"
-        f"Время: <b>{value}</b>\n\n"
-        f"Имя клиента:",
+        f"{t('new_booking', lang)}\n"
+        f"{t('svc_label', lang)}: <b>{service}</b>\n"
+        f"{t('date_label', lang)}: <b>{date_str}</b>\n"
+        f"{t('time_label', lang)}: <b>{value}</b>\n\n"
+        f"{t('client_name_lbl', lang)}",
         reply_markup=None,
+        parse_mode="HTML",
     )
     await callback.answer()
 
 
 @router.message(QuickBook.time, ~F.text.in_(MAIN_KB_TEXTS))
-async def text_time(message: Message, state: FSMContext) -> None:
+async def text_time(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
+    lang = tenant.owner_lang or "ru"
     raw = message.text.strip()
     data = await state.get_data()
     service  = data.get("service", "")
@@ -1022,16 +1048,17 @@ async def text_time(message: Message, state: FSMContext) -> None:
                     chat_id=message.chat.id,
                     message_id=wizard_msg_id,
                     text=(
-                        f"➕ <b>Новая запись</b>\n"
-                        f"Услуга: <b>{service}</b>\n"
-                        f"Дата: <b>{date_str}</b>\n\n"
-                        f"Формат <code>ЧЧ:ММ</code>, например <code>14:30</code>:"
+                        f"{t('new_booking', lang)}\n"
+                        f"{t('svc_label', lang)}: <b>{service}</b>\n"
+                        f"{t('date_label', lang)}: <b>{date_str}</b>\n\n"
+                        f"{t('bad_time', lang)}"
                     ),
+                    parse_mode="HTML",
                 )
                 return
             except Exception:
                 pass
-        await message.answer("Формат <code>ЧЧ:ММ</code>, например <code>14:30</code>:")
+        await message.answer(t("bad_time", lang), parse_mode="HTML")
         return
 
     await state.update_data(time=raw)
@@ -1048,17 +1075,21 @@ async def text_time(message: Message, state: FSMContext) -> None:
                 chat_id=message.chat.id,
                 message_id=wizard_msg_id,
                 text=(
-                    f"➕ <b>Новая запись</b>\n"
-                    f"Услуга: <b>{service}</b>\n"
-                    f"Дата: <b>{date_str}</b>\n"
-                    f"Время: <b>{raw}</b>\n\n"
-                    f"Имя клиента:"
+                    f"{t('new_booking', lang)}\n"
+                    f"{t('svc_label', lang)}: <b>{service}</b>\n"
+                    f"{t('date_label', lang)}: <b>{date_str}</b>\n"
+                    f"{t('time_label', lang)}: <b>{raw}</b>\n\n"
+                    f"{t('client_name_lbl', lang)}"
                 ),
+                parse_mode="HTML",
             )
             return
         except Exception:
             pass
-    await message.answer(f"✅ Время: <b>{raw}</b>\n\nИмя клиента:")
+    await message.answer(
+        f"✅ {t('time_label', lang)}: <b>{raw}</b>\n\n{t('client_name_lbl', lang)}",
+        parse_mode="HTML",
+    )
 
 
 # Step 4 — client name → create booking
@@ -1075,12 +1106,13 @@ async def text_client(message: Message, state: FSMContext, tenant: TenantConfig)
     tz_str   = tenant.timezone or "UTC"
 
     dt = parse_datetime(date_str, time_str, tz_str)
+    lang = tenant.owner_lang or "ru"
     if dt is None:
         try:
             await message.delete()
         except Exception:
             pass
-        result = "❌ Не удалось разобрать дату/время. Попробуй ещё раз."
+        result = t("booking_fail", lang)
     else:
         try:
             adapter = get_adapter(tenant)
@@ -1103,11 +1135,11 @@ async def text_client(message: Message, state: FSMContext, tenant: TenantConfig)
             result = (
                 f"✅ <b>{client_name}</b> — <b>{svc_line}</b>\n"
                 f"{date_str}, {time_str}{gcal_note}\n"
-                f"Запись #{bid}"
+                f"#{bid}"
             )
         except Exception as exc:
             log.exception("QuickBook create_event failed")
-            result = f"❌ Ошибка: {exc}"
+            result = f"❌ {exc}"
 
     try:
         await message.delete()
@@ -1121,9 +1153,10 @@ async def text_client(message: Message, state: FSMContext, tenant: TenantConfig)
                 message_id=wizard_msg_id,
                 text=result,
                 reply_markup=None,
+                parse_mode="HTML",
             )
             return
         except Exception:
             pass
 
-    await message.answer(result, reply_markup=MAIN_KB)
+    await message.answer(result, reply_markup=get_main_kb(lang), parse_mode="HTML")

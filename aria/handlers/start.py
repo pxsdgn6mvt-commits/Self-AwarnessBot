@@ -17,7 +17,7 @@ import aria.db.repo as repo
 from aria.config import settings as _settings
 from aria.filters import SetupDone
 from aria.handlers.menu import ADMIN_KB, _is_admin_bot
-from aria.handlers.quick import MAIN_KB, MAIN_KB_TEXTS
+from aria.handlers.quick import MAIN_KB_TEXTS, get_main_kb
 from aria.middleware import TenantMiddleware
 from aria.services.booking import invalidate_adapter
 from aria.tenant import TenantConfig
@@ -93,12 +93,17 @@ async def cmd_start(message: Message, state: FSMContext, tenant: TenantConfig) -
 @router.callback_query(F.data.startswith("start_lang:"), SetupDone())
 async def cb_start_lang(callback: CallbackQuery, tenant: TenantConfig) -> None:
     lang = callback.data.split(":")[1]
+    if lang not in ("ru", "en", "fi"):
+        lang = "ru"
     await repo.upsert_client(tenant.id, callback.from_user.id, lang)
+    if tenant.is_owner(callback.from_user.id):
+        await repo.update_tenant(tenant.id, owner_lang=lang)
+        TenantMiddleware.invalidate(tenant.bot_token)
     name = tenant.owner_name or callback.from_user.first_name or "друг"
     text = _WELCOME.get(lang, _WELCOME["ru"]).format(name=name, salon=tenant.salon_name)
     await callback.answer()
     await callback.message.delete()
-    await callback.message.answer(text, parse_mode="HTML", reply_markup=MAIN_KB)
+    await callback.message.answer(text, parse_mode="HTML", reply_markup=get_main_kb(lang))
 
 
 @router.message(Command("reset"))

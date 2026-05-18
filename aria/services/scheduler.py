@@ -19,6 +19,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.date import DateTrigger
 
 import aria.db.repo as repo
+from aria.i18n import DAY_SHORT, MON_SHORT, fmt_time_label, t as _t
 
 if TYPE_CHECKING:
     from aria.tenant import TenantConfig
@@ -60,6 +61,7 @@ async def _send_reminder(booking_id: int, owner_id: int, bot: Any) -> None:
     tenant_row = await repo.get_tenant(booking["tenant_id"])
     tz_str = (tenant_row.get("timezone") or "UTC") if tenant_row else "UTC"
     hours_before = int(tenant_row.get("reminder_hours_before") or 2) if tenant_row else 2
+    lang = (tenant_row.get("owner_lang") or "ru") if tenant_row else "ru"
 
     dt = booking["scheduled_at"]
     time_str = _local_time_str(dt, tz_str)
@@ -67,16 +69,12 @@ async def _send_reminder(booking_id: int, owner_id: int, bot: Any) -> None:
 
     now = datetime.now(timezone.utc)
     mins_left = int((dt - now).total_seconds() / 60)
-    if mins_left > 90:
-        time_label = f"через {hours_before} ч"
-    elif mins_left > 0:
-        time_label = f"через {mins_left} мин"
-    else:
-        time_label = "скоро"
+    time_label = fmt_time_label(mins_left, hours_before, lang)
 
+    at_word = _t("sched_in", lang)
     text = (
         f"⏰ {time_label}: <b>{booking['client_name']}</b>\n"
-        f"{booking['service']} — {date_str} в {time_str}"
+        f"{booking['service']} — {date_str} {at_word} {time_str}"
     )
     try:
         await bot.send_message(chat_id=owner_id, text=text, parse_mode="HTML")
@@ -127,6 +125,7 @@ async def _run_daily_summary(bots_getter: Callable[[], dict[int, Any]]) -> None:
         owner_id = t["owner_tg_id"]
         tz_str = t.get("timezone") or "UTC"
         summary_hour = int(t.get("daily_summary_hour") or 20)
+        lang = t.get("owner_lang") or "ru"
 
         tz = ZoneInfo(tz_str)
         now_local = datetime.now(tz)
@@ -143,16 +142,17 @@ async def _run_daily_summary(bots_getter: Callable[[], dict[int, Any]]) -> None:
             if not bookings:
                 await bot.send_message(
                     chat_id=owner_id,
-                    text="📋 Завтра записей нет — свободный день! 🎉",
+                    text=_t("sched_no_tomorrow", lang),
                 )
             else:
-                _MON  = ["янв","фев","мар","апр","май","июн","июл","авг","сен","окт","ноя","дек"]
-                _DAYS = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"]
                 tomorrow = (now_local + timedelta(days=1)).date()
-                day_hdr = f"{_DAYS[tomorrow.weekday()]} {tomorrow.day} {_MON[tomorrow.month - 1]}"
+                day_names = DAY_SHORT.get(lang, DAY_SHORT["ru"])
+                mon_names = MON_SHORT.get(lang, MON_SHORT["ru"])
+                day_hdr = f"{day_names[tomorrow.weekday()]} {tomorrow.day} {mon_names[tomorrow.month - 1]}"
                 client_names = [b["client_name"] for b in bookings]
                 statuses = await repo.get_client_statuses_batch(tid, client_names)
-                lines = [f"📋 <b>Завтра ({day_hdr}) — {len(bookings)} зап.</b>"]
+                header = _t("sched_summary_header", lang).format(day=day_hdr, n=len(bookings))
+                lines = [header]
                 for b in bookings:
                     t_str = _local_time_str(b["scheduled_at"], tz_str)
                     paid_mark = " ✅" if b.get("paid") else ""
@@ -177,14 +177,15 @@ async def _send_noshow_check(booking_id: int, owner_id: int, bot: Any) -> None:
 
     tenant_row = await repo.get_tenant(booking["tenant_id"])
     tz_str = (tenant_row.get("timezone") or "UTC") if tenant_row else "UTC"
+    lang = (tenant_row.get("owner_lang") or "ru") if tenant_row else "ru"
 
     dt = booking["scheduled_at"]
     time_str = _local_time_str(dt, tz_str)
 
-    text = (
-        f"❓ {booking['client_name']} пришла в {time_str}? "
-        f"({booking['service']})\n\n"
-        "Ответь «да» или «нет» — я обновлю запись."
+    text = _t("sched_noshow", lang).format(
+        client=booking["client_name"],
+        time=time_str,
+        service=booking["service"],
     )
     try:
         await bot.send_message(chat_id=owner_id, text=text)
@@ -196,12 +197,12 @@ async def _send_noshow_check(booking_id: int, owner_id: int, bot: Any) -> None:
 
 # ── Waitlist ──────────────────────────────────────────────────────────────────
 
-async def _notify_waitlist_client(waitlist_id: int, owner_id: int, bot: Any) -> None:
+async def _notify_waitlist_client(waitlist_id: int, owner_id: int, bot: Any, lang: str = "ru") -> None:
     await repo.mark_waitlist_notified(waitlist_id)
     try:
         await bot.send_message(
             chat_id=owner_id,
-            text="🟢 Открылось свободное окно! Проверь лист ожидания.",
+            text=_t("sched_waitlist", lang),
         )
         log.info("Waitlist notification sent (id=%d)", waitlist_id)
     except Exception as exc:
@@ -268,7 +269,7 @@ def cancel_booking_jobs(booking_id: int) -> None:
             pass
 
 
-def schedule_waitlist_notify(waitlist_id: int, owner_id: int, bot: Any) -> None:
+def schedule_waitlist_notify(waitlist_id: int, owner_id: int, bot: Any, lang: str = "ru") -> None:
     """Immediately notify owner about a waitlist opening."""
     fire_at = datetime.now(timezone.utc) + timedelta(seconds=1)
     get_scheduler().add_job(
@@ -276,7 +277,7 @@ def schedule_waitlist_notify(waitlist_id: int, owner_id: int, bot: Any) -> None:
         trigger=DateTrigger(run_date=fire_at),
         id=f"waitlist_{waitlist_id}",
         replace_existing=True,
-        args=[waitlist_id, owner_id, bot],
+        args=[waitlist_id, owner_id, bot, lang],
     )
 
 
@@ -312,16 +313,20 @@ async def _run_reactivation(bots_getter: Callable[[], dict[int, Any]]) -> None:
         if not bot:
             continue
         owner_id = t["owner_tg_id"]
+        lang = t.get("owner_lang") or "ru"
         try:
             inactive = await repo.get_clients_without_recent_booking(tid, days=45, limit=20)
             if not inactive:
                 continue
             shown = inactive[:10]
             names = "\n".join(f"• {r['client_name']}" for r in shown)
-            suffix = f" (первые 10 из {len(inactive)})" if len(inactive) > 10 else ""
+            suffix = (
+                _t("sched_reactivation_more", lang).format(total=len(inactive))
+                if len(inactive) > 10 else ""
+            )
             await bot.send_message(
                 chat_id=owner_id,
-                text=f"💤 Клиенты без визита 45+ дней{suffix}:\n\n{names}",
+                text=_t("sched_reactivation", lang).format(suffix=suffix, names=names),
             )
             log.info("Reactivation: tenant %d — %d inactive clients", tid, len(inactive))
             await asyncio.sleep(0.5)
