@@ -75,6 +75,10 @@ async def cmd_start(message: Message, state: FSMContext, tenant: TenantConfig) -
                               message.from_user.language_code or "ru")
     await repo.clear_history(tenant.id, message.from_user.id)
 
+    if tenant.owner_tg_id is None:
+        await repo.update_tenant(tenant.id, owner_tg_id=message.from_user.id)
+        TenantMiddleware.invalidate(tenant.bot_token)
+
     if _is_admin_bot(tenant, message.from_user.id):
         await message.answer(
             "👑 <b>Aria — панель управления</b>\n\n"
