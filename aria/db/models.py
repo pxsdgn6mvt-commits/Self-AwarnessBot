@@ -179,4 +179,5 @@ ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS master_percent        NUMERIC(
 ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS tax_percent           NUMERIC(5,2);
 ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS reminder_hours_before INT NOT NULL DEFAULT 2;
 ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS daily_summary_hour    INT NOT NULL DEFAULT 20;
+ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS owner_lang            VARCHAR(2) NOT NULL DEFAULT 'ru';
 """

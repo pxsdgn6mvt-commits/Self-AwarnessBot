@@ -198,7 +198,7 @@ async def list_active_owner_bots() -> list[asyncpg.Record]:
         return await conn.fetch(
             """
             SELECT id, owner_tg_id, salon_name, bot_token, timezone,
-                   reminder_hours_before, daily_summary_hour
+                   reminder_hours_before, daily_summary_hour, owner_lang
             FROM aria_tenants
             WHERE active=TRUE AND setup_complete=TRUE AND owner_tg_id IS NOT NULL
             ORDER BY id
