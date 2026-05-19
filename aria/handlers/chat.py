@@ -11,7 +11,7 @@ import asyncio
 import logging
 import time
 
-from aiogram import Bot, Router
+from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
@@ -53,15 +53,17 @@ def _has_booking_verb(text: str) -> bool:
     return any(kw in text for kw in _BOOKING_VERBS)
 
 
-async def _schedule_bypass(message: Message, tenant: TenantConfig) -> bool:
-    """
-    Try to handle message without calling AI.
-    Returns True if handled; caller should return immediately.
+async def _schedule_bypass(
+    message: Message, tenant: TenantConfig, override_text: str | None = None
+) -> bool:
+    """Try to handle message without calling AI.
 
+    Returns True if handled; caller should return immediately.
     Uses get_adapter(tenant) → GoogleAdapter when configured, so events from
     external booking services synced via GCal are included in the results.
+    override_text allows passing a transcribed voice string instead of message.text.
     """
-    text  = message.text.strip().lower()
+    text  = (override_text if override_text is not None else (message.text or "")).strip().lower()
     words = text.split()
 
     # Never bypass when the owner wants to mutate bookings
@@ -117,7 +119,74 @@ def _detect_style(text: str) -> str:
     return "casual"
 
 
-# ── Main handler ──────────────────────────────────────────────────────────────
+# ── Voice handler ─────────────────────────────────────────────────────────────
+
+@router.message(F.voice)
+async def handle_voice(message: Message, bot: Bot, state: FSMContext, tenant: Optional[TenantConfig] = None) -> None:
+    if not tenant or not tenant.setup_complete:
+        return
+
+    try:
+        current_state = await state.get_state()
+    except Exception:
+        current_state = None
+    if current_state is not None:
+        return
+
+    user_id = message.from_user.id
+    lang = tenant.owner_lang or "ru"
+
+    if not _check_rate_limit(user_id):
+        await message.answer(t("rate_limit", lang))
+        return
+
+    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+
+    from aria.services.voice import transcribe
+    user_text = await transcribe(bot, message.voice.file_id, lang=lang)
+
+    if not user_text:
+        await message.answer(t("voice_error", lang))
+        return
+
+    # Echo transcript so the owner sees what was recognised
+    await message.answer(
+        t("voice_prefix", lang).format(text=user_text),
+        parse_mode="Markdown",
+    )
+    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+
+    if await _schedule_bypass(message, tenant, override_text=user_text):
+        log.debug("Voice bypass handled: %r", user_text[:40])
+        return
+
+    style = "casual"
+    try:
+        profile = await repo.get_client_profile(tenant.id, user_id)
+        stored_style = (profile["communication_style"] if profile else None) or "casual"
+        new_style = _detect_style(user_text)
+        style = new_style
+        if new_style != stored_style:
+            asyncio.create_task(repo.update_client_style(tenant.id, user_id, new_style))
+    except Exception:
+        pass
+
+    try:
+        reply = await chat(
+            user_id=user_id,
+            user_text=user_text,
+            bot=bot,
+            tenant=tenant,
+            style=style,
+        )
+    except Exception as exc:
+        log.exception("AI error (voice) for tenant %d user %d: %s", tenant.id, user_id, exc)
+        reply = t("ai_error", lang)
+
+    await message.answer(reply)
+
+
+# ── Text handler ───────────────────────────────────────────────────────────────
 
 @router.message()
 async def handle_message(message: Message, bot: Bot, state: FSMContext, tenant: Optional[TenantConfig] = None) -> None:

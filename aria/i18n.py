@@ -228,11 +228,12 @@ T: dict[str, dict[str, str]] = {
             "<b>Тап по записи:</b>\n"
             "✅ Пришёл · 🚫 Не пришёл · 💰 Оплата\n"
             "✏️ Перенести · 📝 Заметка · ❌ Отменить\n\n"
-            "<b>Aria понимает обычные сообщения:</b>\n"
+            "<b>Aria понимает обычные сообщения и голосовые:</b>\n"
             "• «запиши Катю на стрижку 20 мая в 14:00»\n"
             "• «перенеси Катю на завтра»\n"
             "• «что свободно вечером?»\n"
-            "• «кто давно не приходил?»\n\n"
+            "• «кто давно не приходил?»\n"
+            "🎙 <b>Голосовые сообщения</b> — просто надиктуй, Aria распознает\n\n"
             "📧 <b>Почта</b> — пересылает письма от букинг-сервисов прямо в Telegram\n\n"
             "<b>Команды:</b> /reset · /status"
         ),
@@ -249,11 +250,12 @@ T: dict[str, dict[str, str]] = {
             "<b>Tap a booking:</b>\n"
             "✅ Arrived · 🚫 No-show · 💰 Payment\n"
             "✏️ Reschedule · 📝 Note · ❌ Cancel\n\n"
-            "<b>Aria understands plain messages:</b>\n"
+            "<b>Aria understands plain messages and voice:</b>\n"
             "• «book Kate for a haircut May 20 at 14:00»\n"
             "• «reschedule Kate to tomorrow»\n"
             "• «what's free this evening?»\n"
-            "• «who hasn't visited in a while?»\n\n"
+            "• «who hasn't visited in a while?»\n"
+            "🎙 <b>Voice messages</b> — just dictate, Aria transcribes it\n\n"
             "📧 <b>Email</b> — forwards booking-service emails to Telegram\n\n"
             "<b>Commands:</b> /reset · /status"
         ),
@@ -270,11 +272,12 @@ T: dict[str, dict[str, str]] = {
             "<b>Napauta varausta:</b>\n"
             "✅ Saapui · 🚫 Ei saapunut · 💰 Maksu\n"
             "✏️ Siirrä · 📝 Muistiinpano · ❌ Peruuta\n\n"
-            "<b>Aria ymmärtää tavalliset viestit:</b>\n"
+            "<b>Aria ymmärtää tavalliset viestit ja ääniviestit:</b>\n"
             "• «varaa Kaisa hiustenleikkaukseen 20.5. klo 14:00»\n"
             "• «siirrä Kaisa huomiselle»\n"
             "• «mitä on vapaana illalla?»\n"
-            "• «kenellä ei ole ollut käyntiä pitkään?»\n\n"
+            "• «kenellä ei ole ollut käyntiä pitkään?»\n"
+            "🎙 <b>Ääniviestit</b> — sano ääneen, Aria tunnistaa puheen\n\n"
             "📧 <b>Sähköposti</b> — välittää varauspalvelujen sähköpostit Telegramiin\n\n"
             "<b>Komennot:</b> /reset · /status"
         ),
@@ -352,6 +355,8 @@ T: dict[str, dict[str, str]] = {
     "reset_reply":    {"ru": "История очищена. Начнём заново — чем могу помочь?", "en": "History cleared. Let's start fresh — how can I help?", "fi": "Historia tyhjennetty. Aloitetaan alusta — miten voin auttaa?"},
     "rate_limit":     {"ru": "Слишком много сообщений подряд. Подожди минуту.", "en": "Too many messages in a row. Please wait a minute.", "fi": "Liikaa viestejä peräkkäin. Odota hetki."},
     "ai_error":       {"ru": "Что-то пошло не так. Попробуй ещё раз.", "en": "Something went wrong. Please try again.", "fi": "Jokin meni pieleen. Yritä uudelleen."},
+    "voice_error":    {"ru": "Не удалось распознать голосовое. Попробуй написать текстом.", "en": "Couldn't transcribe voice message. Try sending text instead.", "fi": "Ääniviestin tunnistus epäonnistui. Kokeile tekstiä."},
+    "voice_prefix":   {"ru": "🎙 _«{text}»_\n\n", "en": "🎙 _«{text}»_\n\n", "fi": "🎙 _«{text}»_\n\n"},
     "gcal_sync_failed": {"ru": "Запись в боте сохранена, но в Google Calendar не попала — проверь /status", "en": "Saved in bot, but Google Calendar sync failed — check /status", "fi": "Tallennettu bottiin, mutta Google Calendar -synkronointi epäonnistui — katso /status"},
     "cat_items_hdr":  {"ru": "📂 <b>{name}</b> — {n} услуг(а)\n\nНажмите 🗑 рядом с услугой, чтобы удалить.", "en": "📂 <b>{name}</b> — {n} service(s)\n\nTap 🗑 next to a service to delete it.", "fi": "📂 <b>{name}</b> — {n} palvelu(a)\n\nNapauta 🗑 palvelun vieressä poistaaksesi."},
 }
