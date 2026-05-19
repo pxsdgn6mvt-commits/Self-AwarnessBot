@@ -18,6 +18,8 @@ _CACHE_TTL = 30  # seconds
 class TenantMiddleware(BaseMiddleware):
     # Shared across all middleware instances (one per process)
     _cache: dict[str, tuple[TenantConfig, float]] = {}
+    # Permanent fallback — survives cache invalidation; used when DB is unreachable
+    _last_good: dict[str, TenantConfig] = {}
 
     async def __call__(
         self,
@@ -29,8 +31,6 @@ class TenantMiddleware(BaseMiddleware):
         if bot is None:
             return await handler(event, data)
 
-        log.debug("Update received for bot ...%s", bot.token[-8:])
-
         now = time.monotonic()
         cached = TenantMiddleware._cache.get(bot.token)
         if cached is None or (now - cached[1]) > _CACHE_TTL:
@@ -40,13 +40,26 @@ class TenantMiddleware(BaseMiddleware):
                 if row:
                     config = TenantConfig.from_record(dict(row))
                     TenantMiddleware._cache[bot.token] = (config, now)
+                    TenantMiddleware._last_good[bot.token] = config
                     cached = TenantMiddleware._cache[bot.token]
                 else:
                     log.warning("No tenant found for bot token ...%s", bot.token[-8:])
             except Exception:
                 log.exception("DB error resolving tenant for bot token ...%s", bot.token[-8:])
+                # Fall back to last known good config so voice/text messages still work
+                if cached is None and bot.token in TenantMiddleware._last_good:
+                    fallback = TenantMiddleware._last_good[bot.token]
+                    TenantMiddleware._cache[bot.token] = (fallback, now)
+                    cached = TenantMiddleware._cache[bot.token]
+                    log.warning("Using stale tenant config for bot ...%s", bot.token[-8:])
 
-        data["tenant"] = cached[0] if cached else None
+        tenant = cached[0] if cached else None
+        if tenant is None:
+            log.warning(
+                "tenant=None for bot ...%s — update will be skipped",
+                bot.token[-8:],
+            )
+        data["tenant"] = tenant
         return await handler(event, data)
 
     @classmethod

@@ -125,15 +125,13 @@ def _detect_style(text: str) -> str:
 async def handle_message(message: Message, bot: Bot, state: FSMContext, tenant: Optional[TenantConfig] = None) -> None:
     import html as _html
 
-    log.info(
-        "handle_message ENTRY: voice=%s text=%r tenant=%s setup=%s",
-        bool(message.voice),
-        (message.text or "")[:30] if message.text else None,
-        tenant.id if tenant else None,
-        tenant.setup_complete if tenant else None,
-    )
-
     if not tenant or not tenant.setup_complete:
+        if message.voice:
+            log.warning(
+                "voice dropped: tenant=%s setup=%s",
+                tenant.id if tenant else None,
+                tenant.setup_complete if tenant else None,
+            )
         return
 
     # ── Voice branch ───────────────────────────────────────────────────────────
