@@ -92,7 +92,7 @@ main.py
 
 **Цель:** клиенты записываются сами через Telegram, не беспокоя владельца.
 
-- 🔲 **S2-A: Backend API endpoints** (добавить в `server.py`)
+- ✅ **S2-A: Backend API endpoints** (добавить в `server.py`)
   ```
   GET  /api/services?tenant_id=X        → каталог услуг из aria_service_categories + items
   GET  /api/slots?tenant_id=X&date=Y    → свободные слоты на дату (из booking.py логика)
