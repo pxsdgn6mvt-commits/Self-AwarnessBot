@@ -4,20 +4,27 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Запись на приём</title>
+    <style>body{margin:0;background:#fff;font-family:sans-serif}</style>
     <script>
-      // Telegram iOS injects window.Telegram.WebApp natively.
-      // Load the polyfill only when it's not already present (browser preview).
-      window.addEventListener('DOMContentLoaded', function() {
-        if (!window.Telegram || !window.Telegram.WebApp) {
-          var s = document.createElement('script');
-          s.src = 'https://telegram.org/js/telegram-web-app.js';
-          document.head.appendChild(s);
-        }
+      window.onerror = function(msg, src, line, col, err) {
+        document.body.innerHTML =
+          '<div style="padding:20px;font-size:13px;font-family:monospace;word-break:break-all">' +
+          '<b>ERR:</b> ' + msg + '<br>' +
+          '<b>src:</b> ' + src + '<br>' +
+          '<b>line:</b> ' + line + ':' + col + '<br>' +
+          '<b>stack:</b><br>' + (err && err.stack ? err.stack : 'none') +
+          '</div>';
+        return true;
+      };
+      window.addEventListener('unhandledrejection', function(e) {
+        document.body.innerHTML =
+          '<div style="padding:20px;font-size:13px;font-family:monospace;word-break:break-all">' +
+          '<b>PROMISE ERR:</b><br>' + String(e.reason) + '</div>';
       });
     </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><p style="padding:20px;color:#888">Загрузка…</p></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
