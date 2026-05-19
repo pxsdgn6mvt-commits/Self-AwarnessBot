@@ -356,7 +356,6 @@ T: dict[str, dict[str, str]] = {
     "rate_limit":     {"ru": "Слишком много сообщений подряд. Подожди минуту.", "en": "Too many messages in a row. Please wait a minute.", "fi": "Liikaa viestejä peräkkäin. Odota hetki."},
     "ai_error":       {"ru": "Что-то пошло не так. Попробуй ещё раз.", "en": "Something went wrong. Please try again.", "fi": "Jokin meni pieleen. Yritä uudelleen."},
     "voice_error":    {"ru": "Не удалось распознать голосовое. Попробуй написать текстом.", "en": "Couldn't transcribe voice message. Try sending text instead.", "fi": "Ääniviestin tunnistus epäonnistui. Kokeile tekstiä."},
-    "voice_prefix":   {"ru": "🎙 _«{text}»_\n\n", "en": "🎙 _«{text}»_\n\n", "fi": "🎙 _«{text}»_\n\n"},
     "gcal_sync_failed": {"ru": "Запись в боте сохранена, но в Google Calendar не попала — проверь /status", "en": "Saved in bot, but Google Calendar sync failed — check /status", "fi": "Tallennettu bottiin, mutta Google Calendar -synkronointi epäonnistui — katso /status"},
     "cat_items_hdr":  {"ru": "📂 <b>{name}</b> — {n} услуг(а)\n\nНажмите 🗑 рядом с услугой, чтобы удалить.", "en": "📂 <b>{name}</b> — {n} service(s)\n\nTap 🗑 next to a service to delete it.", "fi": "📂 <b>{name}</b> — {n} palvelu(a)\n\nNapauta 🗑 palvelun vieressä poistaaksesi."},
 }

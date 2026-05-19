@@ -123,7 +123,13 @@ def _detect_style(text: str) -> str:
 
 @router.message(F.voice)
 async def handle_voice(message: Message, bot: Bot, state: FSMContext, tenant: Optional[TenantConfig] = None) -> None:
+    log.info("handle_voice: user=%s, tenant=%s, setup=%s",
+             message.from_user.id if message.from_user else "?",
+             tenant.id if tenant else None,
+             tenant.setup_complete if tenant else None)
+
     if not tenant or not tenant.setup_complete:
+        log.info("handle_voice: no tenant or setup incomplete — ignored")
         return
 
     try:
@@ -131,6 +137,7 @@ async def handle_voice(message: Message, bot: Bot, state: FSMContext, tenant: Op
     except Exception:
         current_state = None
     if current_state is not None:
+        log.info("handle_voice: FSM state active (%s) — ignored", current_state)
         return
 
     user_id = message.from_user.id
@@ -144,16 +151,18 @@ async def handle_voice(message: Message, bot: Bot, state: FSMContext, tenant: Op
 
     from aria.services.voice import transcribe
     user_text = await transcribe(bot, message.voice.file_id, lang=lang)
+    log.info("handle_voice: transcription result=%r", user_text[:60] if user_text else None)
 
     if not user_text:
         await message.answer(t("voice_error", lang))
         return
 
-    # Echo transcript so the owner sees what was recognised
-    await message.answer(
-        t("voice_prefix", lang).format(text=user_text),
-        parse_mode="Markdown",
-    )
+    import html as _html
+    try:
+        await message.answer(f"🎙 <i>«{_html.escape(user_text)}»</i>")
+    except Exception as exc:
+        log.warning("handle_voice: echo send failed: %s", exc)
+
     await bot.send_chat_action(chat_id=message.chat.id, action="typing")
 
     if await _schedule_bypass(message, tenant, override_text=user_text):
