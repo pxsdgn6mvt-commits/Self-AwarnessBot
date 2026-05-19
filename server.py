@@ -61,7 +61,7 @@ def faq():
 
 
 @app.route("/healthz")
-def health():
+def healthz():
     return "ok", 200
 
 
