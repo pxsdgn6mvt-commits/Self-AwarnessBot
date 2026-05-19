@@ -97,6 +97,22 @@ def chat():
 _MINIAPP_ORIGIN = os.getenv("MINIAPP_ORIGIN", "*")
 
 
+def _tg_notify(bot_token: str, chat_id: int, text: str) -> None:
+    """Fire-and-forget: send a Telegram message via Bot API using stdlib only."""
+    import urllib.request as _ur
+    import json as _j
+    try:
+        payload = _j.dumps({"chat_id": chat_id, "text": text, "parse_mode": "HTML"}).encode()
+        req = _ur.Request(
+            f"https://api.telegram.org/bot{bot_token}/sendMessage",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        _ur.urlopen(req, timeout=5)
+    except Exception as exc:
+        log.warning("Owner TG notification failed: %s", exc)
+
+
 @app.after_request
 def _add_cors(response: Response) -> Response:
     response.headers["Access-Control-Allow-Origin"] = _MINIAPP_ORIGIN
@@ -116,10 +132,12 @@ def _api_preflight():
 def _run(coro):
     """Run an async coroutine from a Flask sync handler."""
     loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     try:
         return loop.run_until_complete(coro)
     finally:
         loop.close()
+        asyncio.set_event_loop(None)
 
 
 async def _connect():
@@ -330,6 +348,21 @@ def api_create_booking():
 
     if err:
         return jsonify({"error": err}), 409
+
+    owner_tg_id = tenant_row["owner_tg_id"]
+    bot_token   = tenant_row["bot_token"]
+    if owner_tg_id and bot_token:
+        tz   = ZoneInfo(tenant_row["timezone"] or "UTC")
+        local = dt_utc.astimezone(tz)
+        _tg_notify(
+            bot_token,
+            owner_tg_id,
+            f"📅 <b>Новая запись через Mini App</b>\n\n"
+            f"Клиент: {client_name}\n"
+            f"Услуга: {service}\n"
+            f"Дата:   {local.strftime('%d.%m.%Y')} в {local.strftime('%H:%M')}\n"
+            f"Запись: #{booking_id}",
+        )
 
     return jsonify({"booking_id": booking_id, "confirmed": True}), 201
 

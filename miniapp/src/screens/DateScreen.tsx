@@ -30,7 +30,7 @@ export default function DateScreen({ onSelect }: Props) {
   const daysInMonth  = new Date(year, month + 1, 0).getDate();
 
   const cells: (Date | null)[] = [
-    ...Array<null>(firstWeekday).fill(null),
+    ...(Array(firstWeekday).fill(null) as null[]),
     ...Array.from({ length: daysInMonth }, (_, i) => new Date(year, month, i + 1)),
   ];
   while (cells.length % 7 !== 0) cells.push(null);

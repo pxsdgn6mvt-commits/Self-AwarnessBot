@@ -25,6 +25,8 @@ SALON_NAME              — название салона (seed для перв�
 SALON_OWNER_NAME        — имя владельца
 GOOGLE_CALENDAR_CREDENTIALS  — (опционально) JSON сервисного аккаунта
 GOOGLE_CALENDAR_ID           — (опционально) ID Google календаря
+MINIAPP_URL                  — URL задеплоенного Mini App (Cloudflare Pages / Railway)
+MINIAPP_ORIGIN               — CORS origin Mini App (совпадает с MINIAPP_URL без пути)
 ```
 
 ---
@@ -111,7 +113,7 @@ main.py
   - Авторизация: `window.Telegram.WebApp.initData` передаётся в каждый API запрос
   - Хостинг: Cloudflare Pages (бесплатно) или Railway static
 
-- 🔲 **S2-C: Интеграция бота с Mini App**
+- ✅ **S2-C: Интеграция бота с Mini App**
   - Кнопка "Записаться" в боте открывает Mini App с `tenant_id` в URL
   - Когда клиент завершил запись → бот отправляет уведомление владельцу
   - Сохранить `client_tg_id` в `aria_bookings` при записи через Mini App

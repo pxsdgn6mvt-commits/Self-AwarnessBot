@@ -10,7 +10,7 @@ from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
-    CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message,
+    CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message, WebAppInfo,
 )
 
 import aria.db.repo as repo
@@ -109,7 +109,16 @@ async def cb_start_lang(callback: CallbackQuery, tenant: TenantConfig) -> None:
     text = _WELCOME.get(lang, _WELCOME["ru"]).format(name=name, salon=tenant.salon_name)
     await callback.answer()
     await callback.message.delete()
-    await callback.message.answer(text, parse_mode="HTML", reply_markup=get_main_kb(lang))
+
+    miniapp_url = _settings.MINIAPP_URL
+    if not tenant.is_owner(callback.from_user.id) and miniapp_url:
+        url = f"{miniapp_url}?tenant_id={tenant.id}"
+        book_kb = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="📅 Записаться онлайн", web_app=WebAppInfo(url=url))
+        ]])
+        await callback.message.answer(text, parse_mode="HTML", reply_markup=book_kb)
+    else:
+        await callback.message.answer(text, parse_mode="HTML", reply_markup=get_main_kb(lang))
 
 
 @router.message(Command("reset"))
@@ -422,3 +431,20 @@ async def cmd_test_cal(message: Message, tenant: TenantConfig, caller_id: int | 
 
     if lines:
         await message.answer("\n".join(lines))
+
+
+@router.message(Command("book"), SetupDone())
+async def cmd_book(message: Message, tenant: TenantConfig) -> None:
+    miniapp_url = _settings.MINIAPP_URL
+    if not miniapp_url:
+        await message.answer("Запись через приложение временно недоступна.")
+        return
+    url = f"{miniapp_url}?tenant_id={tenant.id}"
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="📅 Записаться", web_app=WebAppInfo(url=url))
+    ]])
+    await message.answer(
+        f"📅 Запись в <b>{tenant.salon_name}</b>:",
+        parse_mode="HTML",
+        reply_markup=kb,
+    )
