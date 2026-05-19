@@ -39,6 +39,11 @@ def index():
     return _read_html("index.html")
 
 
+@app.route("/health")
+def health():
+    return jsonify({"ok": True})
+
+
 @app.route("/thank-you")
 @app.route("/thank-you.html")
 def thank_you():
