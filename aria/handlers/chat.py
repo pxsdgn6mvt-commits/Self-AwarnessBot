@@ -137,8 +137,11 @@ async def handle_voice(message: Message, bot: Bot, state: FSMContext, tenant: Op
     except Exception:
         current_state = None
     if current_state is not None:
-        log.info("handle_voice: FSM state active (%s) — ignored", current_state)
-        return
+        log.info("handle_voice: FSM state active (%s) — clearing to process voice", current_state)
+        try:
+            await state.clear()
+        except Exception:
+            pass
 
     user_id = message.from_user.id
     lang = tenant.owner_lang or "ru"
