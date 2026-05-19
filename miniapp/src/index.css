@@ -11,3 +11,7 @@ body {
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
 }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

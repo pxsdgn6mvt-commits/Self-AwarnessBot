@@ -1,4 +1,4 @@
-import { List, Section, Cell, Button, Placeholder } from '@telegram-apps/telegram-ui';
+import { List, Section, Cell, Button, Placeholder } from '../ui';
 import type { BookingState } from '../types';
 
 interface Props {
@@ -34,7 +34,6 @@ export default function ConfirmScreen({ booking }: Props) {
         <Button
           stretched
           size="l"
-          mode="outline"
           onClick={() => window.Telegram?.WebApp?.close()}
         >
           Закрыть

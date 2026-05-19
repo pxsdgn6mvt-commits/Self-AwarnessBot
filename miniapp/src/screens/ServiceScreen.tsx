@@ -1,4 +1,4 @@
-import { List, Cell, Section } from '@telegram-apps/telegram-ui';
+import { List, Cell, Section } from '../ui';
 import type { Category, ServiceItem } from '../types';
 
 interface Props {

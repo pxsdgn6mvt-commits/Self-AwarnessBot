@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { List, Section, Cell, Button } from '@telegram-apps/telegram-ui';
+import { List, Section, Cell, Button } from '../ui';
 import type { BookingState } from '../types';
 import { createBooking } from '../api';
 import './FormScreen.css';

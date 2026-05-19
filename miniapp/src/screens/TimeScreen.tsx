@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { List, Section, Cell, Placeholder, Spinner } from '@telegram-apps/telegram-ui';
+import { List, Section, Cell, Placeholder, Spinner } from '../ui';
 import { getSlots } from '../api';
 
 interface Props {

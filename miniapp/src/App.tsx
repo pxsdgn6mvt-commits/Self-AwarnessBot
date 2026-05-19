@@ -1,7 +1,4 @@
-import { useState, useEffect, Component, ReactNode } from 'react';
-import { AppRoot } from '@telegram-apps/telegram-ui';
-import '@telegram-apps/telegram-ui/dist/styles.css';
-
+import { useState, useEffect } from 'react';
 import type { BookingState, Category, Screen } from './types';
 import { getServices } from './api';
 import CategoryScreen from './screens/CategoryScreen';
@@ -12,30 +9,6 @@ import FormScreen from './screens/FormScreen';
 import ConfirmScreen from './screens/ConfirmScreen';
 
 const twa = window.Telegram?.WebApp;
-
-class ErrorBoundary extends Component<{ children: ReactNode }, { error: string | null }> {
-  state = { error: null };
-  static getDerivedStateFromError(e: Error) { return { error: e.message }; }
-  render() {
-    if (this.state.error) {
-      return (
-        <div style={{ padding: 24, color: '#fff', background: '#1c1c1e', minHeight: '100vh' }}>
-          <p>Не удалось загрузить приложение.</p>
-          <p style={{ fontSize: 13, opacity: 0.6 }}>{this.state.error}</p>
-          <button onClick={() => window.location.reload()} style={{ marginTop: 16, padding: '10px 20px' }}>
-            Попробовать снова
-          </button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
-
-function safeAppearance(): 'light' | 'dark' {
-  try { return twa?.colorScheme === 'dark' ? 'dark' : 'light'; }
-  catch { return 'light'; }
-}
 
 const PREV: Record<Screen, Screen> = {
   category: 'category',
@@ -51,15 +24,14 @@ export default function App() {
     new URLSearchParams(window.location.search).get('tenant_id') ?? '1',
   );
 
-  const [screen, setScreen]         = useState<Screen>('category');
-  const [booking, setBooking]        = useState<BookingState>({ tenantId });
-  const [categories, setCategories]  = useState<Category[]>([]);
+  const [screen, setScreen]          = useState<Screen>('category');
+  const [booking, setBooking]         = useState<BookingState>({ tenantId });
+  const [categories, setCategories]   = useState<Category[]>([]);
   const [catsLoading, setCatsLoading] = useState(true);
-  const [catsError, setCatsError]    = useState('');
+  const [catsError, setCatsError]     = useState('');
 
   useEffect(() => {
-    twa?.ready();
-    twa?.expand();
+    try { twa?.ready(); twa?.expand(); } catch { /* ignore */ }
   }, []);
 
   useEffect(() => {
@@ -69,23 +41,23 @@ export default function App() {
       .finally(() => setCatsLoading(false));
   }, [tenantId]);
 
-  // Back button wiring
   useEffect(() => {
-    if (screen === 'category' || screen === 'confirm') {
-      twa?.BackButton.hide();
-    } else {
-      twa?.BackButton.show();
-    }
-    const handler = () => setScreen(s => PREV[s]);
-    twa?.BackButton.onClick(handler);
-    return () => twa?.BackButton.offClick(handler);
+    try {
+      if (screen === 'category' || screen === 'confirm') {
+        twa?.BackButton.hide();
+      } else {
+        twa?.BackButton.show();
+      }
+      const handler = () => setScreen(s => PREV[s]);
+      twa?.BackButton.onClick(handler);
+      return () => twa?.BackButton.offClick(handler);
+    } catch { /* ignore */ }
   }, [screen]);
 
   const go = (s: Screen) => setScreen(s);
 
   return (
-    <ErrorBoundary>
-    <AppRoot appearance={safeAppearance()} platform="base">
+    <div style={{ minHeight: '100vh', background: 'var(--tg-theme-bg-color, #fff)' }}>
       {screen === 'category' && (
         <CategoryScreen
           categories={categories}
@@ -141,7 +113,6 @@ export default function App() {
       {screen === 'confirm' && (
         <ConfirmScreen booking={booking} />
       )}
-    </AppRoot>
-    </ErrorBoundary>
+    </div>
   );
 }
