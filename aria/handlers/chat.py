@@ -11,7 +11,7 @@ import asyncio
 import logging
 import time
 
-from aiogram import Bot, F, Router
+from aiogram import Bot, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
@@ -119,90 +119,80 @@ def _detect_style(text: str) -> str:
     return "casual"
 
 
-# ── Voice handler ─────────────────────────────────────────────────────────────
-
-@router.message(F.voice)
-async def handle_voice(message: Message, bot: Bot, state: FSMContext, tenant: Optional[TenantConfig] = None) -> None:
-    log.info("handle_voice: user=%s, tenant=%s, setup=%s",
-             message.from_user.id if message.from_user else "?",
-             tenant.id if tenant else None,
-             tenant.setup_complete if tenant else None)
-
-    if not tenant or not tenant.setup_complete:
-        log.info("handle_voice: no tenant or setup incomplete — ignored")
-        return
-
-    try:
-        current_state = await state.get_state()
-    except Exception:
-        current_state = None
-    if current_state is not None:
-        log.info("handle_voice: FSM state active (%s) — clearing to process voice", current_state)
-        try:
-            await state.clear()
-        except Exception:
-            pass
-
-    user_id = message.from_user.id
-    lang = tenant.owner_lang or "ru"
-
-    if not _check_rate_limit(user_id):
-        await message.answer(t("rate_limit", lang))
-        return
-
-    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
-
-    from aria.services.voice import transcribe
-    user_text = await transcribe(bot, message.voice.file_id, lang=lang)
-    log.info("handle_voice: transcription result=%r", user_text[:60] if user_text else None)
-
-    if not user_text:
-        await message.answer(t("voice_error", lang))
-        return
-
-    import html as _html
-    try:
-        await message.answer(f"🎙 <i>«{_html.escape(user_text)}»</i>")
-    except Exception as exc:
-        log.warning("handle_voice: echo send failed: %s", exc)
-
-    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
-
-    if await _schedule_bypass(message, tenant, override_text=user_text):
-        log.debug("Voice bypass handled: %r", user_text[:40])
-        return
-
-    style = "casual"
-    try:
-        profile = await repo.get_client_profile(tenant.id, user_id)
-        stored_style = (profile["communication_style"] if profile else None) or "casual"
-        new_style = _detect_style(user_text)
-        style = new_style
-        if new_style != stored_style:
-            asyncio.create_task(repo.update_client_style(tenant.id, user_id, new_style))
-    except Exception:
-        pass
-
-    try:
-        reply = await chat(
-            user_id=user_id,
-            user_text=user_text,
-            bot=bot,
-            tenant=tenant,
-            style=style,
-        )
-    except Exception as exc:
-        log.exception("AI error (voice) for tenant %d user %d: %s", tenant.id, user_id, exc)
-        reply = t("ai_error", lang)
-
-    await message.answer(reply)
-
-
-# ── Text handler ───────────────────────────────────────────────────────────────
+# ── Unified handler (voice + text) ────────────────────────────────────────────
 
 @router.message()
 async def handle_message(message: Message, bot: Bot, state: FSMContext, tenant: Optional[TenantConfig] = None) -> None:
-    if not message.text or not tenant or not tenant.setup_complete:
+    import html as _html
+
+    if not tenant or not tenant.setup_complete:
+        return
+
+    # ── Voice branch ───────────────────────────────────────────────────────────
+    if message.voice:
+        log.info("voice message: user=%s tenant=%s", message.from_user.id, tenant.id)
+
+        try:
+            current_state = await state.get_state()
+        except Exception:
+            current_state = None
+        if current_state is not None:
+            log.info("voice: FSM state active (%s) — clearing", current_state)
+            try:
+                await state.clear()
+            except Exception:
+                pass
+
+        user_id = message.from_user.id
+        lang = tenant.owner_lang or "ru"
+
+        if not _check_rate_limit(user_id):
+            await message.answer(t("rate_limit", lang))
+            return
+
+        await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+
+        from aria.services.voice import transcribe
+        user_text = await transcribe(bot, message.voice.file_id, lang=lang)
+        log.info("voice: transcript=%r", user_text[:80] if user_text else None)
+
+        if not user_text:
+            await message.answer(t("voice_error", lang))
+            return
+
+        try:
+            await message.answer(f"🎙 <i>«{_html.escape(user_text)}»</i>")
+        except Exception as exc:
+            log.warning("voice: echo send failed: %s", exc)
+
+        await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+
+        if await _schedule_bypass(message, tenant, override_text=user_text):
+            return
+
+        style = "casual"
+        try:
+            profile = await repo.get_client_profile(tenant.id, user_id)
+            new_style = _detect_style(user_text)
+            style = new_style
+            stored = (profile["communication_style"] if profile else None) or "casual"
+            if new_style != stored:
+                asyncio.create_task(repo.update_client_style(tenant.id, user_id, new_style))
+        except Exception:
+            pass
+
+        try:
+            reply = await chat(user_id=user_id, user_text=user_text,
+                               bot=bot, tenant=tenant, style=style)
+        except Exception as exc:
+            log.exception("AI error (voice) tenant=%d user=%d: %s", tenant.id, user_id, exc)
+            reply = t("ai_error", lang)
+
+        await message.answer(reply)
+        return
+
+    # ── Text branch ────────────────────────────────────────────────────────────
+    if not message.text:
         return
 
     try:
