@@ -74,22 +74,17 @@ main.py
 
 ### S1 — Quick Wins (~1 нед, только Python)
 
-- 🔲 **S1-A: Голосовые сообщения** (voice → текст → AI)
-  - Принять `voice` апдейт от владельца в `handlers/chat.py`
-  - Скачать файл через `bot.get_file()` + `bot.download_file()`
-  - Транскрибировать через OpenAI Whisper API (`openai` пакет, endpoint `/v1/audio/transcriptions`)
-  - Передать текст в существующий `services/ai.chat()` как обычное сообщение
-  - Добавить `openai>=1.0.0` в `aria/requirements.txt`
-  - Новая env var: `OPENAI_API_KEY` (только для Whisper, не для основного AI)
+- ✅ **S1-A: Голосовые сообщения** (voice → текст → AI)
+  - `aria/services/voice.py` — Whisper транскрипция
+  - `aria/handlers/chat.py` — voice branch перед текстом
+  - `aria/config.py` + `requirements.txt` — OPENAI_API_KEY, openai>=1.30.0
+  - Env var: `OPENAI_API_KEY` в Railway Variables
 
-- 🔲 **S1-B: Напоминания клиентам**
-  - Добавить в `aria/db/models.py`:
-    ```sql
-    ALTER TABLE aria_bookings ADD COLUMN IF NOT EXISTS client_tg_id BIGINT;
-    ALTER TABLE aria_bookings ADD COLUMN IF NOT EXISTS client_reminder_sent BOOLEAN DEFAULT FALSE;
-    ```
-  - В wizard `handlers/quick.py`: на шаге подтверждения сохранять `client_tg_id = update.from_user.id` (если клиент записывается сам через бота)
-  - В `services/scheduler.py`: при отправке reminder владельцу — также слать клиенту если `client_tg_id IS NOT NULL` и `client_reminder_sent = FALSE`
+- ✅ **S1-B: Напоминания клиентам**
+  - `aria/db/models.py` — колонки `client_tg_id` и `client_reminder_sent` в aria_bookings
+  - `aria/db/repo.py` — `create_booking` принимает `client_tg_id`; добавлен `mark_client_reminder_sent`
+  - `aria/services/scheduler.py` — после reminder владельцу шлёт клиенту если `client_tg_id IS NOT NULL`
+  - `client_tg_id` заполняется через Mini App (S2); из wizard остаётся NULL
 
 ---
 

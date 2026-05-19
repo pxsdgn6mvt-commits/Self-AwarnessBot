@@ -182,4 +182,8 @@ ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS daily_summary_hour    INT NOT 
 ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS owner_lang            VARCHAR(2) NOT NULL DEFAULT 'ru';
 ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS is_vip                BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS vip_until             TIMESTAMPTZ;
+
+-- ── S1-B: client reminders ────────────────────────────────────────────────────
+ALTER TABLE aria_bookings ADD COLUMN IF NOT EXISTS client_tg_id         BIGINT;
+ALTER TABLE aria_bookings ADD COLUMN IF NOT EXISTS client_reminder_sent BOOLEAN NOT NULL DEFAULT FALSE;
 """

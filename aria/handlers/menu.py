@@ -743,7 +743,7 @@ async def skip_master_percent(message: Message, state: FSMContext) -> None:
     await message.answer(t("master_deleted", lang))
 
 
-@router.message(IncomeSettings.master_percent, ~F.text.in_(MAIN_KB_TEXTS), F.text.func(lambda x: not x.startswith("/")))
+@router.message(IncomeSettings.master_percent, F.text, ~F.text.in_(MAIN_KB_TEXTS), F.text.func(lambda x: not x.startswith("/")))
 async def save_master_percent(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     lang = data.get("lang", "ru")
@@ -789,7 +789,7 @@ async def skip_tax_percent(message: Message, state: FSMContext) -> None:
     await message.answer(t("tax_deleted", lang))
 
 
-@router.message(IncomeSettings.tax_percent, ~F.text.in_(MAIN_KB_TEXTS), F.text.func(lambda x: not x.startswith("/")))
+@router.message(IncomeSettings.tax_percent, F.text, ~F.text.in_(MAIN_KB_TEXTS), F.text.func(lambda x: not x.startswith("/")))
 async def save_tax_percent(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     lang = data.get("lang", "ru")

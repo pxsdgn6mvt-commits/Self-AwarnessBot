@@ -92,6 +92,20 @@ async def _send_reminder(booking_id: int, owner_id: int, bot: Any) -> None:
     except Exception as exc:
         log.warning("Reminder failed for booking %d: %s", booking_id, exc)
 
+    # Send reminder to client too (if they booked via Mini App and have a TG ID)
+    client_tg_id = booking.get("client_tg_id")
+    if client_tg_id and not booking.get("client_reminder_sent"):
+        client_text = (
+            f"⏰ Напоминание о записи:\n"
+            f"<b>{booking['service']}</b> — {date_str} {at_word} {time_str}"
+        )
+        try:
+            await bot.send_message(chat_id=client_tg_id, text=client_text, parse_mode="HTML")
+            await repo.mark_client_reminder_sent(booking_id)
+            log.info("Client reminder sent for booking %d to user %d", booking_id, client_tg_id)
+        except Exception as exc:
+            log.warning("Client reminder failed for booking %d: %s", booking_id, exc)
+
 
 # ── Periodic reminder scan (every 15 min, handles restarts) ──────────────────
 

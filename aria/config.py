@@ -40,6 +40,7 @@ class Settings:
     SALON_CLOSE_HOUR: int
     SALON_SLOT_MINUTES: int
     SALON_WORKING_DAYS: str
+    OPENAI_API_KEY: str
     GOOGLE_CALENDAR_CREDENTIALS: Optional[str]
     GOOGLE_CALENDAR_ID: Optional[str]
 
@@ -68,6 +69,7 @@ class Settings:
         self.SALON_CLOSE_HOUR = _int("SALON_CLOSE_HOUR", 20)
         self.SALON_SLOT_MINUTES = _int("SALON_SLOT_MINUTES", 60)
         self.SALON_WORKING_DAYS = _str("SALON_WORKING_DAYS", "1,2,3,4,5,6")
+        self.OPENAI_API_KEY = _str("OPENAI_API_KEY", "")
         self.GOOGLE_CALENDAR_CREDENTIALS = os.getenv("GOOGLE_CALENDAR_CREDENTIALS")
         self.GOOGLE_CALENDAR_ID = os.getenv("GOOGLE_CALENDAR_ID")
         # Webhook mode: set WEBHOOK_BASE_URL to your Railway public domain.
