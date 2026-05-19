@@ -1,48 +1,97 @@
-# AIBeautyKit — Handoff для нового чата
+# Aria Bot — Handoff для нового чата
 
-## Сайт
-https://aibeautykit-production.up.railway.app
-Репо: pxsdgn6mvt-commits/Self-AwarnessBot, ветка main
-Папка: /home/user/Self-AwarnessBot
+## Репозиторий
+Репо: `pxsdgn6mvt-commits/Self-AwarnessBot`  
+Рабочая папка: `/home/user/Self-AwarnessBot`  
+Активная ветка разработки: `claude/aria-voice-messages-7Jt8t`  
+Стабильный снэпшот S1: `stable/s1-voice` (коммит `6dcb8d4`)
+
+## Платформа
+Railway — автодеплой из ветки `claude/aria-voice-messages-7Jt8t`.  
+Деплой происходит автоматически при каждом `git push` в эту ветку.  
+Перезапуск бота после деплоя не нужен — `/start` нажимать не нужно, бот подхватывает автоматически.
 
 ## Стек
-HTML/CSS/JS лендинг. Flask (server.py) на Railway. Procfile: `web: python server.py`
+- Python 3.11, aiogram 3.13.1, asyncpg, APScheduler
+- Anthropic Claude Haiku (`claude-haiku-4-5-20251001`) — AI чат с tool use
+- OpenAI Whisper (`whisper-1`) — транскрипция голосовых сообщений
+- PostgreSQL — всё состояние (FSM, история, брони, клиенты)
+- Flask + Gunicorn — web-часть (лендинг)
 
-## Что работает
-- Сервер запущен (Flask на порту 8080)
-- Formspree форма аудита (ID: mjglzlaa) — отправляет email
-- Чат-виджет (Claude API через /api/chat) — нужен ANTHROPIC_API_KEY в Railway Variables
+## Переменные окружения (Railway → Variables)
 
-## ПРОБЛЕМА — кнопки Stripe не работают
+| Переменная | Назначение |
+|---|---|
+| `ARIA_BOT_TOKEN` | Токен первого бота (seeds initial tenant) |
+| `ANTHROPIC_API_KEY` | Ключ Anthropic |
+| `ARIA_OWNER_TELEGRAM_ID` | Твой Telegram numeric ID (admin) |
+| `DATABASE_URL` | PostgreSQL (Railway даёт автоматически) |
+| `MANAGEMENT_BOT_TOKEN` | Токен @AriaReseptionist_Bot (admin bot) |
+| `OPENAI_API_KEY` | **НОВОЕ в S1** — ключ OpenAI для Whisper транскрипции голоса |
+| `GOOGLE_CALENDAR_CREDENTIALS` | Service account JSON (одной строкой) |
 
-Кнопки "Начать" в секции Pricing не открывают Stripe.
-Клик либо ничего не делает, либо скроллит на #audit.
+## Что работает (S1 — рабочая версия)
 
-Stripe-ссылки в index.html (строки 484, 505, 524):
-- Starter €49:  https://buy.stripe.com/9B6cN5bAP96814ScWlgYU01
-- Pro €89:      https://buy.stripe.com/eVqeVd9sHeqsfZM5tTgYU02
-- Agency €149:  https://buy.stripe.com/28E9AT34jdmobJw9K9gYU00
+### Текстовый чат (AI)
+- "запиши Катю на завтра на 2 часа дня" → AI вызывает `add_booking`, бот записывает
+- AI сразу извлекает имя клиента из первого сообщения ("Запиши Вику..." → client_name="Вика")
+- Rule-based bypass: "сегодня"/"завтра"/"ближайшие"/"эта неделя" без AI, без токенов
 
-Уже попробовали и не помогло:
-1. Убрали target="_blank"
-2. Добавили JS: window.location.assign(href) с e.preventDefault + e.stopPropagation
+### Голосовые сообщения (S1 — новое)
+- Пользователь отправляет голосовое → Whisper транскрибирует → AI обрабатывает
+- Ответ: `🎙 «транскрипт»\n\nОтвет AI` — всё в одном сообщении
+- Rate limit: 20 сообщений/мин
+- При отключённом OPENAI_API_KEY: бот отвечает "Голосовые сообщения недоступны"
 
-## Что проверить
+### Клавишное меню
+- Сегодня / Завтра / Ближайшие / Новая запись / Дашборд / Меню — из любого FSM-состояния
+- Guided booking wizard: категория → услуга → дата → время → имя клиента
 
-1. Открыть одну ссылку напрямую в браузере — работает ли сам Stripe?
-   https://buy.stripe.com/9B6cN5bAP96814ScWlgYU01
+### Google Calendar
+- Брони создаются в GCal если настроен `/set_cal`
+- Внешние брони (Yclients, Dikidi и т.д.) отображаются через GCal синк
 
-2. В Stripe Dashboard проверить:
-   - Payment Links -> статус (Active или Restricted?)
-   - Аккаунт активирован? (заполнены банковские данные?)
-   - Тестовый режим включён? (Test mode вверху Dashboard)
-
-3. Если Stripe ссылки рабочие — смотреть index.html на наличие
-   CSS/JS блокировки (pointer-events, z-index, overlapping elements)
+### Email мониторинг
+- IMAP polling каждые 5 мин → пересылка в Telegram
 
 ## Ключевые файлы
-- index.html       — лендинг (849 строк)
-- server.py        — Flask + /api/chat
-- thank-you.html   — страница после оплаты
-- aria_bot.py      — Telegram-бот Aria (Claude API)
-- railway.toml     — startCommand = "python server.py"
+
+```
+aria/
+├── handlers/chat.py       ← catch-all handler: voice + text → AI
+├── handlers/quick.py      ← reply keyboard, guided wizard, расписание
+├── handlers/start.py      ← /start, /help, /reset, /set_cal, /set_tz
+├── handlers/menu.py       ← inline меню, callback handlers
+├── handlers/email_setup.py← email setup wizard
+├── middleware.py          ← TenantMiddleware (cache + _last_good fallback)
+├── services/ai.py         ← Claude Haiku + tool use
+├── services/voice.py      ← Whisper транскрипция (НОВЫЙ в S1)
+├── services/booking.py    ← LocalAdapter + GoogleAdapter
+├── services/scheduler.py  ← APScheduler jobs
+├── i18n.py               ← переводы (ru/en/fi)
+├── config.py             ← читает env vars (в т.ч. OPENAI_API_KEY)
+└── requirements.txt      ← зависимости (в т.ч. openai>=1.30.0)
+```
+
+## Известные ограничения / что НЕ работает
+
+- Голосовые сообщения требуют `OPENAI_API_KEY` — без него фича отключена
+- Бот owner-facing: не предназначен для прямого взаимодействия с клиентами салона
+- FSM wizard не работает с голосовыми (голосовые в FSM-состоянии очищают state и уходят в AI)
+
+## Что было в S1 (краткий лог)
+
+1. Голосовые молча игнорировались (19ms, нет ответа):
+   - FSM-обработчики ловили voice через `~F.text.in_(set)` (None not in set → True)
+   - TenantMiddleware возвращал `tenant=None` при протухшем кеше
+   - Фикс: добавлен `F.text` guard во все FSM-хендлеры; добавлен `_last_good` fallback
+2. Bypass срабатывал для "запиши" (показывал расписание вместо брони):
+   - "запиши" = зап+ИШ, "запись" = зап+ИС — разные корни
+   - Фикс: добавлен `"запиш"` в `_BOOKING_VERBS`
+3. AI не извлекал имя клиента из первого сообщения:
+   - Фикс: добавлена секция "ЗАПИСЬ КЛИЕНТА" в system prompt
+4. Echo и AI-ответ приходили двумя сообщениями:
+   - Фикс: объединены в одно `f"{echo}\n\n{reply}"`
+
+## Полная документация
+Смотри `development.md` — полный reference по архитектуре, файлам, багам, деплою.
