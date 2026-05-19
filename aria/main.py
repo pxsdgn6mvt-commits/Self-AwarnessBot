@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import signal
 import sys
 
@@ -199,6 +200,17 @@ async def _ensure_initial_tenant() -> None:
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
+async def _run_web() -> None:
+    port = int(os.getenv("PORT", "8080"))
+    from aiohttp import web as aiohttp_web
+    from aria.web import create_app
+    runner = aiohttp_web.AppRunner(create_app())
+    await runner.setup()
+    site = aiohttp_web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    log.info("Mini App API listening on :%d", port)
+
+
 async def main() -> None:
     if not settings.BOT_TOKEN:
         log.critical(
@@ -254,14 +266,16 @@ async def main() -> None:
         except NotImplementedError:
             pass
 
+    web_task   = asyncio.create_task(_run_web())
     watch_task = asyncio.create_task(_watch_tenants(dp))
     await stop_event.wait()
 
     log.info("Cancelling %d polling tasks...", len(_tasks))
+    web_task.cancel()
     watch_task.cancel()
     for task in _tasks.values():
         task.cancel()
-    await asyncio.gather(*_tasks.values(), watch_task, return_exceptions=True)
+    await asyncio.gather(*_tasks.values(), watch_task, web_task, return_exceptions=True)
     await close_pool()
     log.info("Aria shutdown complete")
 
