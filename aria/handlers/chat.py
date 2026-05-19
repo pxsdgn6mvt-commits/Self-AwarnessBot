@@ -167,14 +167,16 @@ async def handle_message(message: Message, bot: Bot, state: FSMContext, tenant: 
             await message.answer(t("voice_error", lang))
             return
 
-        try:
-            await message.answer(f"🎙 <i>«{_html.escape(user_text)}»</i>")
-        except Exception as exc:
-            log.warning("voice: echo send failed: %s", exc)
+        echo = f"🎙 <i>«{_html.escape(user_text)}»</i>"
 
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
 
         if await _schedule_bypass(message, tenant, override_text=user_text):
+            # Bypass sends its own reply — echo before it as a separate message
+            try:
+                await message.answer(echo)
+            except Exception:
+                pass
             return
 
         style = "casual"
@@ -195,7 +197,7 @@ async def handle_message(message: Message, bot: Bot, state: FSMContext, tenant: 
             log.exception("AI error (voice) tenant=%d user=%d: %s", tenant.id, user_id, exc)
             reply = t("ai_error", lang)
 
-        await message.answer(reply)
+        await message.answer(f"{echo}\n\n{reply}")
         return
 
     # ── Text branch ────────────────────────────────────────────────────────────
