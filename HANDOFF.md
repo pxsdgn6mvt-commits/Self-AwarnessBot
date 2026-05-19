@@ -102,7 +102,7 @@ main.py
   - Валидация `Telegram.WebApp.initData` через HMAC-SHA256 с bot token ОБЯЗАТЕЛЬНА
   - CORS: разрешить только с домена Mini App (Cloudflare Pages)
 
-- 🔲 **S2-B: React Mini App** (новая папка `miniapp/`)
+- ✅ **S2-B: React Mini App** (новая папка `miniapp/`)
   - Стек: React + TypeScript + Vite
   - UI: [TelegramUI](https://github.com/telegram-mini-apps-dev/TelegramUI)
   - Дата: [TGDates](https://github.com/harshil21/TGDates) или react-day-picker

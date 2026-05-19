@@ -1,0 +1,82 @@
+.date-screen {
+  padding: 8px 0;
+}
+
+.cal-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+}
+
+.cal-month-label {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--tg-theme-text-color, #000);
+}
+
+.cal-nav-btn {
+  background: none;
+  border: none;
+  font-size: 26px;
+  line-height: 1;
+  padding: 4px 10px;
+  cursor: pointer;
+  color: var(--tg-theme-link-color, #007AFF);
+  border-radius: 6px;
+}
+
+.cal-nav-btn:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+.cal-nav-btn:not(:disabled):active {
+  background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+}
+
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  padding: 0 12px 16px;
+}
+
+.cal-weekday {
+  text-align: center;
+  font-size: 12px;
+  color: var(--tg-theme-hint-color, #999);
+  padding: 4px 0 8px;
+}
+
+.cal-day {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  border-radius: 50%;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.cal-day--available {
+  color: var(--tg-theme-text-color, #000);
+}
+
+.cal-day--available:active {
+  background: var(--tg-theme-button-color, #007AFF);
+  color: var(--tg-theme-button-text-color, #fff);
+}
+
+.cal-day--today {
+  font-weight: 700;
+  color: var(--tg-theme-link-color, #007AFF);
+}
+
+.cal-day--past {
+  color: var(--tg-theme-hint-color, #ccc);
+  cursor: default;
+}
