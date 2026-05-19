@@ -4,7 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Запись на приём</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script>
+      // Telegram iOS injects window.Telegram.WebApp natively.
+      // Load the polyfill only when it's not already present (browser preview).
+      window.addEventListener('DOMContentLoaded', function() {
+        if (!window.Telegram || !window.Telegram.WebApp) {
+          var s = document.createElement('script');
+          s.src = 'https://telegram.org/js/telegram-web-app.js';
+          document.head.appendChild(s);
+        }
+      });
+    </script>
   </head>
   <body>
     <div id="root"></div>
