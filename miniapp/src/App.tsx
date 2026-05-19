@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Component, ReactNode } from 'react';
 import { AppRoot } from '@telegram-apps/telegram-ui';
 import '@telegram-apps/telegram-ui/dist/styles.css';
 
@@ -12,6 +12,30 @@ import FormScreen from './screens/FormScreen';
 import ConfirmScreen from './screens/ConfirmScreen';
 
 const twa = window.Telegram?.WebApp;
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: string | null }> {
+  state = { error: null };
+  static getDerivedStateFromError(e: Error) { return { error: e.message }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: 24, color: '#fff', background: '#1c1c1e', minHeight: '100vh' }}>
+          <p>Не удалось загрузить приложение.</p>
+          <p style={{ fontSize: 13, opacity: 0.6 }}>{this.state.error}</p>
+          <button onClick={() => window.location.reload()} style={{ marginTop: 16, padding: '10px 20px' }}>
+            Попробовать снова
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function safeAppearance(): 'light' | 'dark' {
+  try { return twa?.colorScheme === 'dark' ? 'dark' : 'light'; }
+  catch { return 'light'; }
+}
 
 const PREV: Record<Screen, Screen> = {
   category: 'category',
@@ -60,7 +84,8 @@ export default function App() {
   const go = (s: Screen) => setScreen(s);
 
   return (
-    <AppRoot appearance={twa?.colorScheme ?? 'light'} platform="ios">
+    <ErrorBoundary>
+    <AppRoot appearance={safeAppearance()} platform="base">
       {screen === 'category' && (
         <CategoryScreen
           categories={categories}
@@ -117,5 +142,6 @@ export default function App() {
         <ConfirmScreen booking={booking} />
       )}
     </AppRoot>
+    </ErrorBoundary>
   );
 }
