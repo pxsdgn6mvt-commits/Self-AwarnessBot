@@ -138,7 +138,8 @@ Self-AwarnessBot/
         ├── booking.py          ← LocalAdapter + GoogleAdapter
         ├── commands.py         ← set_my_commands per bot
         ├── email_monitor.py    ← IMAP polling, forwarding to Telegram
-        └── scheduler.py        ← APScheduler jobs (reminders, no-show, reactivation)
+        ├── scheduler.py        ← APScheduler jobs (reminders, no-show, reactivation)
+        └── voice.py            ← [S1] OpenAI Whisper transcription
 ```
 
 ---
@@ -174,6 +175,7 @@ Set these in **Railway → Variables**:
 | Variable | Description |
 |---|---|
 | `MANAGEMENT_BOT_TOKEN` | Token of the admin management bot (@AriaReseptionist_Bot). That bot shows the admin panel UI instead of the salon UI. |
+| `OPENAI_API_KEY` | **[S1]** OpenAI API key for Whisper voice transcription. If not set, voice messages are rejected with `voice_error` i18n message. |
 | `GOOGLE_CALENDAR_CREDENTIALS` | Full service account JSON as a single-line string. Platform-wide; all tenants share this service account. |
 | `GOOGLE_CALENDAR_ID` | Default calendar ID (can be set per-tenant via /set_cal). |
 
@@ -314,6 +316,7 @@ requests>=2.31.0
 google-auth>=2.0.0
 google-api-python-client>=2.0.0
 tzdata>=2024.1
+openai>=1.30.0       # [S1] Whisper voice transcription
 ```
 
 ### `aria/railway.toml`
@@ -348,9 +351,9 @@ Key properties:
 ### `aria/middleware.py`
 `TenantMiddleware` — resolves `TenantConfig` from `bot.token` on every update.
 - Cache TTL: 30 seconds (in-memory dict `{token: (TenantConfig, timestamp)}`)
+- **[S1]** `_last_good: dict[str, TenantConfig]` — permanent fallback dict. On DB error when cache is empty, uses last known good TenantConfig instead of returning `None`. Prevents voice and text messages from being silently dropped after a transient DB hiccup.
 - Always sets `data["tenant"] = None` when not found (prevents DI crash)
 - `TenantMiddleware.invalidate(bot_token)` — call after any tenant config change
-- Uses `log.debug` not `log.info` to avoid log spam on every update
 
 ### `aria/filters.py`
 Two filters using `**kwargs` pattern (required in aiogram 3 for DI):
@@ -527,13 +530,32 @@ Filter types:
 ### `aria/handlers/chat.py`
 Catch-all handler — LAST router, no filters on `@router.message()`.
 
+**[S1] Voice branch** (runs before text branch):
+1. Check `message.voice` → transcribe via `aria.services.voice.transcribe(bot, file_id, lang)`
+2. If transcription fails → `t("voice_error", lang)`
+3. Echo `🎙 <i>«transcript»</i>` built but NOT sent standalone
+4. Run `_schedule_bypass(message, tenant, override_text=user_text)` with transcribed text
+5. If bypass hits → send echo alone, return
+6. Otherwise → call `chat()` AI service → send `f"{echo}\n\n{reply}"` as one message
+7. If FSM state is active → cleared before voice processing (voice always goes to AI)
+
 Rule-based bypass (no AI tokens):
 - "сегодня" / "завтра" (≤6 words, no booking verbs) → `_show_schedule`
 - "ближайш" → `quick_upcoming`
 - "следующая неделя" → `_show_week(offset=1)`
 - "эта неделя" → `_show_week(offset=0)`
 
-FSM guard:
+`_BOOKING_VERBS` (bypass is blocked when any of these appear in text):
+```python
+_BOOKING_VERBS = [
+    "запис", "запиш",  # запись/записать + запиши/запишешь (разные морфемы!)
+    "добавь", "добавить", "перенес", "отмен",
+    "свободн", "проверь", "убери", "удали",
+]
+```
+**[S1]** Added `"запиш"` — imperative "запиши" has root зап+ИШ, not зап+ИС.
+
+FSM guard (text branch only):
 ```python
 current_state = await state.get_state()
 if current_state is not None:
@@ -556,6 +578,15 @@ History limit: 40 messages (trimmed from oldest, preserving tool_use/tool_result
 
 System prompt: embeds tenant config + style + TODAY date. Uses `cache_control: ephemeral` for prompt caching.
 
+**[S1]** System prompt now includes "ЗАПИСЬ КЛИЕНТА" section:
+```
+— Из первого сообщения сразу извлеки всё доступное: имя клиента, услугу, дату, время
+— Имя клиента часто стоит в начале: «Запиши Вику…» → client_name = «Вика»
+— Уточняй только то, чего реально не хватает для add_booking — по одному вопросу
+— Как только все 4 поля известны — немедленно вызывай add_booking, не переспрашивай
+— Если клиент назван местоимением («её», «его») — ищи имя в предыдущих сообщениях
+```
+
 Tools (5):
 - `get_schedule(date|date_from+date_to)` — list bookings for date/range
 - `check_availability(date, time, service)` — is this slot free?
@@ -568,6 +599,21 @@ AI rules in system prompt (enforced):
 - If tool returns `"error"` field → booking NOT created, tell user
 - Never claim GCal booking without `"google_calendar": true` in tool response
 - If `"google_calendar": false` → tell owner it's saved only in bot
+
+### `aria/services/voice.py` [S1 — NEW]
+OpenAI Whisper voice transcription.
+
+```python
+async def transcribe(bot: "Bot", file_id: str, lang: str = "ru") -> Optional[str]:
+```
+
+Flow:
+1. Check `settings.OPENAI_API_KEY` — return `None` if not set (disables feature)
+2. `bot.get_file(file_id)` + `bot.download_file(...)` → `io.BytesIO` named `"voice.ogg"`
+3. `openai.AsyncOpenAI(api_key=api_key).audio.transcriptions.create(model="whisper-1", ...)`
+4. Return `result.text.strip()` or `None` if empty
+
+Language map: `{"ru": "ru", "en": "en", "fi": "fi"}` — passed as `language` param to Whisper.
 
 ### `aria/services/booking.py`
 Two adapter classes implementing `BookingAdapter` ABC.
@@ -679,6 +725,51 @@ All four bug groups were introduced during a code merge/refactor where old code 
 
 ---
 
+## S1 Voice Feature Bugs (2026-05-19)
+
+### Bug 5 — `~F.text.in_(set)` matches voice messages (text=None)
+**Files:** `aria/handlers/quick.py`, `start.py`, `email_setup.py`, `menu.py`  
+**Symptom:** Voice messages silently consumed by FSM step handlers. Log shows 19ms update processing. No response from bot.  
+**Root cause:** Magic filter evaluation: `F.text.in_(frozenset(...)).resolve(msg)` = `False` when `msg.text is None`. Applying `~` negates it: `~False = True`. So FSM step handlers with filter `~F.text.in_(MAIN_KB_TEXTS)` matched voice messages (text=None) and crashed inside when doing `message.text.strip()`.  
+**Fix:** Add explicit `F.text` as an additional filter on all FSM step handlers:
+```python
+# BROKEN — matches voice (text=None):
+@router.message(QuickBook.date, ~F.text.in_(MAIN_KB_TEXTS))
+
+# CORRECT — requires text to be non-None first:
+@router.message(QuickBook.date, F.text, ~F.text.in_(MAIN_KB_TEXTS))
+```
+Applied to: `QuickBook.date/time/client`, `QuickEdit.note/reschedule`, `OwnerSettings.waiting_cal_id/waiting_tz`, `EmailFilter.value`, `EmailSetup.address/host/password`, `IncomeSettings.master_percent/tax_percent`.
+
+### Bug 6 — Russian morphology: "запиши" not matched by "запис"
+**File:** `aria/handlers/chat.py`, `_BOOKING_VERBS` list  
+**Symptom:** "Запиши Вику на завтра" → shows tomorrow's schedule instead of starting a booking. Bypass incorrectly fired.  
+**Root cause:** Russian morphology — "запиши" (imperative, record!) is зап+**ИШ**+и, while "запись"/"записать" (noun/infinitive) is зап+**ИС**+ь/ать. The substring `"запис"` is NOT in `"запиши"`. So `_has_booking_verb` returned False → bypass was not blocked → "завтра" in ≤6 word message → `_show_schedule` fired.  
+**Fix:** Add `"запиш"` to booking verbs (catches imperative + future forms: запиши, запишешь, запишем):
+```python
+_BOOKING_VERBS = [
+    "запис", "запиш",  # запись/записать + запиши/запишешь (разные морфемы)
+    ...
+]
+```
+
+### Bug 7 — TenantMiddleware returns `tenant=None` on DB cache miss
+**File:** `aria/middleware.py`  
+**Symptom:** After DB connection blip, all messages silently dropped for up to 30 seconds.  
+**Root cause:** When cache TTL expired AND DB query failed, `cached` was still `None`. Code fell through to `tenant = cached[0] if cached else None` → `data["tenant"] = None`. Handler silently returned at `if not tenant or not tenant.setup_complete`.  
+**Fix:** Added `_last_good: dict[str, TenantConfig]` permanent dict. On successful DB fetch, stores the config there. On DB error with empty cache, promotes last good config back to cache:
+```python
+_last_good: dict[str, TenantConfig] = {}
+
+# On error:
+if cached is None and bot.token in TenantMiddleware._last_good:
+    fallback = TenantMiddleware._last_good[bot.token]
+    TenantMiddleware._cache[bot.token] = (fallback, now)
+    cached = TenantMiddleware._cache[bot.token]
+```
+
+---
+
 ## 8. Railway Deployment
 
 ### Initial Setup
@@ -713,6 +804,12 @@ The build command installs from `aria/requirements.txt` (not root `requirements.
 
 ### TelegramConflictError on deploy
 During rolling deploy, old and new containers briefly overlap (5-10 seconds). Both try to poll the same bot → `TelegramConflictError`. This is expected and harmless — resolves automatically when the old container stops. Do not treat as a code bug.
+
+### [S1] Auto-deploy from feature branch
+Railway is configured to watch `claude/aria-voice-messages-7Jt8t` branch.  
+Every `git push -u origin claude/aria-voice-messages-7Jt8t` triggers a deploy automatically.  
+No manual redeploy needed; users don't need to press /start after a deploy.  
+Stable snapshot: `stable/s1-voice` branch — checkout this to roll back.
 
 ### Adding a New Bot
 1. Get a new token from @BotFather

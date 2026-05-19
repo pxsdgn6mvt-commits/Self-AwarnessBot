@@ -1,5 +1,36 @@
 # Aria Bot — версии
 
+## S1 (voice) — 2026-05-19 (текущая рабочая версия)
+
+**Коммит:** `6dcb8d4` (stable/s1-voice)  
+**Ветка деплоя:** `claude/aria-voice-messages-7Jt8t`  
+**Стабильный снэпшот:** `stable/s1-voice`
+
+### Как восстановить эту версию
+
+```bash
+git checkout stable/s1-voice
+```
+
+### Что добавлено/исправлено в S1
+
+**Новое:**
+- Голосовые сообщения через OpenAI Whisper (`aria/services/voice.py`)
+- `OPENAI_API_KEY` в конфиге и env vars
+- `openai>=1.30.0` в requirements
+- i18n ключи: `voice_error`, обновлён `help_text`
+- Голос и ответ AI в одном сообщении: `🎙 «транскрипт»\n\nОтвет`
+
+**Исправлено:**
+- FSM-хендлеры ловили voice (text=None): добавлен `F.text` guard в quick.py, start.py, email_setup.py, menu.py
+- TenantMiddleware возвращал `tenant=None` при DB-ошибке: добавлен `_last_good` permanent dict
+- Bypass срабатывал для "запиши" (не матчилось "запис"): добавлен `"запиш"` в `_BOOKING_VERBS`
+- AI не извлекал имя клиента: добавлена секция "ЗАПИСЬ КЛИЕНТА" в system prompt
+
+**Требует:** `OPENAI_API_KEY` в Railway → Variables
+
+---
+
 ## v1.0.0 — 2026-05-17 (рабочая продакшн-версия)
 
 **Коммит:** `230cc350c663c5b7ebd41bb283d16d0a776082ff`  
