@@ -746,7 +746,7 @@ async def cb_note_skip(message: Message, state: FSMContext) -> None:
     await message.answer(t("cancelled_act", lang))
 
 
-@router.message(QuickEdit.note, F.text.func(lambda x: not x.startswith("/")))
+@router.message(QuickEdit.note, F.text, F.text.func(lambda x: not x.startswith("/")))
 async def cb_note_save(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     lang = data.get("lang", "ru")
@@ -776,7 +776,7 @@ async def cb_reschedule_skip(message: Message, state: FSMContext) -> None:
     await message.answer(t("cancelled_act", lang))
 
 
-@router.message(QuickEdit.reschedule, F.text.func(lambda x: not x.startswith("/")))
+@router.message(QuickEdit.reschedule, F.text, F.text.func(lambda x: not x.startswith("/")))
 async def cb_reschedule_save(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
     data = await state.get_data()
     lang = data.get("lang", "ru")
@@ -925,7 +925,7 @@ async def cb_date(callback: CallbackQuery, state: FSMContext, tenant: TenantConf
     await callback.answer()
 
 
-@router.message(QuickBook.date, ~F.text.in_(MAIN_KB_TEXTS))
+@router.message(QuickBook.date, F.text, ~F.text.in_(MAIN_KB_TEXTS))
 async def text_date(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
     lang = tenant.owner_lang or "ru"
     raw = message.text.strip()
@@ -1034,7 +1034,7 @@ async def cb_time(callback: CallbackQuery, state: FSMContext, tenant: TenantConf
     await callback.answer()
 
 
-@router.message(QuickBook.time, ~F.text.in_(MAIN_KB_TEXTS))
+@router.message(QuickBook.time, F.text, ~F.text.in_(MAIN_KB_TEXTS))
 async def text_time(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
     lang = tenant.owner_lang or "ru"
     raw = message.text.strip()
@@ -1099,7 +1099,7 @@ async def text_time(message: Message, state: FSMContext, tenant: TenantConfig) -
 
 
 # Step 4 — client name → create booking
-@router.message(QuickBook.client, ~F.text.in_(MAIN_KB_TEXTS))
+@router.message(QuickBook.client, F.text, ~F.text.in_(MAIN_KB_TEXTS))
 async def text_client(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
     client_name = message.text.strip()
     data = await state.get_data()
