@@ -4,7 +4,7 @@
 2026-05-21
 
 ## Active Sprint
-None — ожидание Sprint 003
+003-reliability
 
 ## Project Status
 
