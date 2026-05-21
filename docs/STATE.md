@@ -4,7 +4,7 @@
 2026-05-21
 
 ## Active Sprint
-002-miniapp-integration
+None — ожидание Sprint 003
 
 ## Project Status
 
@@ -28,7 +28,7 @@
 | Client reminders (not just owner) | 🔲 Not started |
 
 ## Last Completed Sprint
-001-initial-setup — DONE (все 11 acceptance criteria ✅)
+002-miniapp-integration — DONE (все 5 must-pass criteria ✅)
 
 ## Known Open Issues
 - No known critical bugs in production as of 2026-05-21
