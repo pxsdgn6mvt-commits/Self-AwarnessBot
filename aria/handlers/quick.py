@@ -129,7 +129,7 @@ def _date_kb(tenant: TenantConfig) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-async def _time_kb(tenant: TenantConfig, date_str: str) -> InlineKeyboardMarkup:
+async def _time_kb(tenant: TenantConfig, date_str: str) -> InlineKeyboardMarkup | None:
     from zoneinfo import ZoneInfo
     lang = tenant.owner_lang or "ru"
     tz = ZoneInfo(tenant.timezone or "UTC")
@@ -143,6 +143,8 @@ async def _time_kb(tenant: TenantConfig, date_str: str) -> InlineKeyboardMarkup:
             buttons.append(InlineKeyboardButton(text=label, callback_data=f"qb_time:{label}"))
         total = h * 60 + m + tenant.slot_minutes
         h, m = divmod(total, 60)
+    if not buttons:
+        return None
     rows = [buttons[i:i+3] for i in range(0, len(buttons), 3)]
     rows.append([InlineKeyboardButton(text=t("other_time", lang), callback_data="qb_time:custom")])
     rows.append([InlineKeyboardButton(text=t("btn_cancel_act", lang), callback_data="qb_cancel")])
@@ -913,6 +915,18 @@ async def cb_date(callback: CallbackQuery, state: FSMContext, tenant: TenantConf
         await callback.answer()
         return
 
+    time_kb = await _time_kb(tenant, value)
+    if time_kb is None:
+        await callback.message.edit_text(
+            f"{t('new_booking', lang)}\n"
+            f"{t('svc_label', lang)}: <b>{service}</b>\n"
+            f"{t('date_label', lang)}: <b>{value}</b>\n\n"
+            f"{t('no_free_slots', lang)}",
+            reply_markup=_date_kb(tenant), parse_mode="HTML",
+        )
+        await state.set_state(QuickBook.date)
+        await callback.answer()
+        return
     await state.update_data(date=value)
     await state.set_state(QuickBook.time)
     await callback.message.edit_text(
@@ -920,7 +934,7 @@ async def cb_date(callback: CallbackQuery, state: FSMContext, tenant: TenantConf
         f"{t('svc_label', lang)}: <b>{service}</b>\n"
         f"{t('date_label', lang)}: <b>{value}</b>\n\n"
         f"{t('choose_time', lang)}",
-        reply_markup=await _time_kb(tenant, value), parse_mode="HTML",
+        reply_markup=time_kb, parse_mode="HTML",
     )
     await callback.answer()
 
@@ -967,15 +981,39 @@ async def text_date(message: Message, state: FSMContext, tenant: TenantConfig) -
         await message.answer(t("bad_date", lang), parse_mode="HTML")
         return
 
-    await state.update_data(date=date_str)
-    await state.set_state(QuickBook.time)
-
     try:
         await message.delete()
     except Exception:
         pass
 
     time_kb = await _time_kb(tenant, date_str)
+    if time_kb is None:
+        no_slots_text = (
+            f"{t('new_booking', lang)}\n"
+            f"{t('svc_label', lang)}: <b>{service}</b>\n"
+            f"{t('date_label', lang)}: <b>{date_str}</b>\n\n"
+            f"{t('no_free_slots', lang)}"
+        )
+        if wizard_msg_id:
+            try:
+                await message.bot.edit_message_text(
+                    chat_id=message.chat.id,
+                    message_id=wizard_msg_id,
+                    text=no_slots_text,
+                    reply_markup=_date_kb(tenant),
+                    parse_mode="HTML",
+                )
+                await state.set_state(QuickBook.date)
+                return
+            except Exception:
+                pass
+        await message.answer(t("no_free_slots", lang), parse_mode="HTML")
+        await state.set_state(QuickBook.date)
+        return
+
+    await state.update_data(date=date_str)
+    await state.set_state(QuickBook.time)
+
     if wizard_msg_id:
         try:
             await message.bot.edit_message_text(

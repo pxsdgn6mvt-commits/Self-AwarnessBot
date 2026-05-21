@@ -415,7 +415,8 @@ async def get_slots_on_date(tenant_id: int, date_str: str) -> list[datetime]:
         rows = await conn.fetch(
             """
             SELECT scheduled_at FROM aria_bookings
-            WHERE tenant_id=$1 AND scheduled_at::date=$2 AND status='confirmed'
+            WHERE tenant_id=$1 AND scheduled_at::date=$2
+              AND status IN ('confirmed', 'pending')
             """,
             tenant_id, date_obj,
         )

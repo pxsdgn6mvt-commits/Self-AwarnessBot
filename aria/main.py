@@ -16,7 +16,8 @@ import os
 import signal
 import sys
 import urllib.parse
-from datetime import datetime
+from datetime import date as _date, datetime
+from zoneinfo import ZoneInfo
 
 from aiohttp import web as aio_web
 
@@ -267,9 +268,36 @@ async def _handle_services(request: aio_web.Request) -> aio_web.Response:
 
 
 async def _handle_slots(request: aio_web.Request) -> aio_web.Response:
-    date_str = request.match_info["date"]
-    # TD-002: conflict checking not implemented yet — returns fixed 09:00-18:00 hourly slots
-    slots = [f"{h:02d}:00" for h in range(9, 19)]
+    bot_token = request.match_info["bot_token"]
+    date_str  = request.match_info["date"]
+    pool      = request.app["pool"]
+
+    tenant_row = await pool.fetchrow(
+        "SELECT id, open_hour, close_hour, slot_minutes, timezone FROM aria_tenants WHERE bot_token=$1",
+        bot_token,
+    )
+    if not tenant_row:
+        return aio_web.json_response({"error": "tenant not found"}, status=404)
+
+    tz = ZoneInfo(tenant_row["timezone"] or "UTC")
+    date_obj = _date.fromisoformat(date_str)
+    booked_rows = await pool.fetch(
+        "SELECT scheduled_at FROM aria_bookings "
+        "WHERE tenant_id=$1 AND scheduled_at::date=$2 AND status IN ('confirmed','pending')",
+        tenant_row["id"], date_obj,
+    )
+    booked = {row["scheduled_at"].astimezone(tz).strftime("%H:%M") for row in booked_rows}
+
+    slot_min = tenant_row["slot_minutes"] or 60
+    h, m = tenant_row["open_hour"], 0
+    slots: list[str] = []
+    while h < tenant_row["close_hour"]:
+        label = f"{h:02d}:{m:02d}"
+        if label not in booked:
+            slots.append(label)
+        total = h * 60 + m + slot_min
+        h, m = divmod(total, 60)
+
     return aio_web.json_response({"date": date_str, "slots": slots})
 
 
