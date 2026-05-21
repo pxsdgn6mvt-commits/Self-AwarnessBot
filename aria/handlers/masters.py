@@ -40,6 +40,10 @@ def _masters_text_and_kb(masters: list) -> tuple[str, InlineKeyboardMarkup]:
 
     rows = []
     for m in masters:
+        rows.append([InlineKeyboardButton(
+            text=f"📅 Расписание {m['name']}",
+            callback_data=f"cfg:avail:{m['id']}",
+        )])
         if m["is_active"] and not m["is_owner"]:
             rows.append([InlineKeyboardButton(
                 text=f"🚫 Деактивировать {m['name']}",

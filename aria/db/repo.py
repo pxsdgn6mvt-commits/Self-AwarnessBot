@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import date as _date, datetime, timedelta, timezone
+from datetime import date as _date, datetime, time as _time, timedelta, timezone
 from typing import Any, Optional
 
 import asyncpg
@@ -873,3 +873,59 @@ async def set_master_active(master_id: int, is_active: bool) -> None:
         await conn.execute(
             "UPDATE aria_masters SET is_active=$1 WHERE id=$2", is_active, master_id
         )
+
+
+# ── Availability ──────────────────────────────────────────────────────────────
+
+async def create_availability(
+    tenant_id: int,
+    master_id: int,
+    date: _date,
+    is_open: bool,
+    time_from: Optional[_time] = None,
+    time_to: Optional[_time] = None,
+    note: Optional[str] = None,
+) -> int:
+    async with _p().acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO aria_availability
+                (tenant_id, master_id, date, is_open, time_from, time_to, note)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING id
+            """,
+            tenant_id, master_id, date, is_open, time_from, time_to, note,
+        )
+        return row["id"]
+
+
+async def get_availability(
+    master_id: int,
+    from_date: Optional[_date] = None,
+) -> list[asyncpg.Record]:
+    if from_date is None:
+        from_date = _date.today()
+    async with _p().acquire() as conn:
+        return await conn.fetch(
+            """
+            SELECT * FROM aria_availability
+            WHERE master_id=$1 AND date >= $2
+            ORDER BY date ASC
+            """,
+            master_id, from_date,
+        )
+
+
+async def delete_availability(avail_id: int) -> None:
+    async with _p().acquire() as conn:
+        await conn.execute(
+            "DELETE FROM aria_availability WHERE id=$1", avail_id
+        )
+
+
+async def get_tenant_slot_minutes(tenant_id: int) -> int:
+    async with _p().acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT slot_minutes FROM aria_tenants WHERE id=$1", tenant_id
+        )
+        return row["slot_minutes"] if row else 60
