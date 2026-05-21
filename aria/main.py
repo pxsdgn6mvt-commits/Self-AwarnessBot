@@ -8,9 +8,17 @@ A background watcher picks up new tenants and drops removed ones every 10 s.
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import hmac
+import json
 import logging
+import os
 import signal
 import sys
+import urllib.parse
+from datetime import datetime
+
+from aiohttp import web as aio_web
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
@@ -21,10 +29,12 @@ from aiogram.types import ErrorEvent
 from aria import runtime
 from aria.config import settings
 from aria.db.fsm_storage import PostgresFSMStorage
+from aria.db import repo
 from aria.db.repo import (
     close_pool, create_tenant, get_tenant, get_tenant_by_token,
     init_db, list_active_tenants,
 )
+from aria.services.notifications import notify_owner
 from aria.handlers import admin, chat, email_setup, menu, quick, start
 from aria.handlers.setup import router as setup_router
 from aria.middleware import TenantMiddleware
@@ -197,6 +207,130 @@ async def _ensure_initial_tenant() -> None:
         log.info("Created initial tenant #%d (%s)", tid, settings.SALON_NAME)
 
 
+# ── Mini App API (aiohttp) ────────────────────────────────────────────────────
+
+def _validate_init_data(init_data: str, bot_token: str) -> bool:
+    try:
+        parsed = dict(x.split("=", 1) for x in init_data.split("&"))
+        data_check = "\n".join(
+            f"{k}={v}" for k, v in sorted(parsed.items()) if k != "hash"
+        )
+        secret = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
+        expected = hmac.new(secret, data_check.encode(), hashlib.sha256).hexdigest()
+        return hmac.compare_digest(expected, parsed.get("hash", ""))
+    except Exception:
+        return False
+
+
+def _parse_user_id(init_data: str) -> int:
+    try:
+        parsed = dict(x.split("=", 1) for x in init_data.split("&"))
+        user_obj = json.loads(urllib.parse.unquote(parsed.get("user", "{}")))
+        return int(user_obj.get("id", 0))
+    except Exception:
+        return 0
+
+
+@aio_web.middleware
+async def _cors_middleware(request: aio_web.Request, handler):
+    if request.method == "OPTIONS":
+        resp = aio_web.Response()
+    else:
+        resp = await handler(request)
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    resp.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Telegram-Init-Data"
+    resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    return resp
+
+
+async def _handle_categories(request: aio_web.Request) -> aio_web.Response:
+    bot_token = request.match_info["bot_token"]
+    pool = request.app["pool"]
+    rows = await pool.fetch(
+        "SELECT id, name FROM aria_service_categories "
+        "WHERE tenant_id=(SELECT id FROM aria_tenants WHERE bot_token=$1) "
+        "ORDER BY position, id",
+        bot_token,
+    )
+    return aio_web.json_response([dict(r) for r in rows])
+
+
+async def _handle_services(request: aio_web.Request) -> aio_web.Response:
+    category_id = int(request.match_info["category_id"])
+    pool = request.app["pool"]
+    rows = await pool.fetch(
+        "SELECT id, name, price, duration_minutes FROM aria_service_items "
+        "WHERE category_id=$1 ORDER BY position, id",
+        category_id,
+    )
+    return aio_web.json_response([dict(r) for r in rows])
+
+
+async def _handle_slots(request: aio_web.Request) -> aio_web.Response:
+    date_str = request.match_info["date"]
+    # TD-002: conflict checking not implemented yet — returns fixed 09:00-18:00 hourly slots
+    slots = [f"{h:02d}:00" for h in range(9, 19)]
+    return aio_web.json_response({"date": date_str, "slots": slots})
+
+
+async def _handle_booking(request: aio_web.Request) -> aio_web.Response:
+    bot_token = request.match_info["bot_token"]
+    init_data = request.headers.get("X-Telegram-Init-Data", "")
+
+    if not _validate_init_data(init_data, bot_token):
+        return aio_web.json_response({"error": "unauthorized"}, status=401)
+
+    pool = request.app["pool"]
+    bots: dict[int, Bot] = request.app["bots"]
+
+    body = await request.json()
+
+    tenant_row = await pool.fetchrow(
+        "SELECT id, owner_tg_id FROM aria_tenants WHERE bot_token=$1",
+        bot_token,
+    )
+    if not tenant_row:
+        return aio_web.json_response({"error": "tenant not found"}, status=404)
+
+    user_id = _parse_user_id(init_data) or body.get("user_id", 0)
+
+    try:
+        scheduled_at = datetime.fromisoformat(body["scheduled_at"])
+    except (KeyError, ValueError) as exc:
+        return aio_web.json_response({"error": f"invalid scheduled_at: {exc}"}, status=400)
+
+    booking_id = await repo.create_booking(
+        tenant_id=tenant_row["id"],
+        user_id=user_id,
+        client_name=body["client_name"],
+        service=body["service"],
+        scheduled_at=scheduled_at,
+    )
+
+    bot = bots.get(tenant_row["id"])
+    if bot and tenant_row["owner_tg_id"]:
+        await notify_owner(bot, tenant_row["owner_tg_id"], {
+            "client_name": body["client_name"],
+            "client_phone": body.get("client_phone"),
+            "service": body["service"],
+            "scheduled_at": body["scheduled_at"],
+        })
+
+    return aio_web.json_response({"ok": True, "booking_id": booking_id})
+
+
+def _make_api_app(pool, bots: dict) -> aio_web.Application:
+    app = aio_web.Application(middlewares=[_cors_middleware])
+    app["pool"] = pool
+    app["bots"] = bots
+    app.router.add_get("/api/{bot_token}/categories", _handle_categories)
+    app.router.add_get("/api/{bot_token}/services/{category_id}", _handle_services)
+    app.router.add_get("/api/{bot_token}/slots/{date}", _handle_slots)
+    app.router.add_post("/api/{bot_token}/booking", _handle_booking)
+    app.router.add_route("OPTIONS", "/api/{bot_token}/booking", _handle_booking)
+    return app
+
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 async def main() -> None:
@@ -221,6 +355,7 @@ async def main() -> None:
         return
 
     await init_db(settings.DATABASE_URL)
+    pool = await repo.get_pool(settings.DATABASE_URL)
     await _ensure_initial_tenant()
     get_scheduler().start()
     schedule_daily_reactivation(lambda: _bots)
@@ -254,6 +389,14 @@ async def main() -> None:
         except NotImplementedError:
             pass
 
+    api_port = int(os.getenv("PORT_API", 8081))
+    api_app = _make_api_app(pool, _bots)
+    runner = aio_web.AppRunner(api_app)
+    await runner.setup()
+    site = aio_web.TCPSite(runner, "0.0.0.0", api_port)
+    await site.start()
+    log.info("Mini App API listening on port %d", api_port)
+
     watch_task = asyncio.create_task(_watch_tenants(dp))
     await stop_event.wait()
 
@@ -262,6 +405,7 @@ async def main() -> None:
     for task in _tasks.values():
         task.cancel()
     await asyncio.gather(*_tasks.values(), watch_task, return_exceptions=True)
+    await runner.cleanup()
     await close_pool()
     log.info("Aria shutdown complete")
 

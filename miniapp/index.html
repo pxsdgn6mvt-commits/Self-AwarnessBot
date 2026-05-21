@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="api-base" content="http://localhost:8081"/>
+  <title>Запись</title>
+  <link rel="stylesheet" href="style.css"/>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+  <h1>Выберите категорию</h1>
+  <div id="category-list" class="card-list">
+    <p style="color:var(--tg-hint)">Загрузка…</p>
+  </div>
+  <script src="app.js"></script>
+  <script>loadCategories();</script>
+</body>
+</html>

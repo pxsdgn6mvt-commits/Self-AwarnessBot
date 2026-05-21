@@ -7,6 +7,9 @@ anthropic>=0.49.0
 # Database
 asyncpg==0.30.0
 
+# API server (Mini App)
+aiohttp>=3.9.0
+
 # Scheduler
 APScheduler==3.10.4
 

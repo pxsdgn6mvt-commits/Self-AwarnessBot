@@ -1,0 +1,91 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --tg-bg: var(--tg-theme-bg-color, #fff);
+  --tg-text: var(--tg-theme-text-color, #000);
+  --tg-hint: var(--tg-theme-hint-color, #999);
+  --tg-accent: var(--tg-theme-button-color, #2481cc);
+  --tg-btn-text: var(--tg-theme-button-text-color, #fff);
+  --radius: 12px;
+  --gap: 12px;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--tg-bg);
+  color: var(--tg-text);
+  padding: 16px;
+  min-height: 100vh;
+}
+
+h1 { font-size: 1.2rem; margin-bottom: 16px; }
+h2 { font-size: 1rem; margin-bottom: 12px; color: var(--tg-hint); text-transform: uppercase; letter-spacing: .04em; }
+
+.card-list { display: flex; flex-direction: column; gap: var(--gap); }
+
+.card {
+  background: color-mix(in srgb, var(--tg-accent) 8%, var(--tg-bg));
+  border: 1px solid color-mix(in srgb, var(--tg-accent) 20%, transparent);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: background .15s;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.card:hover { background: color-mix(in srgb, var(--tg-accent) 15%, var(--tg-bg)); }
+.card .arrow { color: var(--tg-accent); font-size: 1.2rem; }
+
+.section { margin-bottom: 24px; }
+
+.pill-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.pill {
+  padding: 8px 14px;
+  border-radius: 100px;
+  border: 1.5px solid var(--tg-accent);
+  cursor: pointer;
+  font-size: .9rem;
+  transition: background .12s, color .12s;
+}
+.pill.selected, .pill:hover {
+  background: var(--tg-accent);
+  color: var(--tg-btn-text);
+}
+
+input[type="date"], input[type="text"], input[type="tel"] {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.5px solid color-mix(in srgb, var(--tg-text) 25%, transparent);
+  border-radius: var(--radius);
+  background: var(--tg-bg);
+  color: var(--tg-text);
+  font-size: 1rem;
+  margin-top: 6px;
+}
+input:focus { outline: none; border-color: var(--tg-accent); }
+
+label { font-size: .9rem; color: var(--tg-hint); display: block; margin-top: 14px; }
+
+.btn {
+  display: block;
+  width: 100%;
+  padding: 14px;
+  background: var(--tg-accent);
+  color: var(--tg-btn-text);
+  border: none;
+  border-radius: var(--radius);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 24px;
+  transition: opacity .15s;
+}
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+.error { color: #e53e3e; font-size: .9rem; margin-top: 8px; }
+.success-icon { font-size: 4rem; text-align: center; margin: 32px 0 16px; }
+.success-text { text-align: center; font-size: 1.1rem; line-height: 1.5; }
+.summary { background: color-mix(in srgb, var(--tg-accent) 8%, var(--tg-bg)); border-radius: var(--radius); padding: 16px; margin-top: 16px; }
+.summary p { margin-top: 8px; font-size: .95rem; line-height: 1.4; }
+.summary strong { color: var(--tg-accent); }

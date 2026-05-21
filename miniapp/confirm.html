@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="api-base" content="http://localhost:8081"/>
+  <title>Подтверждение</title>
+  <link rel="stylesheet" href="style.css"/>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+  <div id="form-section">
+    <h1>Ваши данные</h1>
+
+    <div class="summary" id="booking-summary"></div>
+
+    <label>Имя *
+      <input type="text" id="client-name" placeholder="Иван Иванов"/>
+    </label>
+    <label>Телефон
+      <input type="tel" id="client-phone" placeholder="+7 900 000-00-00"/>
+    </label>
+
+    <p id="err" class="error"></p>
+    <button class="btn" id="submit-btn" onclick="submitBooking()">Записаться</button>
+  </div>
+
+  <div id="success-section" style="display:none">
+    <p class="success-icon">✅</p>
+    <p class="success-text">Запись подтверждена!<br/>Администратор свяжется с вами.</p>
+  </div>
+
+  <script src="app.js"></script>
+  <script>fillSummary();</script>
+</body>
+</html>
