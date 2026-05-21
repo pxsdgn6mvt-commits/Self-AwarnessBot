@@ -55,13 +55,15 @@ class CatalogueSG(StatesGroup):
 
 async def _categories_kb(tenant_id: int, lang: str = "ru") -> InlineKeyboardMarkup:
     cats = await repo.get_categories(tenant_id)
-    rows: list[list[InlineKeyboardButton]] = [
-        [
-            InlineKeyboardButton(text=c["name"], callback_data=f"adm:cat:{c['id']}"),
+    rows: list[list[InlineKeyboardButton]] = []
+    for c in cats:
+        eye = "👁" if c["is_active"] else "🙈"
+        rows.append([
+            InlineKeyboardButton(text=("" if c["is_active"] else "✗ ") + c["name"],
+                                 callback_data=f"adm:cat:{c['id']}"),
+            InlineKeyboardButton(text=eye,  callback_data=f"adm:tcat:{c['id']}"),
             InlineKeyboardButton(text="🗑", callback_data=f"adm:dcat:{c['id']}"),
-        ]
-        for c in cats
-    ]
+        ])
     rows.append([InlineKeyboardButton(text=t("cat_add_btn", lang), callback_data="adm:addcat")])
     rows.append([InlineKeyboardButton(text=t("btn_back", lang),    callback_data="adm:main")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -76,9 +78,11 @@ async def _items_kb(category_id: int, tenant_id: int, lang: str = "ru") -> Inlin
             parts.append(f"{int(it['price'])}€")
         if it["duration_minutes"] is not None:
             parts.append(f"{it['duration_minutes']}{t('min_lbl', lang)}")
-        label = " · ".join(parts)
+        label = ("" if it["is_active"] else "✗ ") + " · ".join(parts)
+        eye = "👁" if it["is_active"] else "🙈"
         rows.append([InlineKeyboardButton(text=label, callback_data="adm:noop")])
         rows.append([
+            InlineKeyboardButton(text=eye,                     callback_data=f"adm:titem:{it['id']}:{category_id}"),
             InlineKeyboardButton(text=t("item_edit_btn", lang), callback_data=f"adm:eitem:{it['id']}:{category_id}"),
             InlineKeyboardButton(text=t("item_del_btn",  lang), callback_data=f"adm:dsub:{it['id']}:{category_id}"),
         ])
@@ -144,6 +148,36 @@ async def delete_category(callback: CallbackQuery, state: FSMContext, tenant: Te
         reply_markup=await _categories_kb(tenant.id, lang),
     )
     await callback.answer()
+
+
+@router.callback_query(F.data.startswith("adm:tcat:"), SetupDone())
+async def toggle_category(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    if not tenant.is_owner(callback.from_user.id):
+        await callback.answer(t("no_access", tenant.owner_lang or "ru"), show_alert=True)
+        return
+    lang = tenant.owner_lang or "ru"
+    cat_id = int(callback.data.split(":")[-1])
+    now_active = await repo.toggle_category_active(cat_id)
+    await callback.answer("👁 Показана" if now_active else "🙈 Скрыта")
+    await callback.message.edit_reply_markup(
+        reply_markup=await _categories_kb(tenant.id, lang)
+    )
+
+
+@router.callback_query(F.data.startswith("adm:titem:"), SetupDone())
+async def toggle_item(callback: CallbackQuery, tenant: TenantConfig) -> None:
+    if not tenant.is_owner(callback.from_user.id):
+        await callback.answer(t("no_access", tenant.owner_lang or "ru"), show_alert=True)
+        return
+    lang = tenant.owner_lang or "ru"
+    _, _, item_id_str, cat_id_str = callback.data.split(":")
+    item_id = int(item_id_str)
+    cat_id  = int(cat_id_str)
+    now_active = await repo.toggle_item_active(item_id)
+    await callback.answer("👁 Показана" if now_active else "🙈 Скрыта")
+    await callback.message.edit_reply_markup(
+        reply_markup=await _items_kb(cat_id, tenant.id, lang)
+    )
 
 
 @router.callback_query(F.data.startswith("adm:cat:"), SetupDone())

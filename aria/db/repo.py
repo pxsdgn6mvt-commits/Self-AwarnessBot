@@ -690,10 +690,11 @@ async def clear_history(tenant_id: int, user_id: int) -> None:
 
 # ── Service catalogue ─────────────────────────────────────────────────────────
 
-async def get_categories(tenant_id: int) -> list[asyncpg.Record]:
+async def get_categories(tenant_id: int, active_only: bool = False) -> list[asyncpg.Record]:
+    filt = " AND is_active = TRUE" if active_only else ""
     async with _p().acquire() as conn:
         return await conn.fetch(
-            "SELECT * FROM aria_service_categories WHERE tenant_id=$1 ORDER BY position, id",
+            f"SELECT * FROM aria_service_categories WHERE tenant_id=$1{filt} ORDER BY position, id",
             tenant_id,
         )
 
@@ -728,12 +729,33 @@ async def get_service_info(tenant_id: int, service_name: str) -> asyncpg.Record 
         )
 
 
-async def get_items(category_id: int) -> list[asyncpg.Record]:
+async def get_items(category_id: int, active_only: bool = False) -> list[asyncpg.Record]:
+    filt = " AND is_active = TRUE" if active_only else ""
     async with _p().acquire() as conn:
         return await conn.fetch(
-            "SELECT * FROM aria_service_items WHERE category_id=$1 ORDER BY position, id",
+            f"SELECT * FROM aria_service_items WHERE category_id=$1{filt} ORDER BY position, id",
             category_id,
         )
+
+
+async def toggle_category_active(category_id: int) -> bool:
+    async with _p().acquire() as conn:
+        row = await conn.fetchrow(
+            "UPDATE aria_service_categories SET is_active = NOT is_active "
+            "WHERE id=$1 RETURNING is_active",
+            category_id,
+        )
+        return row["is_active"] if row else True
+
+
+async def toggle_item_active(item_id: int) -> bool:
+    async with _p().acquire() as conn:
+        row = await conn.fetchrow(
+            "UPDATE aria_service_items SET is_active = NOT is_active "
+            "WHERE id=$1 RETURNING is_active",
+            item_id,
+        )
+        return row["is_active"] if row else True
 
 
 async def add_category(tenant_id: int, name: str) -> int:

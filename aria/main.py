@@ -249,7 +249,7 @@ async def _handle_categories(request: aio_web.Request) -> aio_web.Response:
     rows = await pool.fetch(
         "SELECT id, name FROM aria_service_categories "
         "WHERE tenant_id=(SELECT id FROM aria_tenants WHERE bot_token=$1) "
-        "ORDER BY position, id",
+        "AND is_active = TRUE ORDER BY position, id",
         bot_token,
     )
     return aio_web.json_response([dict(r) for r in rows])
@@ -260,7 +260,7 @@ async def _handle_services(request: aio_web.Request) -> aio_web.Response:
     pool = request.app["pool"]
     rows = await pool.fetch(
         "SELECT id, name, price, duration_minutes FROM aria_service_items "
-        "WHERE category_id=$1 ORDER BY position, id",
+        "WHERE category_id=$1 AND is_active = TRUE ORDER BY position, id",
         category_id,
     )
     return aio_web.json_response([dict(r) for r in rows])

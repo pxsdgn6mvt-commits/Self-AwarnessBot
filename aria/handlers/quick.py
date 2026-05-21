@@ -798,7 +798,7 @@ async def cb_reschedule_save(message: Message, state: FSMContext, tenant: Tenant
 
 async def _start_booking(message_or_query, state: FSMContext, tenant: TenantConfig) -> None:
     lang = tenant.owner_lang or "ru"
-    cats = await repo.get_categories(tenant.id)
+    cats = await repo.get_categories(tenant.id, active_only=True)
     if cats:
         await state.set_state(QuickBook.category)
         text = f"{t('new_booking', lang)}\n\n{t('choose_cat', lang)}"
@@ -852,7 +852,7 @@ async def cb_category(callback: CallbackQuery, state: FSMContext, tenant: Tenant
     cats   = await repo.get_categories(tenant.id)
     cat    = next((c for c in cats if c["id"] == cat_id), None)
     cat_name = cat["name"] if cat else "?"
-    items  = await repo.get_items(cat_id)
+    items  = await repo.get_items(cat_id, active_only=True)
     await state.update_data(category=cat_name)
     await state.set_state(QuickBook.service)
     await callback.message.edit_text(
