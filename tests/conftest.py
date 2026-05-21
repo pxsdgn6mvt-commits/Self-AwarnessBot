@@ -16,15 +16,20 @@ _STUBS = [
     "apscheduler.triggers", "apscheduler.triggers.date",
     "apscheduler.triggers.cron", "apscheduler.triggers.interval",
     "aria.handlers", "aria.handlers.admin", "aria.handlers.chat",
-    "aria.handlers.email_setup", "aria.handlers.masters", "aria.handlers.menu",
+    "aria.handlers.client_bot", "aria.handlers.email_setup",
+    "aria.handlers.masters", "aria.handlers.menu",
     "aria.handlers.quick", "aria.handlers.start", "aria.handlers.setup",
     "aria.middleware", "aria.db.fsm_storage",
-    "aria.services.commands", "aria.services.scheduler",
+    "aria.services.commands", "aria.services.email_monitor",
+    "aria.services.scheduler",
 ]
 
 for _mod in _STUBS:
     if _mod not in sys.modules:
         sys.modules[_mod] = MagicMock()
+
+# Import the real aria.main after stubs are in place so patch.dict targets resolve.
+import aria.main  # noqa: E402
 
 
 def pytest_configure(config):
