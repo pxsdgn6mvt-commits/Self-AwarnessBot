@@ -43,6 +43,7 @@ class Settings:
     OPENAI_API_KEY: str
     GOOGLE_CALENDAR_CREDENTIALS: Optional[str]
     GOOGLE_CALENDAR_ID: Optional[str]
+    CLIENT_BOT_TOKEN: str
     MINIAPP_URL: str
 
     def __init__(self) -> None:
@@ -73,6 +74,7 @@ class Settings:
         self.OPENAI_API_KEY = _str("OPENAI_API_KEY", "")
         self.GOOGLE_CALENDAR_CREDENTIALS = os.getenv("GOOGLE_CALENDAR_CREDENTIALS")
         self.GOOGLE_CALENDAR_ID = os.getenv("GOOGLE_CALENDAR_ID")
+        self.CLIENT_BOT_TOKEN = _str("CLIENT_BOT_TOKEN", "")
         self.MINIAPP_URL = _str("MINIAPP_URL", "").rstrip("/")
         # Webhook mode: set WEBHOOK_BASE_URL to your Railway public domain.
         # Accepted forms:

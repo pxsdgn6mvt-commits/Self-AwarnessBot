@@ -22,6 +22,7 @@ from aiogram.types import ErrorEvent
 from aria import runtime
 from aria.config import settings
 from aria.db.fsm_storage import PostgresFSMStorage
+from aria.handlers.client_bot import client_router
 from aria.db.repo import (
     close_pool, create_tenant, get_tenant, get_tenant_by_token,
     init_db, list_active_tenants,
@@ -249,6 +250,22 @@ async def main() -> None:
 
     dp = _build_dispatcher()
 
+    # ── Client bot (platform-level, one for all tenants) ──────────────────
+    _client_task: asyncio.Task | None = None
+    if settings.CLIENT_BOT_TOKEN:
+        client_bot = Bot(
+            token=settings.CLIENT_BOT_TOKEN,
+            default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+        )
+        client_dp = Dispatcher()
+        client_dp.include_router(client_router)
+        _client_task = asyncio.create_task(
+            _poll_bot(client_bot, client_dp, tenant_id=0)
+        )
+        log.info("Client booking bot started")
+    else:
+        log.warning("CLIENT_BOT_TOKEN not set — client booking bot disabled")
+
     rows = await list_active_tenants()
     for row in rows:
         bot = Bot(
@@ -282,9 +299,14 @@ async def main() -> None:
     log.info("Cancelling %d polling tasks...", len(_tasks))
     web_task.cancel()
     watch_task.cancel()
+    if _client_task:
+        _client_task.cancel()
     for task in _tasks.values():
         task.cancel()
-    await asyncio.gather(*_tasks.values(), watch_task, web_task, return_exceptions=True)
+    all_tasks = [*_tasks.values(), watch_task, web_task]
+    if _client_task:
+        all_tasks.append(_client_task)
+    await asyncio.gather(*all_tasks, return_exceptions=True)
     await close_pool()
     log.info("Aria shutdown complete")
 

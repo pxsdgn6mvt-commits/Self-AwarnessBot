@@ -312,6 +312,11 @@ def api_create_booking():
 
     tg_user = _verify_init_data(init_data, tenant_row["bot_token"])
     if tg_user is None:
+        # Mini App opened from platform client bot — initData signed with CLIENT_BOT_TOKEN
+        client_bot_token = os.getenv("CLIENT_BOT_TOKEN", "")
+        if client_bot_token:
+            tg_user = _verify_init_data(init_data, client_bot_token)
+    if tg_user is None:
         return jsonify({"error": "invalid initData"}), 403
 
     client_tg_id = tg_user.get("id")

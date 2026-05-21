@@ -4,7 +4,7 @@
 2026-05-21
 
 ## Active Sprint
-None — ожидание Sprint 006
+None — ожидание Sprint 007
 
 ## Project Status
 
@@ -28,7 +28,7 @@ None — ожидание Sprint 006
 | Client reminders (not just owner) | 🔲 Not started |
 
 ## Last Completed Sprint
-005-test-foundation — DONE
+006-client-bot — DONE
 
 ## Known Open Issues
 - No known critical bugs in production as of 2026-05-21
