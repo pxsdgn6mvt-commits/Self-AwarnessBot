@@ -78,6 +78,9 @@ async def cmd_start(message: Message, state: FSMContext, tenant: TenantConfig) -
     if tenant.owner_tg_id is None:
         await repo.update_tenant(tenant.id, owner_tg_id=message.from_user.id)
         TenantMiddleware.invalidate(tenant.bot_token)
+        is_owner = True
+    else:
+        is_owner = tenant.is_owner(message.from_user.id)
 
     if _is_admin_bot(tenant, message.from_user.id):
         await message.answer(
@@ -89,10 +92,26 @@ async def cmd_start(message: Message, state: FSMContext, tenant: TenantConfig) -
             "• /set_vip &lt;tid&gt; [дней] — назначить VIP тенанту",
             reply_markup=ADMIN_KB,
         )
-    else:
+    elif is_owner:
         await message.answer(
             "🌐 Выбери язык / Choose language / Valitse kieli:",
             reply_markup=_lang_kb(),
+        )
+    else:
+        # Non-owner client → booking flow
+        from aria.handlers.client_booking import ClientBooking, _categories_kb
+        categories = await repo.get_categories(tenant.id)
+        if not categories:
+            await message.answer(
+                f"Добро пожаловать в <b>{tenant.salon_name}</b>!\n\n"
+                "Запись временно недоступна. Обратитесь к администратору."
+            )
+            return
+        await state.set_state(ClientBooking.choosing_category)
+        await message.answer(
+            f"Добро пожаловать в <b>{tenant.salon_name}</b>! 👋\n\n"
+            "Выберите категорию услуг:",
+            reply_markup=_categories_kb(categories),
         )
 
 
