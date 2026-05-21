@@ -4,7 +4,19 @@
 2026-05-21
 
 ## Active Sprint
-None — ожидание Sprint 008
+None — ожидание Sprint 009
+
+## Business Model
+- **Соло-мастер**: один owner-бот, мастер = владелец
+- **Салон (bundle ~179€)**: owner-бот + N master-ботов для мастеров
+- **Платформ-админ**: управляет всеми через admin-бот
+
+## Bot Types
+| Bot | Status |
+|---|---|
+| owner-bot (per-tenant) | ✅ Implemented |
+| client-bot (platform-level) | ✅ Sprint 006 |
+| master-bot (per-master) | 🔲 Sprint 011 |
 
 ## Project Status
 
@@ -22,17 +34,36 @@ None — ожидание Sprint 008
 | Voice transcription S1 (OpenAI Whisper) | ✅ Implemented |
 | PostgresFSMStorage (FSM survives restarts) | ✅ Implemented |
 | Platform admin bot (@AriaReseptionist_Bot) | ✅ Implemented |
-| Mini App (S2) — client self-booking | 🔲 Not started |
-| Multi-master per tenant (S3) | 🔲 Not started |
-| Auto-reviews, monthly report (S4) | 🔲 Not started |
-| Client reminders (not just owner) | 🔲 Not started |
+| Client self-booking bot (client-bot) | ✅ Sprint 006 |
+| Masters DB schema (aria_masters, aria_availability) | ✅ Sprint 007 |
+| Masters admin UI (owner-bot Settings) | ✅ Sprint 008 |
+| Availability UI in owner-bot | 🔲 Sprint 009 |
+| /api/slots respects aria_availability | 🔲 Sprint 010 |
+| Master Bot (per-master polling) | 🔲 Sprint 011 |
+| Mini App — master selection | 🔲 Sprint 012 |
+| Dashboard per master | 🔲 Sprint 013 |
+| Auto-reviews | 🔲 Sprint 014 |
+| Import DM | 🔲 Sprint 015 |
+| Monthly PNG report | 🔲 Sprint 016 |
+
+## Pending Sprints
+| Sprint | Goal |
+|---|---|
+| 009 | Availability UI in owner-bot |
+| 010 | /api/slots учитывает aria_availability |
+| 011 | Master Bot (отдельный polling) |
+| 012 | S3-D Mini App: выбор мастера |
+| 013 | S3-E Dashboard по мастерам |
+| 014 | S4-A Auto-отзыв |
+| 015 | S4-B Import DM |
+| 016 | S4-C Monthly PNG отчёт |
 
 ## Last Completed Sprint
-007-masters-schema — DONE
+008-masters-ui — DONE
 
 ## Known Open Issues
 - No known critical bugs in production as of 2026-05-21
-- All bugs from v1.0 refactor (Bugs 1–4) and S1 voice (Bugs 5–7) are fixed
+- test_watch_tenants.py: 2 pre-existing failures (aria.main import in test env)
 - Mini App integration (S2) pending — no Mini App API endpoints exist yet
 
 ## Key Metrics
@@ -44,4 +75,4 @@ None — ожидание Sprint 008
 - Stable commit (v1.0.0): `230cc350c663c5b7ebd41bb283d16d0a776082ff`
 
 ## Branch
-Active development branch: `claude/telegram-booking-bot-research-ZygWD`
+Active development branch: `claude/telegram-booking-bot-research-cWjrw`
