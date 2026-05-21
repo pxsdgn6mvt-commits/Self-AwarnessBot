@@ -1,4 +1,4 @@
-import type { Category } from './types';
+import type { ServicesResponse } from './types';
 
 const BASE = ((import.meta.env.VITE_API_BASE as string | undefined) ?? '').replace(/^<|>$/g, '').replace(/\/$/, '');
 
@@ -19,12 +19,12 @@ function initData(): string {
   return window.Telegram?.WebApp?.initData ?? '';
 }
 
-export async function getServices(tenantId: number): Promise<Category[]> {
+export async function getServices(tenantId: number): Promise<ServicesResponse> {
   const url = `${BASE}/api/services?tenant_id=${tenantId}`;
   try {
     const r = await fetchWithRetry(url);
     if (!r.ok) throw new Error(`Сервер ответил ${r.status}`);
-    return r.json() as Promise<Category[]>;
+    return r.json() as Promise<ServicesResponse>;
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     throw new Error(`${msg} (${url})`);

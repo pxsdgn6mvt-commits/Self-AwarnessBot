@@ -2,6 +2,7 @@ import { useState } from 'react';
 import './DateScreen.css';
 
 interface Props {
+  workingDays: number[];  // ISO weekdays: 1=Mon … 7=Sun
   onSelect: (date: string) => void;
 }
 
@@ -15,7 +16,14 @@ function toISO(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-export default function DateScreen({ onSelect }: Props) {
+// JS getDay(): 0=Sun,1=Mon…6=Sat; ISO: 1=Mon…7=Sun → convert via (jsDay || 7)
+function isWorkingDay(d: Date, workingDays: number[]): boolean {
+  const jsDay = d.getDay();
+  const isoDay = jsDay === 0 ? 7 : jsDay;
+  return workingDays.includes(isoDay);
+}
+
+export default function DateScreen({ workingDays, onSelect }: Props) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -64,18 +72,20 @@ export default function DateScreen({ onSelect }: Props) {
 
         {cells.map((d, i) => {
           if (!d) return <div key={i} />;
-          const past = d < today;
-          const isToday = toISO(d) === toISO(today);
+          const past        = d < today;
+          const nonWorking  = !isWorkingDay(d, workingDays);
+          const disabled    = past || nonWorking;
+          const isToday     = toISO(d) === toISO(today);
           return (
             <button
               key={i}
               className={[
                 'cal-day',
-                past    ? 'cal-day--past'    : 'cal-day--available',
-                isToday ? 'cal-day--today'   : '',
+                disabled  ? 'cal-day--past'    : 'cal-day--available',
+                isToday   ? 'cal-day--today'   : '',
               ].join(' ').trim()}
-              disabled={past}
-              onClick={() => !past && onSelect(toISO(d))}
+              disabled={disabled}
+              onClick={() => !disabled && onSelect(toISO(d))}
             >
               {d.getDate()}
             </button>

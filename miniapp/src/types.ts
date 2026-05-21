@@ -11,6 +11,11 @@ export interface Category {
   items: ServiceItem[];
 }
 
+export interface ServicesResponse {
+  categories: Category[];
+  working_days: number[];  // ISO weekdays: 1=Mon … 7=Sun
+}
+
 export interface BookingState {
   tenantId: number;
   category?: Category;

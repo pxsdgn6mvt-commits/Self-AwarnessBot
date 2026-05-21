@@ -176,6 +176,9 @@ def api_services():
     async def _fetch():
         conn = await _connect()
         try:
+            tenant_row = await conn.fetchrow(
+                "SELECT working_days FROM aria_tenants WHERE id=$1", tenant_id
+            )
             rows = await conn.fetch(
                 """
                 SELECT sc.id AS cat_id, sc.name AS cat_name,
@@ -200,7 +203,9 @@ def api_services():
                 "price": float(r["price"]) if r["price"] is not None else None,
                 "duration_minutes": r["duration_minutes"],
             })
-        return list(cats.values())
+        raw = (tenant_row["working_days"] if tenant_row else None) or "1,2,3,4,5,6"
+        working_days = [int(d) for d in raw.split(",") if d.strip().isdigit()]
+        return {"categories": list(cats.values()), "working_days": working_days}
 
     try:
         return jsonify(_run(_fetch()))

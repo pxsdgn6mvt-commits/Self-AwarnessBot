@@ -27,6 +27,7 @@ export default function App() {
   const [screen, setScreen]          = useState<Screen>('category');
   const [booking, setBooking]         = useState<BookingState>({ tenantId });
   const [categories, setCategories]   = useState<Category[]>([]);
+  const [workingDays, setWorkingDays] = useState<number[]>([1, 2, 3, 4, 5, 6]);
   const [catsLoading, setCatsLoading] = useState(true);
   const [catsError, setCatsError]     = useState('');
 
@@ -36,7 +37,10 @@ export default function App() {
 
   useEffect(() => {
     getServices(tenantId)
-      .then(setCategories)
+      .then(({ categories, working_days }) => {
+        setCategories(categories);
+        setWorkingDays(working_days);
+      })
       .catch((e: Error) => setCatsError(e.message))
       .finally(() => setCatsLoading(false));
   }, [tenantId]);
@@ -82,6 +86,7 @@ export default function App() {
 
       {screen === 'date' && (
         <DateScreen
+          workingDays={workingDays}
           onSelect={date => {
             setBooking(b => ({ ...b, date, time: undefined }));
             go('time');
