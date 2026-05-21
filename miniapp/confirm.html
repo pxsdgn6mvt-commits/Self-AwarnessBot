@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Подтверждение</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Success screen (hidden initially) -->
+  <div id="success-screen" style="display:none">
+    <div class="success-icon">✅</div>
+    <p class="success-title">Вы записаны!</p>
+    <p class="success-text" id="success-detail"></p>
+  </div>
+
+  <!-- Form screen -->
+  <div id="form-screen">
+    <h1>Ваши данные</h1>
+    <p class="subtitle">Шаг 5 из 5</p>
+
+    <div class="error-msg" id="err-global"></div>
+
+    <!-- Booking summary -->
+    <div style="margin-bottom: 20px;">
+      <div class="summary-row">
+        <span class="summary-label">Услуга</span>
+        <span id="sum-service">—</span>
+      </div>
+      <div class="summary-row">
+        <span class="summary-label">Дата</span>
+        <span id="sum-date">—</span>
+      </div>
+      <div class="summary-row">
+        <span class="summary-label">Время</span>
+        <span id="sum-time">—</span>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="inp-name">Ваше имя</label>
+      <input class="form-input" id="inp-name" type="text"
+             placeholder="Например: Анна" autocomplete="given-name">
+      <div class="form-error" id="err-name"></div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="inp-phone">Номер телефона</label>
+      <input class="form-input" id="inp-phone" type="tel"
+             placeholder="+7 900 000 00 00" autocomplete="tel">
+      <div class="form-error" id="err-phone"></div>
+    </div>
+
+    <button class="btn-primary" id="btn-confirm" onclick="submitBooking()">
+      Записаться
+    </button>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    const { getState, clearState, createBooking,
+            showError, hideError, formatDateLabel, tg } = window.Aria;
+
+    const state = getState();
+
+    function escHtml(s) {
+      return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    // Fill summary
+    document.getElementById("sum-service").textContent = state.service_name || "—";
+    document.getElementById("sum-date").textContent =
+      state.date_str ? formatDateLabel(state.date_str) : "—";
+    document.getElementById("sum-time").textContent = state.time_str || "—";
+
+    function validatePhone(phone) {
+      return /^\+?[\d\s\-]{7,15}$/.test(phone.trim());
+    }
+
+    async function submitBooking() {
+      hideError("err-global");
+      hideError("err-name");
+      hideError("err-phone");
+
+      const name  = document.getElementById("inp-name").value.trim();
+      const phone = document.getElementById("inp-phone").value.trim();
+
+      let valid = true;
+      if (name.length < 2) {
+        showError("err-name", "Введите имя (минимум 2 символа)");
+        valid = false;
+      }
+      if (phone && !validatePhone(phone)) {
+        showError("err-phone", "Некорректный номер. Формат: +7XXXXXXXXXX");
+        valid = false;
+      }
+      if (!valid) return;
+
+      const btn = document.getElementById("btn-confirm");
+      btn.disabled = true;
+      btn.textContent = "Записываем…";
+
+      try {
+        await createBooking({
+          category_id:  state.category_id,
+          service_id:   state.service_id,
+          service_name: state.service_name,
+          date_str:     state.date_str,
+          time_str:     state.time_str,
+          client_name:  name,
+          client_phone: phone || null,
+        });
+
+        clearState();
+        document.getElementById("form-screen").style.display  = "none";
+        document.getElementById("success-screen").style.display = "block";
+        document.getElementById("success-detail").textContent =
+          `Ждём вас ${formatDateLabel(state.date_str)} в ${state.time_str}. Спасибо, ${escHtml(name)}!`;
+
+        // Close Mini App after 3 seconds
+        setTimeout(() => tg.close(), 3000);
+      } catch (e) {
+        btn.disabled = false;
+        btn.textContent = "Записаться";
+        showError("err-global", "Ошибка записи: " + e.message);
+      }
+    }
+
+    if (!state.category_id || !state.service_id || !state.date_str || !state.time_str) {
+      location.href = `index.html?bot=${encodeURIComponent(window.Aria.BOT_TOKEN)}`;
+    }
+  </script>
+</body>
+</html>

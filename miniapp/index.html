@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Запись на услугу</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>Выберите категорию</h1>
+  <p class="subtitle">Шаг 1 из 4</p>
+  <div class="error-msg" id="err-global"></div>
+  <div class="card-list" id="categories">
+    <p class="loading">Загружаем…</p>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    const { getCategories, setState, navigate, showError } = window.Aria;
+
+    async function load() {
+      try {
+        const data = await getCategories();
+        const list = document.getElementById("categories");
+        if (!data.categories || data.categories.length === 0) {
+          list.innerHTML = '<p class="loading">Нет доступных услуг.</p>';
+          return;
+        }
+        list.innerHTML = data.categories.map(c => `
+          <div class="card" onclick="selectCategory(${c.id}, '${escHtml(c.name)}')">
+            <div>
+              <div class="card-title">${escHtml(c.name)}</div>
+            </div>
+            <span class="card-arrow">›</span>
+          </div>
+        `).join("");
+      } catch (e) {
+        showError("err-global", "Не удалось загрузить категории: " + e.message);
+      }
+    }
+
+    function selectCategory(id, name) {
+      setState({ category_id: id, category_name: name });
+      navigate("booking.html");
+    }
+
+    function escHtml(s) {
+      return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    load();
+  </script>
+</body>
+</html>

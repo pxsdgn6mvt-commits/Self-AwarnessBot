@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Выбор услуги и даты</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1 id="page-title">Выберите услугу</h1>
+  <p class="subtitle" id="page-subtitle">Шаг 2 из 4</p>
+  <div class="error-msg" id="err-global"></div>
+  <div class="card-list" id="content">
+    <p class="loading">Загружаем…</p>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    const { getState, setState, navigate, getServices, getSlots,
+            showError, formatDateLabel } = window.Aria;
+
+    const state = getState();
+    let phase = "service"; // "service" | "date" | "time"
+
+    function escHtml(s) {
+      return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    async function loadServices() {
+      document.getElementById("page-title").textContent = "Выберите услугу";
+      document.getElementById("page-subtitle").textContent = "Шаг 2 из 4";
+      try {
+        const data = await getServices(state.category_id);
+        const list = document.getElementById("content");
+        if (!data.services || data.services.length === 0) {
+          list.innerHTML = '<p class="loading">Нет доступных услуг.</p>';
+          return;
+        }
+        list.innerHTML = data.services.map(s => {
+          const meta = [
+            s.price != null ? `${Math.round(s.price)} ₽` : null,
+            s.duration_minutes ? `${s.duration_minutes} мин` : null,
+          ].filter(Boolean).join(" · ");
+          return `
+            <div class="card" onclick="selectService(${s.id}, '${escHtml(s.name)}', ${s.price || 0}, ${s.duration_minutes || 0})">
+              <div>
+                <div class="card-title">${escHtml(s.name)}</div>
+                ${meta ? `<div class="card-meta">${meta}</div>` : ""}
+              </div>
+              <span class="card-arrow">›</span>
+            </div>
+          `;
+        }).join("");
+      } catch (e) {
+        showError("err-global", "Не удалось загрузить услуги: " + e.message);
+      }
+    }
+
+    function selectService(id, name, price, duration) {
+      setState({ service_id: id, service_name: name, service_price: price, service_duration: duration });
+      phase = "date";
+      loadDates();
+    }
+
+    async function loadDates() {
+      document.getElementById("page-title").textContent = "Выберите дату";
+      document.getElementById("page-subtitle").textContent = "Шаг 3 из 4";
+      const content = document.getElementById("content");
+      content.innerHTML = '<p class="loading">Загружаем…</p>';
+
+      // Build next 14 days, filter by slots availability
+      const dates = [];
+      const today = new Date();
+      for (let i = 1; i <= 14; i++) {
+        const d = new Date(today);
+        d.setDate(today.getDate() + i);
+        dates.push(d.toISOString().split("T")[0]);
+      }
+
+      content.innerHTML = dates.map(iso => `
+        <div class="card" onclick="selectDate('${iso}')">
+          <div>
+            <div class="card-title">${formatDateLabel(iso)}</div>
+          </div>
+          <span class="card-arrow">›</span>
+        </div>
+      `).join("");
+    }
+
+    function selectDate(iso) {
+      setState({ date_str: iso });
+      phase = "time";
+      loadSlots(iso);
+    }
+
+    async function loadSlots(iso) {
+      document.getElementById("page-title").textContent = "Выберите время";
+      document.getElementById("page-subtitle").textContent = "Шаг 4 из 5";
+      const content = document.getElementById("content");
+      content.innerHTML = '<p class="loading">Загружаем…</p>';
+      try {
+        const data = await getSlots(iso);
+        if (!data.slots || data.slots.length === 0) {
+          content.innerHTML = '<p class="loading">Нет свободных слотов на этот день.</p>';
+          return;
+        }
+        content.innerHTML = data.slots.map(slot => `
+          <div class="card" onclick="selectTime('${escHtml(slot)}')">
+            <div class="card-title">${escHtml(slot)}</div>
+          </div>
+        `).join("");
+      } catch (e) {
+        showError("err-global", "Не удалось загрузить слоты: " + e.message);
+      }
+    }
+
+    function selectTime(time) {
+      setState({ time_str: time });
+      navigate("confirm.html");
+    }
+
+    if (!state.category_id) {
+      navigate("index.html");
+    } else {
+      loadServices();
+    }
+  </script>
+</body>
+</html>

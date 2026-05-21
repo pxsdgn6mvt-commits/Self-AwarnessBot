@@ -21,6 +21,7 @@ from aiogram.types import (
 )
 
 import aria.db.repo as repo
+from aria.services.notifications import notify_owner
 from aria.tenant import TenantConfig
 
 log = logging.getLogger(__name__)
@@ -246,21 +247,17 @@ async def cb_confirm(
     await callback.answer("Запись подтверждена!")
 
     if tenant.owner_tg_id:
-        owner_text = (
-            f"🔔 <b>Новая запись через бот</b>\n\n"
-            f"👤 Клиент: {data['client_name']}\n"
-            f"📱 Телефон: {data.get('client_phone') or 'не указан'}\n"
-            f"💇 Услуга: {data['service_name']}\n"
-            f"📅 {data['date_str']} в {data['time_str']}\n"
-            f"🆔 Запись #{booking_id}"
+        await notify_owner(
+            callback.bot,
+            tenant.owner_tg_id,
+            {
+                "client_name": data["client_name"],
+                "client_phone": data.get("client_phone"),
+                "service": data["service_name"],
+                "scheduled_at": f"{data['date_str']} в {data['time_str']}",
+                "booking_id": booking_id,
+            },
         )
-        try:
-            await callback.bot.send_message(tenant.owner_tg_id, owner_text)
-        except Exception:
-            log.warning(
-                "Failed to notify owner %d (tenant %d) about booking #%d",
-                tenant.owner_tg_id, tenant.id, booking_id,
-            )
 
 
 @router.callback_query(ClientBooking.confirming, F.data == "cb_cancel")
