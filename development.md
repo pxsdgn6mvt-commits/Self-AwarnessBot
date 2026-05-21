@@ -1,3 +1,16 @@
+<!--
+=============================================================
+ARCHITECT/BUILDER NOTE — Sprint 001 completed
+This file remains the full technical reference.
+For structured docs, see:
+  - .claude/CLAUDE.md      ← Architect context
+  - docs/DOMAIN.md         ← Domain definitions & DB schema
+  - docs/DECISIONS.md      ← Design decisions & bug log
+  - docs/STATE.md          ← Current project state
+  - planning/sprints/      ← Sprint history
+=============================================================
+-->
+
 # Aria — Multi-Tenant Salon Bot Platform
 ## Complete Development Reference
 
