@@ -10,6 +10,8 @@ from zoneinfo import ZoneInfo
 
 from flask import Flask, request, jsonify, Response
 
+from aria.utils.notify_admin import notify_admin as _notify_admin
+
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
@@ -100,17 +102,6 @@ def chat():
 # Allowed origin for CORS. Set MINIAPP_ORIGIN in Railway Variables once the
 # Cloudflare Pages URL is known. Default "*" is fine during development.
 _MINIAPP_ORIGIN = os.getenv("MINIAPP_ORIGIN", "*")
-
-
-def _notify_admin(context: str, error: Exception) -> None:
-    token    = os.getenv("ARIA_BOT_TOKEN", "") or os.getenv("BOT_TOKEN", "")
-    admin_id = os.getenv("ARIA_OWNER_TELEGRAM_ID", "") or os.getenv("OWNER_ID", "")
-    if not token or not admin_id:
-        return
-    try:
-        _tg_notify(token, int(admin_id), f"🚨 Aria server error in {context}:\n{type(error).__name__}: {error}")
-    except Exception:
-        pass
 
 
 def _tg_notify(bot_token: str, chat_id: int, text: str) -> None:

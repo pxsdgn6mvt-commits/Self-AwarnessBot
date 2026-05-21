@@ -11,10 +11,7 @@ APScheduler background jobs for Aria.
 from __future__ import annotations
 
 import asyncio
-import json as _json
 import logging
-import os
-import urllib.request as _ur
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, TYPE_CHECKING
 
@@ -23,6 +20,7 @@ from apscheduler.triggers.date import DateTrigger
 
 import aria.db.repo as repo
 from aria.i18n import DAY_SHORT, MON_SHORT, fmt_time_label, t as _t
+from aria.utils.notify_admin import notify_admin as _notify_admin
 
 if TYPE_CHECKING:
     from aria.tenant import TenantConfig
@@ -30,24 +28,6 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 _scheduler: AsyncIOScheduler | None = None
-
-
-def _notify_admin(context: str, error: Exception) -> None:
-    token    = os.getenv("ARIA_BOT_TOKEN", "") or os.getenv("BOT_TOKEN", "")
-    admin_id = os.getenv("ARIA_OWNER_TELEGRAM_ID", "") or os.getenv("OWNER_ID", "")
-    if not token or not admin_id:
-        return
-    text = f"🚨 Aria scheduler error in {context}:\n{type(error).__name__}: {error}"
-    data = _json.dumps({"chat_id": admin_id, "text": text}).encode()
-    req = _ur.Request(
-        f"https://api.telegram.org/bot{token}/sendMessage",
-        data=data,
-        headers={"Content-Type": "application/json"},
-    )
-    try:
-        _ur.urlopen(req, timeout=5)
-    except Exception:
-        pass
 
 
 def _is_tenant_vip(t: dict) -> bool:
