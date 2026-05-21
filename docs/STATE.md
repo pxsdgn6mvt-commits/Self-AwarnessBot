@@ -4,7 +4,7 @@
 2026-05-21
 
 ## Active Sprint
-001-initial-setup (bootstrap)
+None — ожидание Sprint 002
 
 ## Project Status
 
@@ -28,7 +28,7 @@
 | Client reminders (not just owner) | 🔲 Not started |
 
 ## Last Completed Sprint
-None — this is the initial bootstrap sprint.
+001-initial-setup — DONE (все 11 acceptance criteria ✅)
 
 ## Known Open Issues
 - No known critical bugs in production as of 2026-05-21
