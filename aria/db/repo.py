@@ -929,3 +929,30 @@ async def get_tenant_slot_minutes(tenant_id: int) -> int:
             "SELECT slot_minutes FROM aria_tenants WHERE id=$1", tenant_id
         )
         return row["slot_minutes"] if row else 60
+
+
+# ── Master bots ───────────────────────────────────────────────────────────────
+
+async def get_active_master_bots() -> list[asyncpg.Record]:
+    async with _p().acquire() as conn:
+        return await conn.fetch(
+            "SELECT id, tenant_id, bot_token, name FROM aria_masters "
+            "WHERE bot_active=TRUE AND bot_token IS NOT NULL ORDER BY id"
+        )
+
+
+async def set_master_bot_token(master_id: int, token: str) -> None:
+    async with _p().acquire() as conn:
+        await conn.execute(
+            "UPDATE aria_masters SET bot_token=$1, bot_active=TRUE WHERE id=$2",
+            token, master_id,
+        )
+
+
+async def get_master_by_token(token: str) -> Optional[asyncpg.Record]:
+    async with _p().acquire() as conn:
+        return await conn.fetchrow(
+            "SELECT id, tenant_id, name FROM aria_masters "
+            "WHERE bot_token=$1 AND bot_active=TRUE",
+            token,
+        )

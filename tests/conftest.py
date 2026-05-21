@@ -17,9 +17,10 @@ _STUBS = [
     "apscheduler.triggers.cron", "apscheduler.triggers.interval",
     "aria.handlers", "aria.handlers.admin", "aria.handlers.availability",
     "aria.handlers.chat", "aria.handlers.client_bot", "aria.handlers.email_setup",
-    "aria.handlers.masters", "aria.handlers.menu",
+    "aria.handlers.master_bot", "aria.handlers.masters", "aria.handlers.menu",
     "aria.handlers.quick", "aria.handlers.start", "aria.handlers.setup",
-    "aria.middleware", "aria.db.fsm_storage",
+    "aria.middleware", "aria.middlewares", "aria.middlewares.master",
+    "aria.db.fsm_storage",
     "aria.services.commands", "aria.services.email_monitor",
     "aria.services.scheduler",
 ]

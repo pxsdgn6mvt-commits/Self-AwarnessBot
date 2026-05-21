@@ -24,14 +24,16 @@ from aria.config import settings
 from aria.db.fsm_storage import PostgresFSMStorage
 from aria.handlers.client_bot import client_router
 from aria.db.repo import (
-    close_pool, create_tenant, ensure_owner_master, get_tenant,
-    get_tenant_by_token, init_db, list_active_tenants,
+    close_pool, create_tenant, ensure_owner_master, get_active_master_bots,
+    get_tenant, get_tenant_by_token, init_db, list_active_tenants,
 )
 from aria.handlers import admin, chat, email_setup, menu, quick, start
 from aria.handlers.availability import router as availability_router
+from aria.handlers.master_bot import master_router
 from aria.handlers.masters import router as masters_router
 from aria.handlers.setup import router as setup_router
 from aria.middleware import TenantMiddleware
+from aria.middlewares.master import MasterMiddleware
 from aria.services.commands import set_commands
 from aria.services.scheduler import get_scheduler, schedule_daily_reactivation, schedule_owner_reminders
 
@@ -44,6 +46,9 @@ log = logging.getLogger("aria")
 
 _bots: dict[int, Bot] = {}
 _tasks: dict[int, asyncio.Task] = {}
+
+_master_bots: dict[int, Bot] = {}
+_master_tasks: dict[int, asyncio.Task] = {}
 
 
 def _is_tenant_vip_row(row: dict) -> bool:
@@ -73,6 +78,23 @@ def _build_dispatcher() -> Dispatcher:
     async def on_error(event: ErrorEvent) -> None:
         log.exception(
             "Unhandled error for update %s: %s",
+            event.update.update_id if event.update else "?",
+            event.exception,
+            exc_info=event.exception,
+        )
+
+    return dp
+
+
+def _build_master_dispatcher() -> Dispatcher:
+    dp = Dispatcher(storage=PostgresFSMStorage())
+    dp.update.middleware(MasterMiddleware())
+    dp.include_router(master_router)
+
+    @dp.errors()
+    async def on_error(event: ErrorEvent) -> None:
+        log.exception(
+            "Unhandled error for master update %s: %s",
             event.update.update_id if event.update else "?",
             event.exception,
             exc_info=event.exception,
@@ -189,6 +211,41 @@ async def _watch_tenants(dp: Dispatcher) -> None:
             log.exception("Tenant watcher error")
 
 
+async def _watch_master_bots(master_dp: Dispatcher) -> None:
+    while True:
+        await asyncio.sleep(10)
+        try:
+            rows = await get_active_master_bots()
+            active_ids = {r["id"] for r in rows}
+
+            for row in rows:
+                mid = row["id"]
+                task = _master_tasks.get(mid)
+                if task is None or task.done():
+                    bot = Bot(
+                        token=row["bot_token"],
+                        default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+                    )
+                    _master_bots[mid] = bot
+                    _master_tasks[mid] = asyncio.create_task(
+                        _poll_bot(bot, master_dp, mid)
+                    )
+                    log.info("Started polling for master #%d (%s)", mid, row["name"])
+
+            for mid in list(_master_bots.keys()):
+                if mid not in active_ids:
+                    _master_tasks[mid].cancel()
+                    try:
+                        await _master_bots[mid].session.close()
+                    except Exception:
+                        pass
+                    del _master_bots[mid]
+                    del _master_tasks[mid]
+                    log.info("Stopped polling for master #%d", mid)
+        except Exception:
+            log.exception("Master bot watcher error")
+
+
 # ── Initial tenant seed ───────────────────────────────────────────────────────
 
 async def _ensure_owner_masters() -> None:
@@ -263,6 +320,7 @@ async def main() -> None:
     schedule_owner_reminders(lambda: _bots)
 
     dp = _build_dispatcher()
+    master_dp = _build_master_dispatcher()
 
     # ── Client bot (platform-level, one for all tenants) ──────────────────
     _client_task: asyncio.Task | None = None
@@ -306,18 +364,22 @@ async def main() -> None:
         except NotImplementedError:
             pass
 
-    web_task   = asyncio.create_task(_run_web())
-    watch_task = asyncio.create_task(_watch_tenants(dp))
+    web_task          = asyncio.create_task(_run_web())
+    watch_task        = asyncio.create_task(_watch_tenants(dp))
+    master_watch_task = asyncio.create_task(_watch_master_bots(master_dp))
     await stop_event.wait()
 
     log.info("Cancelling %d polling tasks...", len(_tasks))
     web_task.cancel()
     watch_task.cancel()
+    master_watch_task.cancel()
     if _client_task:
         _client_task.cancel()
     for task in _tasks.values():
         task.cancel()
-    all_tasks = [*_tasks.values(), watch_task, web_task]
+    for task in _master_tasks.values():
+        task.cancel()
+    all_tasks = [*_tasks.values(), *_master_tasks.values(), watch_task, master_watch_task, web_task]
     if _client_task:
         all_tasks.append(_client_task)
     await asyncio.gather(*all_tasks, return_exceptions=True)

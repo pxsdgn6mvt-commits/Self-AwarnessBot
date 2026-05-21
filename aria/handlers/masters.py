@@ -26,6 +26,10 @@ class AddMasterFSM(StatesGroup):
     phone = State()
 
 
+class SetMasterBotFSM(StatesGroup):
+    waiting_token = State()
+
+
 def _masters_text_and_kb(masters: list) -> tuple[str, InlineKeyboardMarkup]:
     if not masters:
         text = "👥 <b>Мастера</b>\n\nСписок пуст."
@@ -48,6 +52,10 @@ def _masters_text_and_kb(masters: list) -> tuple[str, InlineKeyboardMarkup]:
             rows.append([InlineKeyboardButton(
                 text=f"🚫 Деактивировать {m['name']}",
                 callback_data=f"cfg:master_off:{m['id']}",
+            )])
+            rows.append([InlineKeyboardButton(
+                text=f"🤖 Выдать бот {m['name']}",
+                callback_data=f"cfg:master_token:{m['id']}",
             )])
         elif not m["is_active"]:
             rows.append([InlineKeyboardButton(
@@ -194,4 +202,63 @@ async def fsm_master_phone(message: Message, state: FSMContext) -> None:
     await state.clear()
     masters = await repo.get_masters(data["tenant_id"], active_only=False)
     text, kb = _masters_text_and_kb(masters)
+    await message.answer(text, reply_markup=kb, parse_mode="HTML")
+
+
+# ── Assign bot token to master ────────────────────────────────────────────────
+
+@router.callback_query(F.data.startswith("cfg:master_token:"), SetupDone())
+async def cb_master_token(callback: CallbackQuery, state: FSMContext, tenant: TenantConfig) -> None:
+    if not tenant.is_owner(callback.from_user.id):
+        await callback.answer("Нет доступа.", show_alert=True)
+        return
+    master_id = int(callback.data.split(":")[-1])
+    master = await repo.get_master_by_id(master_id)
+    if not master or master["tenant_id"] != tenant.id:
+        await callback.answer("Мастер не найден.", show_alert=True)
+        return
+    await state.set_state(SetMasterBotFSM.waiting_token)
+    await state.update_data(master_id=master_id, tenant_id=tenant.id)
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
+    await callback.message.answer(
+        f"🤖 <b>Бот для мастера {master['name']}</b>\n\n"
+        "Создайте бота через @BotFather и введите полученный токен:",
+        parse_mode="HTML",
+    )
+    await callback.answer()
+
+
+@router.message(SetMasterBotFSM.waiting_token, F.text)
+async def fsm_master_bot_token(message: Message, state: FSMContext) -> None:
+    from aiogram import Bot as _Bot
+    from aiogram.client.default import DefaultBotProperties
+    from aiogram.enums import ParseMode
+
+    token = message.text.strip()
+    data = await state.get_data()
+
+    temp_bot = _Bot(token=token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    try:
+        bot_info = await temp_bot.get_me()
+        await temp_bot.session.close()
+    except Exception:
+        await temp_bot.session.close()
+        await message.answer(
+            "❌ Токен не валиден или бот недоступен. Проверьте токен и попробуйте снова:"
+        )
+        return
+
+    await repo.set_master_bot_token(data["master_id"], token)
+    await state.clear()
+    master = await repo.get_master_by_id(data["master_id"])
+    masters = await repo.get_masters(data["tenant_id"], active_only=False)
+    text, kb = _masters_text_and_kb(masters)
+    await message.answer(
+        f"✅ Бот <b>@{bot_info.username}</b> привязан к мастеру <b>{master['name']}</b>.\n"
+        "Мастер-бот запустится в течение 30 секунд.",
+        parse_mode="HTML",
+    )
     await message.answer(text, reply_markup=kb, parse_mode="HTML")

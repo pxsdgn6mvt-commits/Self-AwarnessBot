@@ -236,4 +236,8 @@ CREATE INDEX IF NOT EXISTS idx_availability_master_date
 
 ALTER TABLE aria_bookings
     ADD COLUMN IF NOT EXISTS master_id INTEGER REFERENCES aria_masters(id) ON DELETE SET NULL;
+
+-- ── S4: master bot tokens ──────────────────────────────────────────────────────
+ALTER TABLE aria_masters ADD COLUMN IF NOT EXISTS bot_token  TEXT;
+ALTER TABLE aria_masters ADD COLUMN IF NOT EXISTS bot_active BOOLEAN NOT NULL DEFAULT FALSE;
 """
