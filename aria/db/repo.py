@@ -794,3 +794,68 @@ async def update_item_duration(item_id: int, duration_minutes: int | None) -> No
         await conn.execute(
             "UPDATE aria_service_items SET duration_minutes=$2 WHERE id=$1", item_id, duration_minutes
         )
+
+
+# ── Masters ───────────────────────────────────────────────────────────────────
+
+async def create_master(
+    tenant_id: int,
+    name: str,
+    is_owner: bool = False,
+    phone: Optional[str] = None,
+    telegram_id: Optional[int] = None,
+) -> int:
+    async with _p().acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO aria_masters (tenant_id, name, is_owner, phone, telegram_id)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id
+            """,
+            tenant_id, name, is_owner, phone, telegram_id,
+        )
+        return row["id"]
+
+
+async def get_masters(
+    tenant_id: int,
+    active_only: bool = True,
+) -> list[asyncpg.Record]:
+    async with _p().acquire() as conn:
+        if active_only:
+            return await conn.fetch(
+                "SELECT * FROM aria_masters WHERE tenant_id=$1 AND is_active=TRUE ORDER BY id",
+                tenant_id,
+            )
+        return await conn.fetch(
+            "SELECT * FROM aria_masters WHERE tenant_id=$1 ORDER BY id",
+            tenant_id,
+        )
+
+
+async def get_owner_master(tenant_id: int) -> Optional[asyncpg.Record]:
+    async with _p().acquire() as conn:
+        return await conn.fetchrow(
+            "SELECT * FROM aria_masters WHERE tenant_id=$1 AND is_owner=TRUE LIMIT 1",
+            tenant_id,
+        )
+
+
+async def ensure_owner_master(tenant_id: int, owner_name: str) -> int:
+    """Create the owner master record if it doesn't exist. Idempotent."""
+    async with _p().acquire() as conn:
+        existing = await conn.fetchrow(
+            "SELECT id FROM aria_masters WHERE tenant_id=$1 AND is_owner=TRUE LIMIT 1",
+            tenant_id,
+        )
+        if existing:
+            return existing["id"]
+        row = await conn.fetchrow(
+            """
+            INSERT INTO aria_masters (tenant_id, name, is_owner)
+            VALUES ($1, $2, TRUE)
+            RETURNING id
+            """,
+            tenant_id, owner_name,
+        )
+        return row["id"]

@@ -48,6 +48,9 @@ reminder_sent       BOOLEAN NOT NULL DEFAULT FALSE
 noshow_check_sent   BOOLEAN NOT NULL DEFAULT FALSE
 upsell_offered      BOOLEAN NOT NULL DEFAULT FALSE
 calendar_event_id   TEXT                          -- GCal event ID (null for local-only)
+client_tg_id        BIGINT                        -- client's Telegram ID (from Mini App)
+client_reminder_sent BOOLEAN NOT NULL DEFAULT FALSE
+master_id           INTEGER REFERENCES aria_masters(id) ON DELETE SET NULL  -- [S3-A] NULL = unassigned
 created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 ```
 Index: `(tenant_id, scheduled_at) WHERE status = 'confirmed'`
@@ -99,6 +102,46 @@ name        TEXT NOT NULL
 position    INT  NOT NULL DEFAULT 0
 UNIQUE (category_id, name)
 ```
+
+### `aria_masters` [S3-A]
+One row per master per tenant. Owner is always the first master (`is_owner=TRUE`).
+```sql
+id          SERIAL PRIMARY KEY
+tenant_id   INTEGER NOT NULL REFERENCES aria_tenants(id) ON DELETE CASCADE
+name        TEXT NOT NULL
+phone       TEXT
+telegram_id BIGINT                    -- master's Telegram ID (optional)
+is_owner    BOOLEAN NOT NULL DEFAULT FALSE
+is_active   BOOLEAN NOT NULL DEFAULT TRUE
+created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+```
+Index: `(tenant_id)`
+
+### `aria_master_services` [S3-A]
+Many-to-many: which services each master provides.
+```sql
+master_id   INTEGER NOT NULL REFERENCES aria_masters(id) ON DELETE CASCADE
+service_id  INTEGER NOT NULL REFERENCES aria_service_items(id) ON DELETE CASCADE
+PRIMARY KEY (master_id, service_id)
+```
+
+### `aria_availability` [S3-A]
+Overrides on top of the base schedule stored in `aria_tenants`.
+Base schedule (`working_days`, `open_hour`, `close_hour`) is NOT replaced — only extended.
+```sql
+id          SERIAL PRIMARY KEY
+tenant_id   INTEGER NOT NULL REFERENCES aria_tenants(id) ON DELETE CASCADE
+master_id   INTEGER REFERENCES aria_masters(id) ON DELETE CASCADE  -- NULL = whole tenant
+date        DATE        -- specific date override (weekday must be NULL)
+weekday     SMALLINT    -- recurring weekly rule 1=Mon..7=Sun (date must be NULL)
+time_from   TIME        -- NULL = whole day rule
+time_to     TIME        -- NULL = whole day rule
+is_open     BOOLEAN NOT NULL DEFAULT FALSE  -- FALSE = blocked
+note        TEXT
+created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CONSTRAINT chk_date_or_weekday: exactly one of (date, weekday) must be set
+```
+Indexes: `(tenant_id, date)`, `(master_id, date)`
 
 ### `aria_waitlist`
 ```sql

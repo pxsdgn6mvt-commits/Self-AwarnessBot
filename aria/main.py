@@ -24,8 +24,8 @@ from aria.config import settings
 from aria.db.fsm_storage import PostgresFSMStorage
 from aria.handlers.client_bot import client_router
 from aria.db.repo import (
-    close_pool, create_tenant, get_tenant, get_tenant_by_token,
-    init_db, list_active_tenants,
+    close_pool, create_tenant, ensure_owner_master, get_tenant,
+    get_tenant_by_token, init_db, list_active_tenants,
 )
 from aria.handlers import admin, chat, email_setup, menu, quick, start
 from aria.handlers.setup import router as setup_router
@@ -187,6 +187,15 @@ async def _watch_tenants(dp: Dispatcher) -> None:
 
 # ── Initial tenant seed ───────────────────────────────────────────────────────
 
+async def _ensure_owner_masters() -> None:
+    rows = await list_active_tenants()
+    for row in rows:
+        try:
+            await ensure_owner_master(row["id"], row["owner_name"])
+        except Exception:
+            log.exception("ensure_owner_master failed for tenant #%d", row["id"])
+
+
 async def _ensure_initial_tenant() -> None:
     existing = await get_tenant_by_token(settings.BOT_TOKEN)
     if existing is None:
@@ -244,6 +253,7 @@ async def main() -> None:
 
     await init_db(settings.DATABASE_URL)
     await _ensure_initial_tenant()
+    await _ensure_owner_masters()
     get_scheduler().start()
     schedule_daily_reactivation(lambda: _bots)
     schedule_owner_reminders(lambda: _bots)
