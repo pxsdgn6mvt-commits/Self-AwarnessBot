@@ -409,18 +409,49 @@ async def get_all_upcoming_bookings(tenant_id: int, limit: int = 30) -> list[asy
         )
 
 
-async def get_slots_on_date(tenant_id: int, date_str: str) -> list[datetime]:
+async def get_slots_on_date(tenant_id: int, date_str: str) -> list[tuple[datetime, int]]:
+    """Returns (booking_start, duration_minutes) for each confirmed/pending booking on date."""
     date_obj = _date.fromisoformat(date_str)
     async with _p().acquire() as conn:
         rows = await conn.fetch(
             """
-            SELECT scheduled_at FROM aria_bookings
-            WHERE tenant_id=$1 AND scheduled_at::date=$2
-              AND status IN ('confirmed', 'pending')
+            SELECT b.scheduled_at,
+                   COALESCE(
+                       (SELECT si.duration_minutes
+                        FROM aria_service_items si
+                        JOIN aria_service_categories sc ON si.category_id = sc.id
+                        WHERE sc.tenant_id = b.tenant_id
+                          AND LOWER(si.name) = LOWER(b.service)
+                          AND si.duration_minutes IS NOT NULL
+                        LIMIT 1),
+                       t.slot_minutes
+                   ) AS duration_minutes
+            FROM aria_bookings b
+            JOIN aria_tenants t ON t.id = b.tenant_id
+            WHERE b.tenant_id=$1 AND b.scheduled_at::date=$2
+              AND b.status IN ('confirmed', 'pending')
             """,
             tenant_id, date_obj,
         )
-        return [r["scheduled_at"] for r in rows]
+        return [(r["scheduled_at"], r["duration_minutes"]) for r in rows]
+
+
+def slots_overlap(
+    slot_start_min: int,
+    slot_min: int,
+    bookings: list[tuple[int, int]],
+) -> bool:
+    """True if the candidate slot overlaps any booking interval.
+
+    slot_start_min — minutes since midnight for the candidate slot
+    slot_min       — duration of one slot in minutes (tenant.slot_minutes)
+    bookings       — list of (booked_start_min, booked_duration_min)
+    """
+    slot_end = slot_start_min + slot_min
+    for b_start, b_dur in bookings:
+        if b_start < slot_end and (b_start + b_dur) > slot_start_min:
+            return True
+    return False
 
 
 

@@ -47,3 +47,14 @@ aria_service_items: колонка duration_minutes (не duration_min).
 
 initData parsing: user_id берётся из initData (поле user.id),
   НЕ из тела POST-запроса.
+
+## DECISION-008 — timezone в slot-checking (Sprint 005, 2026-05-21)
+scheduled_at хранится в БД как UTC TIMESTAMPTZ.
+Для сравнения слотов (HH:MM) конвертировать в tenant.timezone перед сравнением.
+Нельзя сравнивать UTC время с локальными HH:MM слотами напрямую.
+
+## DECISION-009 — slot_minutes как fallback для duration (Sprint 006, 2026-05-21)
+При overlap-проверке duration конкретной услуги берётся через LEFT JOIN aria_service_items.
+Если JOIN не дал результата (услуга не в каталоге) — fallback: tenant.slot_minutes.
+Это решение не требует изменения схемы aria_bookings (нет поля service_item_id).
+При переходе на service_item_id в будущем — пересмотреть.

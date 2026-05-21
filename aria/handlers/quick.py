@@ -133,15 +133,19 @@ async def _time_kb(tenant: TenantConfig, date_str: str) -> InlineKeyboardMarkup 
     from zoneinfo import ZoneInfo
     lang = tenant.owner_lang or "ru"
     tz = ZoneInfo(tenant.timezone or "UTC")
-    booked_dts = await repo.get_slots_on_date(tenant.id, date_str)
-    booked = {dt.astimezone(tz).strftime("%H:%M") for dt in booked_dts}
+    booked_data = await repo.get_slots_on_date(tenant.id, date_str)
+    booked_intervals = [
+        (dt.astimezone(tz).hour * 60 + dt.astimezone(tz).minute, dur)
+        for dt, dur in booked_data
+    ]
     h, m = tenant.open_hour, 0
     buttons: list[InlineKeyboardButton] = []
     while h < tenant.close_hour:
-        label = f"{h:02d}:{m:02d}"
-        if label not in booked:
+        slot_start = h * 60 + m
+        if not repo.slots_overlap(slot_start, tenant.slot_minutes, booked_intervals):
+            label = f"{h:02d}:{m:02d}"
             buttons.append(InlineKeyboardButton(text=label, callback_data=f"qb_time:{label}"))
-        total = h * 60 + m + tenant.slot_minutes
+        total = slot_start + tenant.slot_minutes
         h, m = divmod(total, 60)
     if not buttons:
         return None
