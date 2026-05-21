@@ -4,7 +4,7 @@
 2026-05-21
 
 ## Active Sprint
-003-reliability
+None — ожидание Sprint 004
 
 ## Project Status
 
@@ -28,7 +28,7 @@
 | Client reminders (not just owner) | 🔲 Not started |
 
 ## Last Completed Sprint
-002-miniapp-integration — DONE (все 5 must-pass criteria ✅)
+003-reliability — DONE (все 6 must-pass criteria ✅)
 
 ## Known Open Issues
 - No known critical bugs in production as of 2026-05-21
