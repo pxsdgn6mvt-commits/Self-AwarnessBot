@@ -67,6 +67,9 @@ def _owner_settings_kb(lang: str = "ru") -> InlineKeyboardMarkup:
             InlineKeyboardButton(text=t("btn_clients", lang),       callback_data="cfg:clients"),
         ],
         [
+            InlineKeyboardButton(text="👥 Мастера",                 callback_data="cfg:masters"),
+        ],
+        [
             InlineKeyboardButton(text=t("btn_income", lang),        callback_data="cfg:income"),
             InlineKeyboardButton(text=t("btn_reminders", lang),     callback_data="cfg:reminders"),
         ],

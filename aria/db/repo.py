@@ -859,3 +859,17 @@ async def ensure_owner_master(tenant_id: int, owner_name: str) -> int:
             tenant_id, owner_name,
         )
         return row["id"]
+
+
+async def get_master_by_id(master_id: int) -> Optional[asyncpg.Record]:
+    async with _p().acquire() as conn:
+        return await conn.fetchrow(
+            "SELECT * FROM aria_masters WHERE id=$1", master_id
+        )
+
+
+async def set_master_active(master_id: int, is_active: bool) -> None:
+    async with _p().acquire() as conn:
+        await conn.execute(
+            "UPDATE aria_masters SET is_active=$1 WHERE id=$2", is_active, master_id
+        )

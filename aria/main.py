@@ -28,6 +28,7 @@ from aria.db.repo import (
     get_tenant_by_token, init_db, list_active_tenants,
 )
 from aria.handlers import admin, chat, email_setup, menu, quick, start
+from aria.handlers.masters import router as masters_router
 from aria.handlers.setup import router as setup_router
 from aria.middleware import TenantMiddleware
 from aria.services.commands import set_commands
@@ -61,6 +62,7 @@ def _build_dispatcher() -> Dispatcher:
     dp.include_router(admin.router)
     dp.include_router(start.router)
     dp.include_router(menu.router)
+    dp.include_router(masters_router)
     dp.include_router(quick.router)
     dp.include_router(email_setup.router)
     dp.include_router(chat.router)
