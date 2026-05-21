@@ -33,3 +33,17 @@ Blueprint предполагал aiohttp в server.py — неверное до�
 
 Следствие: Mini App делает запросы НЕ на server.py, а на отдельный порт/путь.
 В Railway добавить переменную PORT_API и настроить routing если нужно.
+
+## DECISION-007 — реальные сигнатуры (2026-05-21)
+Источник: Builder адаптации Sprint 003.
+
+_bots dict: ключ — int(tenant_id), НЕ строка bot_token.
+  Доступ: _bots[tenant_row['id']]
+
+repo.create_booking(): НЕ принимает pool, client_phone, status как параметры.
+  Перед следующим обращением к create_booking() читать реальную сигнатуру в repo.py.
+
+aria_service_items: колонка duration_minutes (не duration_min).
+
+initData parsing: user_id берётся из initData (поле user.id),
+  НЕ из тела POST-запроса.

@@ -1,35 +1,45 @@
-# Project State
+# STATE.md — Aria Bot Platform
+Последнее обновление: 2026-05-21
 
-Updated: 2026-05-21
+## Статус компонентов
 
-## Completed sprints
+Multi-tenant polling loop        ✅
+Owner FSM (quick.py)             ✅
+Client booking FSM (bot)         ✅ Sprint 002
+client_phone в aria_bookings     ✅ Sprint 002
+notify_owner (notifications.py)  ✅ Sprint 003
+aiohttp API в aria/main.py       ✅ Sprint 003
+Mini App (miniapp/)              ✅ Sprint 003
+is_active фильтрация услуг       ❌ TD-001 → Sprint 004
+Конфликты слотов                 ❌ TD-002 → Sprint 005
+GCal sync клиентских броней      ❌ → Sprint 006
 
-| Sprint | Description | Status |
-|--------|-------------|--------|
-| 001 | Multi-tenant polling core | ✅ done |
-| 002 | VIP system, scheduler, email monitor | ✅ done |
-| 003 | Mini App skeleton + API layer (aiohttp) | ✅ done |
+## Последние спринты
 
-## Current architecture
+Sprint 002 — Client Booking FSM
+  ветка: claude/client-booking-fsm-sprint-05t0R
+  коммит: a052aaf
 
-```
-Railway:
-  web    → gunicorn server:app          (Flask, landing page, /api/chat)
-  worker → python -m aria.main         (asyncio, polling, aiohttp API on PORT_API)
-```
+Sprint 003 — Mini App + API
+  ветка: claude/api-layer-aiohttp-main-qRfj3
+  коммит: 60bada9
 
-## Active technical debt
+## Активный спринт
 
-| ID | Description | Sprint |
-|----|-------------|--------|
-| TD-001 | is_active filter missing from service catalogue queries | 004 |
-| TD-002 | Slot conflict checking not implemented (slots are fixed 09-18) | 005 |
+Sprint 004 — is_active filtering (TD-001)
 
-## Open variables (Railway)
+## Критические факты для Builder
 
-| Variable | Required | Default | Notes |
-|----------|----------|---------|-------|
-| ARIA_BOT_TOKEN | ✅ | — | Main bot token |
-| DATABASE_URL | ✅ | — | asyncpg DSN |
-| ANTHROPIC_API_KEY | ✅ | — | AI responses |
-| PORT_API | ⚠️ | 8081 | aiohttp Mini App API port |
+_bots: ключ int(tenant_id), не строка bot_token
+repo.create_booking(): перед использованием читать реальную сигнатуру в repo.py
+aria_service_items: колонка duration_minutes, не duration_min
+initData: user_id парсится из initData.user.id
+server.py: не трогать (Flask, маркетинг)
+aiohttp API: живёт в aria/main.py, порт PORT_API (default 8081)
+
+## Railway Variables
+
+ARIA_BOT_TOKEN    required   —      Main bot token
+DATABASE_URL      required   —      asyncpg DSN
+ANTHROPIC_API_KEY required   —      AI responses
+PORT_API          optional   8081   aiohttp Mini App API port
