@@ -216,12 +216,66 @@ def api_services():
         return jsonify({"error": str(exc)}), 500
 
 
-# ── GET /api/slots?tenant_id=X&date=YYYY-MM-DD ────────────────────────────────
+# ── GET /api/slots?tenant_id=X&date=YYYY-MM-DD[&master=Y] ────────────────────
+
+def _build_slots(
+    open_min: int,
+    close_min: int,
+    step: int,
+    tz: ZoneInfo,
+    target_date: _date,
+    now_utc: datetime,
+    booked: set,
+) -> list[str]:
+    slots: list[str] = []
+    cur = open_min
+    while cur < close_min:
+        h, m = divmod(cur, 60)
+        slot_utc = datetime(
+            target_date.year, target_date.month, target_date.day,
+            h, m, tzinfo=tz,
+        ).astimezone(timezone.utc)
+        if slot_utc > now_utc and slot_utc not in booked:
+            slots.append(f"{h:02d}:{m:02d}")
+        cur += step
+    return slots
+
+
+def _apply_availability(
+    slots: list[str],
+    avail_rows: list,
+    step: int,
+    tz: ZoneInfo,
+    target_date: _date,
+    now_utc: datetime,
+    booked: set,
+) -> list[str]:
+    # Rule 2: closed day — wins over everything
+    if any(not r["is_open"] and r["time_from"] is None for r in avail_rows):
+        return []
+
+    # Rule 3: custom hours — rebuild slot list
+    custom = [r for r in avail_rows if r["is_open"] and r["time_from"] is not None]
+    if custom:
+        r = custom[0]
+        open_min  = r["time_from"].hour * 60 + r["time_from"].minute
+        close_min = r["time_to"].hour   * 60 + r["time_to"].minute
+        slots = _build_slots(open_min, close_min, step, tz, target_date, now_utc, booked)
+
+    # Rule 1: blocked slots — remove specific times
+    blocked = {
+        r["time_from"].strftime("%H:%M")
+        for r in avail_rows
+        if not r["is_open"] and r["time_from"] is not None
+    }
+    return [s for s in slots if s not in blocked]
+
 
 @app.route("/api/slots")
 def api_slots():
     tenant_id = request.args.get("tenant_id", type=int)
-    date_str = request.args.get("date", "")
+    master_id = request.args.get("master", type=int)
+    date_str  = request.args.get("date", "")
     if not tenant_id or not date_str:
         return jsonify({"error": "tenant_id and date required"}), 400
     try:
@@ -236,7 +290,7 @@ def api_slots():
                 "SELECT * FROM aria_tenants WHERE id=$1", tenant_id
             )
             if not tenant_row:
-                return None, None
+                return None, None, []
             booked_rows = await conn.fetch(
                 """
                 SELECT scheduled_at FROM aria_bookings
@@ -244,12 +298,22 @@ def api_slots():
                 """,
                 tenant_id, target_date,
             )
+            avail_rows = []
+            if master_id is not None:
+                avail_rows = await conn.fetch(
+                    """
+                    SELECT is_open, time_from, time_to
+                    FROM aria_availability
+                    WHERE tenant_id=$1 AND master_id=$2 AND date=$3
+                    """,
+                    tenant_id, master_id, target_date,
+                )
         finally:
             await conn.close()
-        return tenant_row, {r["scheduled_at"] for r in booked_rows}
+        return tenant_row, {r["scheduled_at"] for r in booked_rows}, list(avail_rows)
 
     try:
-        tenant_row, booked = _run(_fetch())
+        tenant_row, booked, avail_rows = _run(_fetch())
     except Exception as exc:
         log.exception("api_slots error")
         return jsonify({"error": str(exc)}), 500
@@ -261,20 +325,16 @@ def api_slots():
     if target_date.isoweekday() not in working_days:
         return jsonify([])
 
-    tz = ZoneInfo(tenant_row["timezone"] or "UTC")
+    tz      = ZoneInfo(tenant_row["timezone"] or "UTC")
     open_h  = tenant_row["open_hour"]    or 10
     close_h = tenant_row["close_hour"]   or 20
     step    = tenant_row["slot_minutes"] or 60
     now_utc = datetime.now(timezone.utc)
 
-    slots = []
-    h, m = open_h, 0
-    while h < close_h:
-        slot_utc = datetime(target_date.year, target_date.month, target_date.day,
-                            h, m, tzinfo=tz).astimezone(timezone.utc)
-        if slot_utc > now_utc and slot_utc not in booked:
-            slots.append(f"{h:02d}:{m:02d}")
-        h, m = divmod(h * 60 + m + step, 60)
+    slots = _build_slots(open_h * 60, close_h * 60, step, tz, target_date, now_utc, booked)
+
+    if master_id is not None and avail_rows:
+        slots = _apply_availability(slots, avail_rows, step, tz, target_date, now_utc, booked)
 
     return jsonify(slots)
 
