@@ -42,6 +42,10 @@ _bots: dict[int, Bot] = {}
 _tasks: dict[int, asyncio.Task] = {}
 
 
+def get_tenant_bot(tenant_id: int) -> Bot | None:
+    return _bots.get(tenant_id)
+
+
 def _is_tenant_vip_row(row: dict) -> bool:
     from datetime import datetime, timezone
     if not row.get("is_vip"):

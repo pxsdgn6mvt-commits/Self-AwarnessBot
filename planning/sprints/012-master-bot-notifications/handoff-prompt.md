@@ -1,50 +1,58 @@
-Handoff — Sprint 012
+Handoff — Sprint 012 (revised after dry-run blockers)
 
 You are the Builder Layer. Execute the approved blueprint exactly.
+
+Critical context (read before anything else)
+
+The previous sprint 012 dry-run revealed that aria_masters table does NOT exist
+and _watch_master_bots() does NOT exist. This revised sprint works with the
+ACTUAL codebase. "Owner" = salon owner = tg_id in aria_tenants.
 
 Read First (in this order)
 
 	1.	docs/STATE.md
 	2.	planning/sprints/012-master-bot-notifications/requirements.md
 	3.	planning/sprints/012-master-bot-notifications/blueprint.md
-	4.	aria/main.py — locate _watch_master_bots() and existing Bot management
-	5.	aria/db/repo.py — locate create_booking, delete_booking, update_booking
+	4.	aria/main.py — locate _watch_tenants() and the tenant Bot dict
+	5.	aria/db/repo.py — locate create_booking, update_booking_status,
+update_booking_time; check for existing tg_id and booking-detail helpers
 
-Execute
+Dry-run first (mandatory)
 
-Step 1 — Expose master bot registry in aria/main.py
-Add _master_bots: dict[int, Bot] = {} at module level.
-Inside _watch_master_bots(), keep the start/stop logic and also maintain
-_master_bots in sync (add on start, remove on stop).
-Add: def get_master_bot(master_id: int) -> Bot | None: return _master_bots.get(master_id)
+Before writing any file, report:
 
-Step 2 — Create aria/notifications.py
-Implement 3 async functions as specified in blueprint.md.
-Import get_master_bot from aria.main.
-All functions: silent return if bot is None, catch TelegramAPIError, log both cases.
-Date format: dd.mm.yyyy and HH:MM.
+	•	Exact name and line number of the tenant Bot dict in main.py
+	•	Whether get_tenant_owner_tg_id or equivalent already exists in repo.py
+	•	Whether get_booking_details or equivalent already exists in repo.py
+	•	Confirm import chain is acyclic
 
-Step 3 — Wire into aria/db/repo.py
-After each successful booking write, call the matching notify function via
-asyncio.create_task().
-If get_booking_details(booking_id) does not exist, create it — minimal SELECT
-returning client_name, client_phone, service_name, master_tg_id, dt (and old_dt
-for reschedule).
-Import notify_* functions lazily inside the function body if needed to avoid
-any import-time side effects.
+If anything is ambiguous or missing from the above — stop and report, do not invent.
 
-Step 4 — Create tests/test_notifications.py
-5 tests as listed in acceptance.md. Use unittest.mock.AsyncMock for bot.
-Patch aria.notifications.get_master_bot.
+Execute (after dry-run confirmed)
 
-Step 5 — Dry run check
-Before writing any file, state which functions in repo.py you found for
-create/delete/update booking, and confirm the import chain is acyclic.
+Step 1 — aria/main.py
+Add def get_tenant_bot(tenant_id: int) -> Bot | None using the existing
+tenant Bot dict. Do not change _watch_tenants() logic.
+
+Step 2 — aria/notifications.py (new file)
+Three async functions: notify_owner_new_booking, notify_owner_cancelled,
+notify_owner_rescheduled. Silent return if bot is None. Catch TelegramAPIError.
+Date format: dd.mm.yyyy, time: HH:MM.
+
+Step 3 — aria/db/repo.py
+Add get_tenant_owner_tg_id(tenant_id) if not present.
+Add get_booking_details(booking_id) if not present.
+Wire asyncio.create_task(notify_owner_*(...)) into the three booking mutation
+functions. Import notify functions inside the function body to avoid circular
+import issues at module load time.
+
+Step 4 — tests/test_notifications.py (new file)
+5 tests. Patch aria.notifications.get_tenant_bot with AsyncMock.
+Cover: new booking, cancelled, rescheduled, no-bot silent return, TelegramAPIError swallowed.
 
 Constraints
 
+	•	No new DB tables or ALTER TABLE
 	•	Do not modify server.py
 	•	Do not refactor files outside sprint scope
-	•	Do not add new DB tables or columns
-	•	If any booking write function is ambiguous (e.g. combined create+update),
-stop and describe what you found before proceeding
+	•	tg_id comes from aria_tenants, never from aria_masters

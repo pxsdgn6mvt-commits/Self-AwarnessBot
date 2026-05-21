@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from datetime import date as _date, datetime, timedelta, timezone
@@ -259,7 +260,14 @@ async def create_booking(
             """,
             tenant_id, user_id, client_name, service, scheduled_at, calendar_event_id,
         )
-        return row["id"]
+        booking_id = row["id"]
+    tenant = await get_tenant(tenant_id)
+    if tenant and tenant["owner_tg_id"]:
+        from aria.notifications import notify_owner_new_booking
+        asyncio.create_task(notify_owner_new_booking(
+            tenant_id, tenant["owner_tg_id"], client_name, service, scheduled_at,
+        ))
+    return booking_id
 
 
 async def get_booking(booking_id: int) -> Optional[asyncpg.Record]:
@@ -283,18 +291,37 @@ async def get_upcoming_booking(tenant_id: int, user_id: int) -> Optional[asyncpg
 
 
 async def update_booking_time(booking_id: int, new_time: datetime) -> None:
+    booking = await get_booking(booking_id)
     async with _p().acquire() as conn:
         await conn.execute(
             "UPDATE aria_bookings SET scheduled_at=$1, reminder_sent=FALSE WHERE id=$2",
             new_time, booking_id,
         )
+    if booking:
+        tenant = await get_tenant(booking["tenant_id"])
+        if tenant and tenant["owner_tg_id"]:
+            from aria.notifications import notify_owner_rescheduled
+            asyncio.create_task(notify_owner_rescheduled(
+                booking["tenant_id"], tenant["owner_tg_id"],
+                booking["client_name"], booking["service"],
+                booking["scheduled_at"], new_time,
+            ))
 
 
 async def update_booking_status(booking_id: int, status: str) -> None:
+    booking = await get_booking(booking_id) if status == "cancelled" else None
     async with _p().acquire() as conn:
         await conn.execute(
             "UPDATE aria_bookings SET status=$1 WHERE id=$2", status, booking_id
         )
+    if booking:
+        tenant = await get_tenant(booking["tenant_id"])
+        if tenant and tenant["owner_tg_id"]:
+            from aria.notifications import notify_owner_cancelled
+            asyncio.create_task(notify_owner_cancelled(
+                booking["tenant_id"], tenant["owner_tg_id"],
+                booking["client_name"], booking["service"], booking["scheduled_at"],
+            ))
 
 
 async def set_booking_paid(booking_id: int, paid: bool = True) -> None:

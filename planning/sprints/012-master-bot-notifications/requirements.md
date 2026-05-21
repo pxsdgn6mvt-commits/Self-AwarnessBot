@@ -1,45 +1,38 @@
-Sprint 012 — Master Bot Push Notifications
+Sprint 012 — Booking Push Notifications to Salon Owner
 
 Business Goal
 
-When a booking is created, modified, or cancelled — the affected master receives an
-instant push notification in their personal bot. Masters currently learn about
-bookings only by manually checking their schedule. This sprint closes that gap.
+Когда запись создаётся, отменяется или переносится — владелец салона получает
+мгновенный push в свой бот. Сейчас владелец узнаёт о записях только заглядывая
+в расписание вручную.
 
 Users
 
-	•	Master — receives push in their bot (via master_bot dispatcher)
-	•	Owner — triggers notifications indirectly by managing bookings in owner-bot
-	•	Client — (future) triggers notifications via Mini App booking (out of scope)
+	•	Owner (владелец салона) — получает push через существующий tenant-бот
+	•	Клиент — (будущее) источник записи через Mini App, вне scope
+
+Terminology (исправлено)
+
+	•	"Мастер" = владелец салона = tg_id в таблице aria_tenants
+	•	"Master bot" = бот тенанта, уже запущенный через _watch_tenants()
+	•	Никакой таблицы aria_masters нет и не создаётся
 
 Scope
 
-Notify master bot when:
+Уведомить владельца салона когда:
 
-	1.	New booking created for this master (any source: owner-bot FSM)
-	2.	Booking cancelled / deleted
-	3.	Booking rescheduled (date or time changed)
+	1.	Создана новая запись к нему (create_booking)
+	2.	Запись отменена (update_booking_status(id, 'cancelled'))
+	3.	Запись перенесена (update_booking_time(id, new_time))
 
-Out of scope:
+Out of scope
 
-	•	Client-side booking flow (Sprint future)
-	•	Mini App webhook → notification (Sprint future, blocked on Mini App auth)
-	•	Bulk/broadcast notifications
-	•	Read receipts or delivery confirmation
+	•	Новые таблицы или колонки в БД
+	•	Mini App → notification
+	•	Отдельные боты на мастеров
+	•	Подтверждение доставки
 
-Inputs
-
-	•	Existing booking write functions in aria/db/repo.py
-	•	get_active_master_bots() → maps master_id → bot instance (already in _watch_master_bots)
-	•	Master's telegram tg_id from aria_masters table
-
-Outputs
-
-	•	Push message sent to master's tg_id via their bot instance
-	•	No new DB tables required
-	•	Notification text in Russian, consistent with existing bot tone
-
-Notification Message Format
+Message Format (Russian)
 
 📅 Новая запись!
 Клиент: {client_name} ({client_phone})
