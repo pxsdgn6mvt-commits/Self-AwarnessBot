@@ -160,6 +160,15 @@ async def _watch_tenants(dp: Dispatcher) -> None:
                     _tasks[tid] = asyncio.create_task(_poll_bot(bot, dp, tid))
                     log.info("Started polling for tenant #%d (%s)", tid, row["salon_name"])
 
+                # Resurrect email job if it was lost (e.g. after scheduler restart)
+                if row.get("email_user") and row.get("email_host") and _is_tenant_vip_row(row):
+                    if not get_scheduler().get_job(f"email_{tid}"):
+                        bot = _bots.get(tid)
+                        if bot:
+                            from aria.services.email_monitor import start_email_job
+                            start_email_job(tid, bot)
+                            log.info("Resurrected email job for tenant #%d", tid)
+
             for tid in list(_bots.keys()):
                 if tid not in active_ids:
                     _tasks[tid].cancel()

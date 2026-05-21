@@ -402,8 +402,8 @@ async def cb_cfg_cal(callback: CallbackQuery, state: FSMContext, tenant: TenantC
     if creds:
         try:
             svc_email = json.loads(creds).get("client_email")
-        except Exception:
-            pass
+        except Exception as e:
+            log.error("Failed to parse GOOGLE_CALENDAR_CREDENTIALS: %s", e, exc_info=True)
     svc_hint = (
         f"\n\nСервисный аккаунт:\n<code>{svc_email}</code>\n(добавь с правом «Вносить изменения»)"
         if svc_email else ""
