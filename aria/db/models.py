@@ -182,4 +182,7 @@ ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS daily_summary_hour    INT NOT 
 ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS owner_lang            VARCHAR(2) NOT NULL DEFAULT 'ru';
 ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS is_vip                BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS vip_until             TIMESTAMPTZ;
+
+-- Sprint 007: GCal event ID for Mini App bookings
+ALTER TABLE aria_bookings ADD COLUMN IF NOT EXISTS gcal_event_id TEXT;
 """

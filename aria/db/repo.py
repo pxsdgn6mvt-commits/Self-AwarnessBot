@@ -311,6 +311,14 @@ async def set_booking_note(booking_id: int, note: str) -> None:
         )
 
 
+async def set_booking_gcal_event_id(booking_id: int, event_id: str) -> None:
+    async with _p().acquire() as conn:
+        await conn.execute(
+            "UPDATE aria_bookings SET gcal_event_id=$1 WHERE id=$2",
+            event_id, booking_id,
+        )
+
+
 async def mark_reminder_sent(booking_id: int) -> None:
     async with _p().acquire() as conn:
         await conn.execute(

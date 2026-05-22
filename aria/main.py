@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import signal
 import sys
 
@@ -26,6 +27,7 @@ from aria.db.repo import (
     init_db, list_active_tenants,
 )
 from aria.handlers import admin, chat, email_setup, menu, quick, start
+from aria.handlers.miniapp_api import make_app as _make_miniapp_app
 from aria.handlers.setup import router as setup_router
 from aria.middleware import TenantMiddleware
 from aria.services.commands import set_commands
@@ -222,6 +224,14 @@ async def main() -> None:
 
     await init_db(settings.DATABASE_URL)
     await _ensure_initial_tenant()
+
+    from aiohttp import web as _web
+    _miniapp_runner = _web.AppRunner(_make_miniapp_app())
+    await _miniapp_runner.setup()
+    _miniapp_port = int(os.getenv("MINIAPP_PORT", "8081"))
+    await _web.TCPSite(_miniapp_runner, "0.0.0.0", _miniapp_port).start()
+    log.info("Mini App API listening on port %d", _miniapp_port)
+
     get_scheduler().start()
     schedule_daily_reactivation(lambda: _bots)
     schedule_owner_reminders(lambda: _bots)
@@ -262,6 +272,7 @@ async def main() -> None:
     for task in _tasks.values():
         task.cancel()
     await asyncio.gather(*_tasks.values(), watch_task, return_exceptions=True)
+    await _miniapp_runner.cleanup()
     await close_pool()
     log.info("Aria shutdown complete")
 
