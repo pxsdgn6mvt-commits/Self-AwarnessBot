@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>You're on the list — AIBeautyKit</title>
+<meta name="description" content="You've joined the AIBeautyKit waitlist. We'll be in touch when your spot opens up.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23c9a96e'/><text x='16' y='22' text-anchor='middle' font-family='Georgia,serif' font-size='19' font-weight='bold' fill='%230a0a0f'>A</text></svg>">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0a0f;
+  --bg2:#111118;
+  --bg3:#1a1a24;
+  --gold:#c9a96e;
+  --text:#f0ece4;
+  --muted:#8a8496;
+  --muted2:#5a5566;
+  --border:rgba(201,169,110,.15);
+}
+html{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif}
+body{background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;line-height:1.65;text-align:center}
+
+.glow{position:fixed;top:0;left:50%;transform:translateX(-50%);width:700px;height:340px;pointer-events:none;background:radial-gradient(ellipse at top,rgba(201,169,110,.1) 0%,transparent 70%);z-index:0}
+
+.card{position:relative;z-index:1;background:var(--bg2);border:1px solid var(--border);border-radius:24px;padding:64px 48px;max-width:480px;width:100%;box-shadow:0 24px 80px rgba(0,0,0,.6)}
+@media(max-width:520px){.card{padding:40px 24px;border-radius:16px}}
+
+.icon{font-size:3rem;margin-bottom:16px;display:block}
+
+.brand{font-size:.75rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--muted2);margin-bottom:28px}
+.brand span{color:var(--gold)}
+
+h1{font-size:clamp(2rem,6vw,2.8rem);font-weight:800;line-height:1.1;margin-bottom:16px;color:var(--text)}
+h1 em{font-style:normal;color:var(--gold)}
+
+.sub{color:var(--muted);font-size:.95rem;line-height:1.7;margin-bottom:40px;max-width:360px;margin-left:auto;margin-right:auto}
+
+.divider{border:none;border-top:1px solid rgba(201,169,110,.1);margin:0 0 32px}
+
+.btn-tg{display:inline-flex;align-items:center;justify-content:center;gap:10px;background:var(--gold);color:var(--bg);font-weight:800;font-size:.95rem;padding:16px 28px;border-radius:12px;text-decoration:none;width:100%;transition:background .15s,transform .1s;min-height:54px;letter-spacing:.02em}
+.btn-tg:hover{background:#d4b47a}
+.btn-tg:active{transform:scale(.98)}
+
+.tg-icon{width:20px;height:20px;flex-shrink:0}
+
+.back{display:block;margin-top:20px;color:var(--muted2);font-size:.82rem;text-decoration:none}
+.back:hover{color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="glow"></div>
+
+<div class="card">
+  <span class="icon">✓</span>
+  <div class="brand">AIBeautyKit<span>.</span></div>
+
+  <h1>You're on <em>the list.</em></h1>
+  <p class="sub">We've received your request. We're expanding country by country — you'll hear from us as soon as a spot opens up in your region. Keep an eye on your inbox.</p>
+
+  <hr class="divider"/>
+
+  <a href="https://t.me/AIBeautyKitinc" class="btn-tg" target="_blank" rel="noopener">
+    <svg class="tg-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.93 6.858l-1.694 7.98c-.127.567-.462.706-.937.439l-2.59-1.908-1.25 1.204c-.138.138-.254.254-.52.254l.186-2.637 4.793-4.33c.208-.186-.046-.29-.323-.104L8.14 13.906l-2.54-.794c-.552-.173-.563-.552.115-.818l9.916-3.822c.46-.167.862.112.3.586z" fill="currentColor"/>
+    </svg>
+    Join our Telegram while you wait →
+  </a>
+
+  <a href="/" class="back">← Back to homepage</a>
+</div>
+
+</body>
+</html>

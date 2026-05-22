@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Join the Waitlist — AIBeautyKit</title>
+<meta name="description" content="Get early access to AIBeautyKit — 6 AI specialists for beauty professionals.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23c9a96e'/><text x='16' y='22' text-anchor='middle' font-family='Georgia,serif' font-size='19' font-weight='bold' fill='%230a0a0f'>A</text></svg>">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0a0f;
+  --bg2:#111118;
+  --bg3:#1a1a24;
+  --gold:#c9a96e;
+  --gold-d:#a8844e;
+  --text:#f0ece4;
+  --muted:#8a8496;
+  --muted2:#5a5566;
+  --border:rgba(201,169,110,.15);
+}
+html{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;line-height:1.65}
+
+.glow{position:fixed;top:0;left:50%;transform:translateX(-50%);width:700px;height:340px;pointer-events:none;background:radial-gradient(ellipse at top,rgba(201,169,110,.08) 0%,transparent 70%);z-index:0}
+
+.card{position:relative;z-index:1;background:var(--bg2);border:1px solid var(--border);border-radius:24px;padding:56px 48px;max-width:520px;width:100%;box-shadow:0 24px 80px rgba(0,0,0,.6)}
+@media(max-width:560px){.card{padding:36px 24px;border-radius:16px}}
+
+.brand{font-size:.75rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--muted2);margin-bottom:32px}
+.brand span{color:var(--gold)}
+
+h1{font-size:clamp(1.9rem,5vw,2.6rem);font-weight:800;line-height:1.1;margin-bottom:12px;color:var(--text)}
+h1 em{font-style:normal;color:var(--gold)}
+
+.sub{color:var(--muted);font-size:.95rem;line-height:1.7;margin-bottom:40px;max-width:400px}
+
+.form-group{display:flex;flex-direction:column;gap:4px;margin-bottom:20px}
+label{font-size:.78rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+input,select{width:100%;background:var(--bg3);border:1px solid rgba(201,169,110,.2);border-radius:10px;padding:14px 16px;color:var(--text);font-size:.95rem;outline:none;transition:border-color .2s,box-shadow .2s;-webkit-appearance:none;appearance:none}
+input::placeholder{color:var(--muted2)}
+input:focus,select:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(201,169,110,.1)}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238a8496' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 16px center;padding-right:40px;cursor:pointer}
+select option{background:var(--bg3);color:var(--text)}
+
+.btn-submit{width:100%;background:var(--gold);color:var(--bg);font-weight:800;font-size:1rem;padding:16px 24px;border-radius:12px;border:none;cursor:pointer;transition:background .15s,transform .1s;margin-top:8px;min-height:54px;letter-spacing:.02em}
+.btn-submit:hover{background:#d4b47a}
+.btn-submit:active{transform:scale(.98)}
+
+.divider{border:none;border-top:1px solid rgba(201,169,110,.1);margin:32px 0}
+
+.tg-link{display:flex;align-items:center;justify-content:center;gap:10px;color:var(--gold);font-size:.88rem;font-weight:600;text-decoration:none;transition:opacity .2s}
+.tg-link:hover{opacity:.75}
+.tg-icon{width:22px;height:22px;flex-shrink:0}
+
+.back{display:block;text-align:center;margin-top:24px;color:var(--muted2);font-size:.82rem;text-decoration:none}
+.back:hover{color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="glow"></div>
+
+<div class="card">
+  <div class="brand">AIBeautyKit<span>.</span></div>
+
+  <h1>Join the <em>Waitlist</em></h1>
+  <p class="sub">Be among the first beauty professionals to get access. We're rolling out region by region — reserve your spot now.</p>
+
+  <form method="POST" action="/api/waitlist">
+    <div class="form-group">
+      <label for="name">Your name</label>
+      <input type="text" id="name" name="name" placeholder="e.g. Anna" required autocomplete="name"/>
+    </div>
+
+    <div class="form-group">
+      <label for="email">Email address</label>
+      <input type="email" id="email" name="email" placeholder="you@example.com" required autocomplete="email"/>
+    </div>
+
+    <div class="form-group">
+      <label for="country">Country</label>
+      <select id="country" name="country" required>
+        <option value="" disabled selected>Select your country</option>
+        <option value="Finland">Finland</option>
+        <option value="Russia">Russia</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+
+    <button type="submit" class="btn-submit">Request Early Access →</button>
+  </form>
+
+  <hr class="divider"/>
+
+  <a href="https://t.me/AIBeautyKitinc" class="tg-link" target="_blank" rel="noopener">
+    <svg class="tg-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.93 6.858l-1.694 7.98c-.127.567-.462.706-.937.439l-2.59-1.908-1.25 1.204c-.138.138-.254.254-.52.254l.186-2.637 4.793-4.33c.208-.186-.046-.29-.323-.104L8.14 13.906l-2.54-.794c-.552-.173-.563-.552.115-.818l9.916-3.822c.46-.167.862.112.3.586z" fill="currentColor"/>
+    </svg>
+    Follow us on Telegram while you wait
+  </a>
+
+  <a href="/" class="back">← Back to homepage</a>
+</div>
+
+</body>
+</html>

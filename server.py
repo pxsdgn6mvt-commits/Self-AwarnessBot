@@ -1,6 +1,9 @@
 import os
 import logging
-from flask import Flask, request, jsonify, Response
+import smtplib
+from email.mime.text import MIMEText
+from datetime import datetime
+from flask import Flask, request, jsonify, Response, redirect
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -18,6 +21,58 @@ SALES_SYSTEM_PROMPT = (
     "or one of the pricing plans (Starter €49, Pro €89, Agency €149). "
     "Never make up specific numbers or statistics."
 )
+
+
+def _get_db_conn():
+    import psycopg2
+    return psycopg2.connect(os.environ["DATABASE_URL"])
+
+
+def _init_db():
+    try:
+        conn = _get_db_conn()
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS waitlist_entries (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                email TEXT NOT NULL,
+                country TEXT NOT NULL,
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+        conn.commit()
+        cur.close()
+        conn.close()
+        log.info("DB init: waitlist_entries table ready")
+    except Exception:
+        log.exception("DB init failed — DATABASE_URL may not be set")
+
+
+_init_db()
+
+
+def _send_admin_email(name: str, email: str, country: str):
+    admin_email = os.getenv("ADMIN_EMAIL")
+    smtp_host = os.getenv("SMTP_HOST")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_pass = os.getenv("SMTP_PASSWORD")
+
+    if not all([admin_email, smtp_host, smtp_user, smtp_pass]):
+        log.warning("SMTP not configured — skipping waitlist notification email")
+        return
+
+    body = f"Name: {name}\nEmail: {email}\nCountry: {country}\nTime: {datetime.utcnow()}"
+    msg = MIMEText(body)
+    msg["Subject"] = "New waitlist signup — AIBeautyKit"
+    msg["From"] = smtp_user
+    msg["To"] = admin_email
+
+    with smtplib.SMTP(smtp_host, smtp_port) as server:
+        server.starttls()
+        server.login(smtp_user, smtp_pass)
+        server.sendmail(smtp_user, admin_email, msg.as_string())
 
 
 def _read_html(filename):
@@ -51,6 +106,51 @@ def faq():
 def health():
     return "ok", 200
 
+
+@app.route("/waitlist")
+def waitlist():
+    return _read_html("waitlist.html")
+
+
+@app.route("/waitlist/thanks")
+def waitlist_thanks():
+    return _read_html("waitlist-thanks.html")
+
+
+@app.route("/guides/<path:filename>")
+def guides(filename):
+    return _read_html(f"guides/{filename}")
+
+
+@app.route("/api/waitlist", methods=["POST"])
+def api_waitlist():
+    name = (request.form.get("name") or "").strip()
+    email = (request.form.get("email") or "").strip()
+    country = (request.form.get("country") or "").strip()
+
+    if not name or not email or not country:
+        return "Missing required fields: name, email, country", 400
+
+    try:
+        conn = _get_db_conn()
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO waitlist_entries (name, email, country) VALUES (%s, %s, %s)",
+            (name, email, country),
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception:
+        log.exception("Failed to insert waitlist entry")
+        return "Database error", 500
+
+    try:
+        _send_admin_email(name, email, country)
+    except Exception:
+        log.exception("Failed to send waitlist notification email")
+
+    return redirect("/waitlist/thanks")
 
 
 @app.route("/api/chat", methods=["POST"])
