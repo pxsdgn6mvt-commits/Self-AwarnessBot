@@ -16,7 +16,7 @@ To send it over — are you following my account?
 
 🎉 Amazing, you're in the right place!
 
-Here's your guide → [PDF link]
+Here's your guide → https://web-production-54417.up.railway.app/guides/en-owner
 
 Inside: why clients disappear, how phone bookings kill your revenue, and what growing salons do differently 📈
 

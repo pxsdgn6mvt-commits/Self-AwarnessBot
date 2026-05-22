@@ -47,6 +47,11 @@ def faq():
     return _read_html("faq.html")
 
 
+@app.route("/guides/<name>")
+def guide(name):
+    return _read_html(f"guides/{name}.html")
+
+
 @app.route("/healthz")
 def health():
     return "ok", 200

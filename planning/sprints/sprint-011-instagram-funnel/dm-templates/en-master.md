@@ -16,7 +16,7 @@ Are you following my account so I can send it over?
 
 🎉 Here you go!
 
-Your guide → [PDF link]
+Your guide → https://web-production-54417.up.railway.app/guides/en-master
 
 Inside: how to stop managing bookings in a notebook, why clients forget their appointments, and how to free your mind from admin chaos 🧠
 

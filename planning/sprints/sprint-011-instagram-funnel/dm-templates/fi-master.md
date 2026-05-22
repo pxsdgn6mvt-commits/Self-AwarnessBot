@@ -16,7 +16,7 @@ Oletko seurannut tiliäni, jotta voin lähettää sen?
 
 🎉 Tässä se on!
 
-Oppaasi → [linkki PDF:ään]
+Oppaasi → https://web-production-54417.up.railway.app/guides/fi-master
 
 Sisältö: miten lopettaa varausten kirjaaminen muistikirjaan, miksi asiakkaat unohtavat käynnin, ja miten vapautua hallinnollisesta kaaoksesta 🧠
 

@@ -16,7 +16,7 @@ Jotta voin lähettää sen — oletko seurannut tiliäni?
 
 🎉 Mahtavaa, olet oikeassa paikassa!
 
-Tässä oppaasi → [linkki PDF:ään]
+Tässä oppaasi → https://web-production-54417.up.railway.app/guides/fi-owner
 
 Sisältö: miksi asiakkaat lähtevät, miten puhelinvaraukset tappavat tulot, ja mitä kasvavat salongit tekevät toisin 📈
 
