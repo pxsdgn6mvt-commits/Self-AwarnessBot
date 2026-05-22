@@ -42,4 +42,4 @@ Jos tunnistit itsesi edes yhdestä kohdasta — Aria kannattaa kokeilla. Se hoit
 
 14 päivää ilmaiseksi, ei korttia tarvita 🎯
 
-## [🚀 Aloita ilmaiseksi]
+[🚀 Aloita ilmaiseksi]

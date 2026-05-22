@@ -42,4 +42,4 @@ Jos jokin kohta tuntui tutulta — Aria hoitaa juuri nämä asiat automaattisest
 
 Voit testata 14 päivää ilmaiseksi omassa salonkissasi 🎯
 
-## [🚀 Aloita ilmaiseksi]
+[🚀 Aloita ilmaiseksi]

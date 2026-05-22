@@ -42,4 +42,4 @@ If anything felt familiar — Aria solves exactly that. Bookings, reminders, ana
 
 14 days free to test it in your own salon 🎯
 
-## [🚀 Start for free]
+[🚀 Start for free]

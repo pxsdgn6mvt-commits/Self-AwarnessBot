@@ -42,4 +42,4 @@ If any of it hit home — Aria is worth trying. It handles bookings, client remi
 
 14 days free, no card required 🎯
 
-## [🚀 Start for free]
+[🚀 Start for free]
