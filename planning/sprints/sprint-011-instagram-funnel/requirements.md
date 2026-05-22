@@ -1,27 +1,42 @@
-# Sprint 011 — Instagram Funnel: Requirements
+# Sprint 011 — Instagram Funnel: DM Templates
 
-## Goal
+## Business Goal
 
-Build and document an Instagram DM funnel that converts post commenters into Aria trial sign-ups. The funnel uses a free lead-magnet guide (PDF) as an entry hook, gated behind an account follow-check.
+Build Instagram lead generation funnel for Aria salon bot.
+Objective: collect leads → warm up with free guide → convert to Aria trial.
 
-## Target Audiences
+## Target Markets
 
-| Segment | Description |
-|---|---|
-| Salon Owner (RU) | Russian-speaking salon business owners |
-| Stylist / Master (RU) | Russian-speaking independent beauty professionals |
-| Salon Owner (FI) | Finnish-speaking salon business owners |
-| Stylist / Beauty Pro (FI) | Finnish-speaking independent beauty professionals |
-| Salon Owner (EN) | English-speaking salon business owners |
-| Stylist / Beauty Pro (EN) | English-speaking beauty professionals |
+- RU (Russian-speaking, CIS)
+- FI (Finland)
+- EN (English-speaking, international)
+
+## Target Segments
+
+- Salon owners (владельцы салонов / salonin omistajat / salon owners)
+- Beauty professionals / masters (мастера / kampaajat / stylists)
 
 ## Funnel Flow
 
-1. User comments on a post
-2. Bot sends Message 1 — asks if they follow the account
-3a. User confirms follow → Bot sends Message 2a (guide + CTA to try Aria)
-3b. User is not following → Bot sends Message 2b (follow prompt, no guide)
-4. 24 hours after guide delivery → Bot sends Message 3 (follow-up + Aria CTA)
+Comment/Story keyword → DM Message 1 (subscription check) → DM Message 2a/2b (guide + CTA) → DM Message 3 (24h follow-up → trial)
+
+## Tool
+
+ManyChat (official Meta partner, no-code)
+
+## Deliverables This Sprint
+
+- 18 DM message templates (3 messages × 3 languages × 2 segments)
+- Stored in: planning/sprints/sprint-011-instagram-funnel/dm-templates/
+
+## Message Count
+
+| | RU | FI | EN |
+|---|---|---|---|
+| Salon owner | Msg 1, 2a/2b, 3 | Msg 1, 2a/2b, 3 | Msg 1, 2a/2b, 3 |
+| Master / Stylist | Msg 1, 2a/2b, 3 | Msg 1, 2a/2b, 3 | Msg 1, 2a/2b, 3 |
+
+Message 2 branches: 2a (follows account → receives guide), 2b (not following → follow prompt).
 
 ## Lead Magnet Content (per segment)
 
@@ -31,11 +46,6 @@ Build and document an Instagram DM funnel that converts post commenters into Ari
 ## CTA Destination
 
 All CTAs link to Aria 14-day free trial. No credit card required.
-
-## Deliverables
-
-- 6 DM template files (2 languages × 3 locales): `dm-templates/`
-- Sprint blueprint, acceptance criteria, and handoff prompt
 
 ## Out of Scope
 
