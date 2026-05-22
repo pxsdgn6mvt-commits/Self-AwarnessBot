@@ -185,4 +185,7 @@ ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS vip_until             TIMESTAM
 
 -- Sprint 007: GCal event ID for Mini App bookings
 ALTER TABLE aria_bookings ADD COLUMN IF NOT EXISTS gcal_event_id TEXT;
+
+-- Sprint 008: booking source (telegram | miniapp)
+ALTER TABLE aria_bookings ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'telegram';
 """

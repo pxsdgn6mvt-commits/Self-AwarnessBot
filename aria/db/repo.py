@@ -248,16 +248,17 @@ async def create_booking(
     service: str,
     scheduled_at: datetime,
     calendar_event_id: Optional[str] = None,
+    source: str = "telegram",
 ) -> int:
     async with _p().acquire() as conn:
         row = await conn.fetchrow(
             """
             INSERT INTO aria_bookings
-                (tenant_id, user_id, client_name, service, scheduled_at, calendar_event_id)
-            VALUES ($1,$2,$3,$4,$5,$6)
+                (tenant_id, user_id, client_name, service, scheduled_at, calendar_event_id, source)
+            VALUES ($1,$2,$3,$4,$5,$6,$7)
             RETURNING id
             """,
-            tenant_id, user_id, client_name, service, scheduled_at, calendar_event_id,
+            tenant_id, user_id, client_name, service, scheduled_at, calendar_event_id, source,
         )
         return row["id"]
 
