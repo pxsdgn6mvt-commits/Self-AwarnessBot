@@ -177,6 +177,17 @@ def _schedule_text_and_kb(
     return "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+_SOURCE_LABELS: dict[str, str] = {
+    "bot":      "📱 Бот",
+    "phone":    "📞 Телефон",
+    "mini_app": "🌐 Mini App",
+}
+
+
+def format_source(source: str | None) -> str:
+    return _SOURCE_LABELS.get(source or "", "")
+
+
 def _booking_card_text(booking: dict, lang: str = "ru") -> str:
     paid   = booking.get("paid") or False
     notes  = booking.get("notes")
@@ -193,6 +204,9 @@ def _booking_card_text(booking: dict, lang: str = "ru") -> str:
         lines.append(t("paid_mark", lang))
     if notes:
         lines.append(f"📝 {notes}")
+    source_label = format_source(booking.get("source"))
+    if source_label:
+        lines.append(f"🔗 {source_label}")
     return "\n".join(lines)
 
 

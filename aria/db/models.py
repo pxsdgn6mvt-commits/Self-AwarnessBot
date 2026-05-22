@@ -175,6 +175,8 @@ CREATE TABLE IF NOT EXISTS aria_service_items (
 ALTER TABLE aria_service_items ADD COLUMN IF NOT EXISTS price            NUMERIC(10,2);
 ALTER TABLE aria_service_items ADD COLUMN IF NOT EXISTS duration_minutes INT;
 
+ALTER TABLE aria_bookings ADD COLUMN IF NOT EXISTS source TEXT;
+
 ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS master_percent        NUMERIC(5,2);
 ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS tax_percent           NUMERIC(5,2);
 ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS reminder_hours_before INT NOT NULL DEFAULT 2;
