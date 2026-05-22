@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>5 syytä miksi salonki menettää rahaa — AIBeautyKit</title>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0f0d08;--bg2:#181408;--bg3:#201b0a;--accent:#d4a843;--accent2:#e8c06a;--text:#f5f0e8;--muted:#8a8070;--border:rgba(212,168,67,0.2);--card:rgba(255,255,255,0.03);}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-weight:300;line-height:1.7;max-width:860px;margin:0 auto;padding:0 24px 80px;}
+  .cover{min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:80px 0 60px;position:relative;overflow:hidden;}
+  .cover::before{content:'';position:absolute;top:-100px;right:-100px;width:500px;height:500px;background:radial-gradient(circle,rgba(212,168,67,0.07) 0%,transparent 70%);pointer-events:none;}
+  .cover-tag{font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--accent);margin-bottom:32px;font-weight:500;}
+  .cover h1{font-family:'Spectral',serif;font-size:clamp(34px,5.5vw,60px);line-height:1.15;font-weight:700;margin-bottom:24px;}
+  .cover h1 em{font-style:italic;color:var(--accent);}
+  .cover-sub{font-size:18px;color:var(--muted);max-width:520px;margin-bottom:48px;}
+  .cover-brand{display:flex;align-items:center;gap:12px;font-size:13px;color:var(--muted);}
+  .cover-brand span{color:var(--accent);font-weight:500;font-family:'Spectral',serif;font-size:17px;}
+  .divider-line{width:1px;height:28px;background:var(--border);}
+  .section{padding:64px 0;border-top:1px solid var(--border);}
+  .section-num{font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--accent);font-weight:500;margin-bottom:16px;}
+  .section h2{font-family:'Spectral',serif;font-size:clamp(24px,4vw,40px);font-weight:700;line-height:1.2;margin-bottom:24px;}
+  .section h2 em{font-style:italic;color:var(--accent);}
+  .section p{font-size:16px;color:#c8c0b0;margin-bottom:20px;max-width:660px;}
+  .stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:16px;margin:32px 0;}
+  .stat-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px 20px;}
+  .stat-card .num{font-family:'Spectral',serif;font-size:36px;color:var(--accent);font-weight:700;line-height:1;margin-bottom:8px;}
+  .stat-card .label{font-size:13px;color:var(--muted);line-height:1.4;}
+  .highlight{background:linear-gradient(135deg,rgba(212,168,67,0.07),rgba(212,168,67,0.02));border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:0 12px 12px 0;padding:24px 28px;margin:28px 0;}
+  .highlight .hl-label{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--accent);font-weight:500;margin-bottom:10px;}
+  .highlight p{font-size:15px;color:var(--text);margin:0;}
+  .ps-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:28px 0;}
+  @media(max-width:560px){.ps-grid{grid-template-columns:1fr;}}
+  .ps-box{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;}
+  .ps-box .ps-label{font-size:11px;letter-spacing:2px;text-transform:uppercase;font-weight:500;margin-bottom:10px;}
+  .ps-box.problem .ps-label{color:#e07070;}
+  .ps-box.solution .ps-label{color:var(--accent);}
+  .ps-box p{font-size:14px;color:#c8c0b0;margin:0;}
+  .checklist{list-style:none;margin:20px 0;}
+  .checklist li{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:15px;color:#c8c0b0;}
+  .checklist li:last-child{border-bottom:none;}
+  .checklist li .icon{color:var(--accent);flex-shrink:0;margin-top:2px;}
+  .cta-section{padding:80px 0 40px;text-align:center;border-top:1px solid var(--border);}
+  .cta-section h2{font-family:'Spectral',serif;font-size:clamp(26px,5vw,48px);font-weight:700;margin-bottom:16px;line-height:1.2;}
+  .cta-section h2 em{font-style:italic;color:var(--accent);}
+  .cta-section p{font-size:17px;color:var(--muted);margin-bottom:40px;max-width:460px;margin-left:auto;margin-right:auto;}
+  .plans-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin:40px 0;text-align:left;}
+  .plan-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px 20px;}
+  .plan-card.featured{border-color:var(--accent);background:linear-gradient(135deg,rgba(212,168,67,0.06),transparent);}
+  .plan-card .plan-name{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:500;margin-bottom:8px;}
+  .plan-card .plan-price{font-family:'Spectral',serif;font-size:34px;color:var(--accent);font-weight:700;margin-bottom:4px;}
+  .plan-card .plan-price span{font-size:15px;color:var(--muted);}
+  .plan-card .plan-desc{font-size:13px;color:var(--muted);margin-bottom:20px;}
+  .plan-card a{display:block;text-align:center;padding:10px;border-radius:6px;font-size:13px;font-weight:500;text-decoration:none;transition:all 0.2s;}
+  .plan-card.featured a{background:var(--accent);color:#0f0d08;}
+  .plan-card:not(.featured) a{border:1px solid var(--border);color:var(--text);}
+  .plan-card:not(.featured) a:hover{border-color:var(--accent);}
+  .btn-group{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;}
+  .btn-primary{background:var(--accent);color:#0f0d08;padding:16px 36px;border-radius:8px;font-weight:500;font-size:15px;text-decoration:none;}
+  .btn-primary:hover{background:var(--accent2);}
+  .btn-secondary{border:1px solid var(--border);color:var(--text);padding:16px 36px;border-radius:8px;font-size:15px;text-decoration:none;}
+  .btn-secondary:hover{border-color:var(--accent);}
+  .footer-note{text-align:center;font-size:13px;color:var(--muted);margin-top:48px;padding-top:32px;border-top:1px solid var(--border);}
+  .footer-note a{color:var(--accent);text-decoration:none;}
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="cover-tag">Ilmainen opas · Salongin omistajat · AIBeautyKit</div>
+  <h1>5 syytä miksi salonki <em>menettää rahaa</em> ilman automaatiota</h1>
+  <p class="cover-sub">Ja miten korjata kaikki viisi — 14 päivässä, ilman uusia työntekijöitä.</p>
+  <div class="cover-brand">
+    <span>AIBeautyKit</span>
+    <div class="divider-line"></div>
+    <span style="color:var(--muted)">AI-tiimi kauneudenhoitoalan ammattilaisille · aibeautykit.com</span>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-num">Johdanto</div>
+  <h2>Kuulostaako tämä <em>tutulta?</em></h2>
+  <p>Puhelin soi kesken leikkauksen. Asiakas viestii kolmeen eri sovellukseen samanaikaisesti. Kuun lopussa tuotto on pienempi kuin sen pitäisi olla — eikä tiedä miksi.</p>
+  <p>Tämä ei ole sinun vikasi. Se on järjestelmällinen ongelma, joka koskee 80 % salongeista. Keskimääräinen salonki menettää 15–30 % potentiaalisesta tuotostaan vain automatisoimattomien prosessien takia.</p>
+  <div class="stat-row">
+    <div class="stat-card"><div class="num">15–30%</div><div class="label">potentiaalisesta tuotosta menetetään ilman automaatiota</div></div>
+    <div class="stat-card"><div class="num">4+ h</div><div class="label">viikossa kuluu hallinnollisiin tehtäviin jotka voisi automatisoida</div></div>
+    <div class="stat-card"><div class="num">67%</div><div class="label">alle 35-vuotiaista asiakkaista suosii online-varauksia — eivätkä soita</div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-num">Syy 01</div>
+  <h2>Puhelinvaraukset <em>syövät aikaasi</em></h2>
+  <p>Jokainen puhelu vie 3–5 minuuttia. 20 varauksella päivässä se tarkoittaa jopa 1,5 tuntia pelkkään puhelimen vastaamiseen. Kuukaudessa yli 30 tuntia — lähes neljä työpäivää.</p>
+  <div class="stat-row">
+    <div class="stat-card"><div class="num">30 h</div><div class="label">kuukaudessa kuluu manuaaliseen puhelinvaraukseen</div></div>
+    <div class="stat-card"><div class="num">67%</div><div class="label">asiakkaista haluaisi varata verkosta — eivätkä soita</div></div>
+  </div>
+  <div class="ps-grid">
+    <div class="ps-box problem"><div class="ps-label">❌ Ilman automaatiota</div><p>Jokainen varaus vaatii ihmisen. Vastaamaton puhelu = menetetty asiakas. Henkilökunnan aika kuluu hallintoon.</p></div>
+    <div class="ps-box solution"><div class="ps-label">✓ Arian kanssa (AIBeautyKit)</div><p>Asiakkaat varaavat 24/7 botin kautta. Ei puheluita. Henkilökunta keskittyy työhön, ei puhelimeen.</p></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-num">Syy 02</div>
+  <h2>No-show't <em>maksavat tuhansia</em></h2>
+  <p>Kauneussalonkien keskimääräinen no-show-prosentti on 10–15 % kaikista varauksista. 50 € keskiostoksella ja 100 varauksella kuukaudessa se tarkoittaa 500–750 € menetettyä tuottoa joka kuukausi.</p>
+  <div class="stat-row">
+    <div class="stat-card"><div class="num">12%</div><div class="label">keskimääräinen no-show ilman muistutuksia</div></div>
+    <div class="stat-card"><div class="num">€750</div><div class="label">menetetään kuukaudessa 50 € keskiostoksella</div></div>
+    <div class="stat-card"><div class="num">€9 000</div><div class="label">vuotuinen no-show-tappio — rahaa jota ei pitäisi menettää</div></div>
+  </div>
+  <div class="highlight">
+    <div class="hl-label">Ratkaisu</div>
+    <p>Automaattiset muistutukset 24 tuntia ja 2 tuntia ennen käyntiä vähentävät no-show't 2–3 %:iin. Se tarkoittaa <strong>€6 000–€8 000 vuodessa</strong> jotka jäävät sinulle.</p>
+  </div>
+  <div class="ps-grid">
+    <div class="ps-box problem"><div class="ps-label">❌ Ilman automaatiota</div><p>Asiakkaat unohtavat. Tuoli seisoo tyhjänä. Raha katoaa. Huomaat vasta kun on liian myöhäistä täyttää aikaslotti.</p></div>
+    <div class="ps-box solution"><div class="ps-label">✓ Arian kanssa</div><p>Automaattinen muistutus 24h ja 2h ennen. Jos asiakas peruuttaa — aikaslotti avautuu heti uudelleen varattavaksi.</p></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-num">Syy 03</div>
+  <h2>Et tiedä <em>arvokkaimpia asiakkaitasi</em></h2>
+  <p>Pystytkö nimeämään 10 parasta asiakastasi tuoton mukaan juuri nyt? Tiedätkö mitkä palvelut tuottavat eniten? Mitkä viikonpäivät ovat jatkuvasti vajaita?</p>
+  <p>Ilman dataa päätökset perustuvat vaistoon. Ja vaisto on kallista.</p>
+  <div class="highlight">
+    <div class="hl-label">Tositarina</div>
+    <p>"Sage huomasi että torstaini olivat jatkuvasti tyhjiä. Maya laati kohdennetun flash-tarjouksen. Täytin koko päivän alle kahdessa tunnissa." — Karolina B., salongin omistaja · Varsova</p>
+  </div>
+  <div class="ps-grid">
+    <div class="ps-box problem"><div class="ps-label">❌ Ilman automaatiota</div><p>Tuottokuviot ovat näkymättömiä. Kampanjat ovat arvailua. Uskolliset asiakkaat lähtevät huomaamatta.</p></div>
+    <div class="ps-box solution"><div class="ps-label">✓ Sagen + Mayan kanssa</div><p>Päivittäiset ja viikoittaiset raportit. Huippuasiakkaat merkitään automaattisesti. Tyhjät slotit täytetään flash-tarjouksilla.</p></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-num">Syy 04</div>
+  <h2>Asiakkaat lähtevät — <em>eivätkä palaa</em></h2>
+  <p>Suurin osa asiakkaista ei lähde tyytymättömänä. Elämä vain kiireytyy eikä kukaan ottanut yhteyttä. 45 päivän hiljaisuuden jälkeen paluutodennäköisyys laskee yli 40 %.</p>
+  <div class="stat-row">
+    <div class="stat-card"><div class="num">45 pv</div><div class="label">kriittinen hiljaisuusikkuna jonka jälkeen asiakas alkaa etääntyä</div></div>
+    <div class="stat-card"><div class="num">−40%</div><div class="label">paluutodennäköisyys 45 päivän hiljaisuuden jälkeen</div></div>
+    <div class="stat-card"><div class="num">5×</div><div class="label">kalliimpaa hankkia uusi asiakas kuin pitää vanha</div></div>
+  </div>
+  <div class="ps-grid">
+    <div class="ps-box problem"><div class="ps-label">❌ Ilman automaatiota</div><p>Ei järjestelmää hiljaisuuden seuraamiseen. Asiakkaat katoavat hiljaa. Huomaat vasta kun tuotto laskee.</p></div>
+    <div class="ps-box solution"><div class="ps-label">✓ Lunan kanssa</div><p>Automaattinen reaktivointiviesti 45 päivän hiljaisuuden jälkeen. Personoitu, sinun tyylissäsi. Asiakkaat palaavat.</p></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-num">Syy 05</div>
+  <h2>Keskiostos <em>ei kasva</em></h2>
+  <p>Lisämyynti tuntuu hankalalta kasvotusten. Useimmat ohittavat sen. Mutta oikein tehtynä — ja automaattisesti — lisämyynti on korkein ROI-työkalu missä tahansa salonkissa.</p>
+  <div class="highlight">
+    <div class="hl-label">Tositarina</div>
+    <p>"Pelkästään lisämyyntiominaisuus maksaa tilauksen kolminkertaisesti takaisin. Keskiostokseni nousi 65 eurosta 94 euroon kuudessa viikossa." — Priya M., ripsiartesaani · Amsterdam</p>
+  </div>
+  <div class="stat-row">
+    <div class="stat-card"><div class="num">€65→€94</div><div class="label">keskiostoksen kasvu 6 viikossa älykkäällä lisämyynnillä</div></div>
+    <div class="stat-card"><div class="num">+45%</div><div class="label">tuotto ilman yhtäkään uutta asiakasta</div></div>
+  </div>
+  <div class="ps-grid">
+    <div class="ps-box problem"><div class="ps-label">❌ Ilman automaatiota</div><p>Lisämyynti riippuu mielialasta ja muistista. Tapahtuu harvoin. Tuotto pysyy paikallaan.</p></div>
+    <div class="ps-box solution"><div class="ps-label">✓ Viviennen kanssa</div><p>Älykkäät ehdotukset oikeaan aikaan oikealle asiakkaalle. Automaattisesti. Personoidusti. Johdonmukaisesti.</p></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-num">Yhteenveto</div>
+  <h2>5 syytä — <em>lyhyesti</em></h2>
+  <ul class="checklist">
+    <li><span class="icon">01</span> Puhelinvaraukset vievät 30+ tuntia kuukaudessa ja menettävät asiakkaat jotka eivät halua soittaa</li>
+    <li><span class="icon">02</span> No-show't maksavat €500–€9 000 vuodessa ilman automaattisia muistutusjärjestelmää</li>
+    <li><span class="icon">03</span> Ilman dataa ei kasvua — tyhjät slotit pysyvät tyhjinä</li>
+    <li><span class="icon">04</span> Asiakkaat lähtevät 45 päivän hiljaisuuden jälkeen — ja korvaaminen maksaa 5× enemmän kuin pitäminen</li>
+    <li><span class="icon">05</span> Tasainen keskiostos ilman lisämyyntiä = raha jätetty pöydälle jokaisella varauksella</li>
+  </ul>
+</div>
+
+<div class="cta-section">
+  <h2>Valmis korjaamaan kaikki viisi — <em>14 päivässä?</em></h2>
+  <p>AIBeautyKit on 6 AI-asiantuntijan tiimi rakennettu nimenomaan kauneusalan ammattilaisille. Käyttöönotto: 10 minuuttia. Tulokset: samana päivänä.</p>
+  <div class="plans-grid">
+    <div class="plan-card"><div class="plan-name">Starter</div><div class="plan-price">€49<span>/kk</span></div><div class="plan-desc">Aria + Celeste + Luna. Hyvä aloituspaketti.</div><a href="https://buy.stripe.com/9B6cN5bAP96814ScWlgYU01">Aloita →</a></div>
+    <div class="plan-card featured"><div class="plan-name">⭐ Pro — Suosituin</div><div class="plan-price">€89<span>/kk</span></div><div class="plan-desc">Kaikki 6 asiantuntijaa. Rajaton. 12 kieltä.</div><a href="https://buy.stripe.com/eVqeVd9sHeqsfZM5tTgYU02">Aloita →</a></div>
+    <div class="plan-card"><div class="plan-name">Agency</div><div class="plan-price">€179<span>/kk</span></div><div class="plan-desc">Jopa 5 tuolia. White-label. API.</div><a href="https://buy.stripe.com/28E9AT34jdmobJw9K9gYU00">Aloita →</a></div>
+  </div>
+  <div class="btn-group">
+    <a href="https://web-production-54417.up.railway.app/" class="btn-primary">Siirry AIBeautyKitiin →</a>
+    <a href="https://web-production-54417.up.railway.app/#pricing" class="btn-secondary">Katso kaikki paketit</a>
+  </div>
+  <div class="footer-note">30 päivän rahatakuu · Ei sopimusta · Peruuta milloin tahansa<br><br><a href="https://web-production-54417.up.railway.app/">web-production-54417.up.railway.app</a> · hello@aibeautykit.com</div>
+</div>
+
+</body>
+</html>

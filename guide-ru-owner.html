@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>5 причин почему салон теряет деньги — AIBeautyKit</title>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Nunito+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#080f0e;--bg2:#0d1614;--bg3:#121e1b;
+    --accent:#5eb89a;--accent2:#7ecfb4;
+    --text:#eef4f2;--muted:#7a9990;--border:rgba(94,184,154,0.2);--card:rgba(255,255,255,0.03);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Nunito Sans',sans-serif;font-weight:300;line-height:1.7;max-width:860px;margin:0 auto;padding:0 24px 80px;}
+  .cover{min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:80px 0 60px;position:relative;overflow:hidden;}
+  .cover::before{content:'';position:absolute;top:-150px;right:-150px;width:500px;height:500px;background:radial-gradient(circle,rgba(94,184,154,0.07) 0%,transparent 70%);pointer-events:none;}
+  .cover-tag{font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--accent);margin-bottom:32px;font-weight:600;}
+  .cover h1{font-family:'Libre Baskerville',serif;font-size:clamp(34px,5.5vw,60px);line-height:1.15;font-weight:700;margin-bottom:24px;}
+  .cover h1 em{font-style:italic;color:var(--accent);}
+  .cover-sub{font-size:18px;color:var(--muted);max-width:520px;margin-bottom:48px;}
+  .cover-brand{display:flex;align-items:center;gap:12px;font-size:13px;color:var(--muted);}
+  .cover-brand span{color:var(--accent);font-weight:600;font-family:'Libre Baskerville',serif;font-size:17px;}
+  .divider-line{width:1px;height:28px;background:var(--border);}
+  .section{padding:64px 0;border-top:1px solid var(--border);}
+  .section-num{font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--accent);font-weight:600;margin-bottom:16px;}
+  .section h2{font-family:'Libre Baskerville',serif;font-size:clamp(24px,4vw,40px);font-weight:700;line-height:1.2;margin-bottom:24px;}
+  .section h2 em{font-style:italic;color:var(--accent);}
+  .section p{font-size:16px;color:#b8cec9;margin-bottom:20px;max-width:660px;}
+  .stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:16px;margin:32px 0;}
+  .stat-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px 20px;}
+  .stat-card .num{font-family:'Libre Baskerville',serif;font-size:36px;color:var(--accent);font-weight:700;line-height:1;margin-bottom:8px;}
+  .stat-card .label{font-size:13px;color:var(--muted);line-height:1.4;}
+  .highlight{background:linear-gradient(135deg,rgba(94,184,154,0.07),rgba(94,184,154,0.02));border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:0 12px 12px 0;padding:24px 28px;margin:28px 0;}
+  .highlight .hl-label{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--accent);font-weight:600;margin-bottom:10px;}
+  .highlight p{font-size:15px;color:var(--text);margin:0;}
+  .ps-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:28px 0;}
+  @media(max-width:560px){.ps-grid{grid-template-columns:1fr;}}
+  .ps-box{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;}
+  .ps-box .ps-label{font-size:11px;letter-spacing:2px;text-transform:uppercase;font-weight:600;margin-bottom:10px;}
+  .ps-box.problem .ps-label{color:#e07070;}
+  .ps-box.solution .ps-label{color:var(--accent);}
+  .ps-box p{font-size:14px;color:#b8cec9;margin:0;}
+  .checklist{list-style:none;margin:20px 0;}
+  .checklist li{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:15px;color:#b8cec9;}
+  .checklist li:last-child{border-bottom:none;}
+  .checklist li .icon{color:var(--accent);flex-shrink:0;margin-top:2px;}
+  .cta-section{padding:80px 0 40px;text-align:center;border-top:1px solid var(--border);}
+  .cta-section h2{font-family:'Libre Baskerville',serif;font-size:clamp(26px,5vw,48px);font-weight:700;margin-bottom:16px;line-height:1.2;}
+  .cta-section h2 em{font-style:italic;color:var(--accent);}
+  .cta-section p{font-size:17px;color:var(--muted);margin-bottom:40px;max-width:460px;margin-left:auto;margin-right:auto;}
+  .plans-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin:40px 0;text-align:left;}
+  .plan-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px 20px;}
+  .plan-card.featured{border-color:var(--accent);background:linear-gradient(135deg,rgba(94,184,154,0.06),transparent);}
+  .plan-card .plan-name{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:8px;}
+  .plan-card .plan-price{font-family:'Libre Baskerville',serif;font-size:34px;color:var(--accent);font-weight:700;margin-bottom:4px;}
+  .plan-card .plan-price span{font-size:15px;color:var(--muted);}
+  .plan-card .plan-desc{font-size:13px;color:var(--muted);margin-bottom:20px;}
+  .plan-card a{display:block;text-align:center;padding:10px;border-radius:6px;font-size:13px;font-weight:600;text-decoration:none;transition:all 0.2s;}
+  .plan-card.featured a{background:var(--accent);color:#080f0e;}
+  .plan-card:not(.featured) a{border:1px solid var(--border);color:var(--text);}
+  .plan-card:not(.featured) a:hover{border-color:var(--accent);}
+  .btn-group{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;}
+  .btn-primary{background:var(--accent);color:#080f0e;padding:16px 36px;border-radius:8px;font-weight:600;font-size:15px;text-decoration:none;}
+  .btn-primary:hover{background:var(--accent2);}
+  .btn-secondary{border:1px solid var(--border);color:var(--text);padding:16px 36px;border-radius:8px;font-size:15px;text-decoration:none;}
+  .btn-secondary:hover{border-color:var(--accent);}
+  .footer-note{text-align:center;font-size:13px;color:var(--muted);margin-top:48px;padding-top:32px;border-top:1px solid var(--border);}
+  .footer-note a{color:var(--accent);text-decoration:none;}
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="cover-tag">Бесплатный гайд · Владельцы салонов · AIBeautyKit</div>
+  <h1>5 причин почему салон <em>теряет деньги</em> без автоматизации</h1>
+  <p class="cover-sub">И как исправить все пять — за 14 дней, без найма новых сотрудников.</p>
+  <div class="cover-brand">
+    <span>AIBeautyKit</span>
+    <div class="divider-line"></div>
+    <span style="color:var(--muted)">AI-команда для бьюти-профессионалов · aibeautykit.com</span>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-num">Введение</div>
+  <h2>Узнаёшь <em>себя</em> в этом?</h2>
+  <p>Телефон звонит пока ты работаешь с клиентом. Запрос приходит в три разных мессенджера одновременно. В конце месяца выручка меньше чем должна быть — и непонятно почему.</p>
+  <p>Это не твоя вина. Это системная проблема 80% салонов. Средний салон теряет от 15 до 30% потенциального дохода из-за неавтоматизированных процессов.</p>
+  <div class="stat-row">
+    <div class="stat-card"><div class="num">15–30%</div><div class="label">потенциального дохода теряется без автоматизации</div></div>
+    <div class="stat-card"><div class="num">4+ ч</div><div class="label">в неделю уходит на административные задачи которые можно автоматизировать</div></div>
+    <div class="stat-card"><div class="num">67%</div><div class="label">клиентов до 35 лет предпочитают онлайн-запись и просто не звонят</div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-num">Причина 01</div>
+  <h2>Запись по телефону <em>съедает твоё время</em></h2>
+  <p>Каждый звонок — это 3–5 минут. При 20 записях в день: до 1.5 часа только на приём звонков. В месяц — больше 30 часов. Почти 4 рабочих дня.</p>
+  <div class="stat-row">
+    <div class="stat-card"><div class="num">30 ч</div><div class="label">в месяц уходит на ручную запись по телефону</div></div>
+    <div class="stat-card"><div class="num">67%</div><div class="label">клиентов предпочли бы записаться онлайн — и не звонят</div></div>
+  </div>
+  <div class="ps-grid">
+    <div class="ps-box problem"><div class="ps-label">❌ Без автоматизации</div><p>Каждая запись требует человека. Пропущенный звонок = потерянный клиент. Время персонала тратится на администрирование.</p></div>
+    <div class="ps-box solution"><div class="ps-label">✓ С Aria (AIBeautyKit)</div><p>Клиент выбирает время сам — 24/7. Никаких звонков. Мастер фокусируется на работе, не на телефоне.</p></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-num">Причина 02</div>
+  <h2>Клиенты не приходят — и это <em>стоит тысячи</em></h2>
+  <p>Средний процент no-show в салонах красоты — 10–15% от всех записей. При среднем чеке 50€ и 100 записях в месяц — это 500–750€ потерянного дохода каждый месяц.</p>
+  <div class="stat-row">
+    <div class="stat-card"><div class="num">12%</div><div class="label">средний no-show без напоминаний</div></div>
+    <div class="stat-card"><div class="num">€750</div><div class="label">теряется в месяц при среднем чеке €50</div></div>
+    <div class="stat-card"><div class="num">€9 000</div><div class="label">потери в год — деньги которых не должно быть</div></div>
+  </div>
+  <div class="highlight">
+    <div class="hl-label">Решение</div>
+    <p>Автоматические напоминания за 24 часа и за 2 часа до визита снижают no-show до 2–3%. Это <strong>€6 000–€8 000 в год</strong> которые остаются в твоём кармане.</p>
+  </div>
+  <div class="ps-grid">
+    <div class="ps-box problem"><div class="ps-label">❌ Без автоматизации</div><p>Клиенты забывают. Кресло стоит пустым. Деньги уходят. Ты узнаёшь только когда уже поздно заполнить слот.</p></div>
+    <div class="ps-box solution"><div class="ps-label">✓ С Aria</div><p>Напоминание за 24ч и за 2ч автоматически. Если клиент отменяет — слот сразу открывается для другого.</p></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-num">Причина 03</div>
+  <h2>Ты не знаешь <em>самых ценных клиентов</em></h2>
+  <p>Можешь назвать топ-10 клиентов по выручке прямо сейчас? Знаешь какие услуги приносят больше всего прибыли? Какие дни недели хронически недозаполнены?</p>
+  <p>Без данных решения принимаются на интуиции. А интуиция — дорогое удовольствие.</p>
+  <div class="highlight">
+    <div class="hl-label">Реальный пример</div>
+    <p>"Sage показал что мои четверги стабильно пустые. Maya составила целевой флэш-оффер. Я заполнила весь день меньше чем за 2 часа." — Каролина Б., владелица салона · Варшава</p>
+  </div>
+  <div class="ps-grid">
+    <div class="ps-box problem"><div class="ps-label">❌ Без автоматизации</div><p>Паттерны выручки невидимы. Акции — угадывание. Лояльные клиенты уходят незамеченными.</p></div>
+    <div class="ps-box solution"><div class="ps-label">✓ С Sage + Maya</div><p>Ежедневные и еженедельные отчёты. Топ-клиенты выделены автоматически. Пустые слоты заполняются флэш-офферами.</p></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-num">Причина 04</div>
+  <h2>Клиенты уходят — и <em>не возвращаются</em></h2>
+  <p>Большинство клиентов уходят не потому что недовольны. Просто жизнь закрутилась и никто не написал. После 45 дней тишины вероятность возврата падает более чем на 40%.</p>
+  <div class="stat-row">
+    <div class="stat-card"><div class="num">45 дней</div><div class="label">критическое окно тишины после которого клиент уходит</div></div>
+    <div class="stat-card"><div class="num">−40%</div><div class="label">вероятность возврата после 45 дней без контакта</div></div>
+    <div class="stat-card"><div class="num">5×</div><div class="label">дороже привлечь нового клиента чем удержать старого</div></div>
+  </div>
+  <div class="ps-grid">
+    <div class="ps-box problem"><div class="ps-label">❌ Без автоматизации</div><p>Нет системы отслеживания тишины. Клиенты тихо уходят. Ты замечаешь только когда падает выручка.</p></div>
+    <div class="ps-box solution"><div class="ps-label">✓ С Luna</div><p>Автоматическое сообщение реактивации после 45 дней. Персонализированное, в твоём стиле. Клиенты возвращаются.</p></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-num">Причина 05</div>
+  <h2>Средний чек <em>не растёт</em></h2>
+  <p>Допродавать вживую неловко. Большинство мастеров пропускают этот момент. Но сделанная правильно — и автоматически — допродажа это самый высокий ROI-инструмент в любом салоне.</p>
+  <div class="highlight">
+    <div class="hl-label">Реальный пример</div>
+    <p>"Только функция допродаж окупает подписку втрое. Мой средний чек вырос с €65 до €94 за шесть недель." — Прия М., лэш-мастер · Амстердам</p>
+  </div>
+  <div class="stat-row">
+    <div class="stat-card"><div class="num">€65→€94</div><div class="label">рост среднего чека за 6 недель с умными допродажами</div></div>
+    <div class="stat-card"><div class="num">+45%</div><div class="label">выручка без единого нового клиента</div></div>
+  </div>
+  <div class="ps-grid">
+    <div class="ps-box problem"><div class="ps-label">❌ Без автоматизации</div><p>Допродажа зависит от настроения и памяти. Происходит редко. Выручка стоит на месте.</p></div>
+    <div class="ps-box solution"><div class="ps-label">✓ С Vivienne</div><p>Умные предложения в нужный момент нужному клиенту. Автоматически. Персонализированно. Стабильно.</p></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-num">Итог</div>
+  <h2>5 причин — <em>кратко</em></h2>
+  <ul class="checklist">
+    <li><span class="icon">01</span> Запись по телефону съедает 30+ часов в месяц и теряет клиентов которые не хотят звонить</li>
+    <li><span class="icon">02</span> No-show стоят €500–€9 000 в год без системы автоматических напоминаний</li>
+    <li><span class="icon">03</span> Без данных — нет роста. Пустые слоты остаются пустыми</li>
+    <li><span class="icon">04</span> Клиенты уходят после 45 дней тишины — и заменить их в 5 раз дороже чем удержать</li>
+    <li><span class="icon">05</span> Плоский средний чек без допродаж = деньги оставленные на столе при каждой записи</li>
+  </ul>
+</div>
+
+<div class="cta-section">
+  <h2>Готов исправить все пять — <em>за 14 дней?</em></h2>
+  <p>AIBeautyKit — команда из 6 AI-специалистов созданных для бьюти-бизнеса. Настройка: 10 минут. Результат: в тот же день.</p>
+  <div class="plans-grid">
+    <div class="plan-card"><div class="plan-name">Starter</div><div class="plan-price">€49<span>/мес</span></div><div class="plan-desc">Aria + Celeste + Luna. Отличный старт.</div><a href="https://buy.stripe.com/9B6cN5bAP96814ScWlgYU01">Начать →</a></div>
+    <div class="plan-card featured"><div class="plan-name">⭐ Pro — Выбор большинства</div><div class="plan-price">€89<span>/мес</span></div><div class="plan-desc">Вся команда из 6 специалистов. Безлимит. 12 языков.</div><a href="https://buy.stripe.com/eVqeVd9sHeqsfZM5tTgYU02">Начать →</a></div>
+    <div class="plan-card"><div class="plan-name">Agency</div><div class="plan-price">€179<span>/мес</span></div><div class="plan-desc">До 5 мастеров. White-label. API.</div><a href="https://buy.stripe.com/28E9AT34jdmobJw9K9gYU00">Начать →</a></div>
+  </div>
+  <div class="btn-group">
+    <a href="https://web-production-54417.up.railway.app/" class="btn-primary">Перейти на AIBeautyKit →</a>
+    <a href="https://web-production-54417.up.railway.app/#pricing" class="btn-secondary">Смотреть тарифы</a>
+  </div>
+  <div class="footer-note">30-дневная гарантия возврата · Без контракта · Отмена в любой момент<br><br><a href="https://web-production-54417.up.railway.app/">web-production-54417.up.railway.app</a> · hello@aibeautykit.com</div>
+</div>
+
+</body>
+</html>

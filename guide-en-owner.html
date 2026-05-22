@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>5 Reasons Your Salon Is Losing Money — AIBeautyKit</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --bg2: #111118;
+    --bg3: #16161f;
+    --accent: #c9a96e;
+    --accent2: #e8c98a;
+    --text: #f0ece4;
+    --muted: #8a8696;
+    --border: rgba(201,169,110,0.2);
+    --card: rgba(255,255,255,0.03);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 300;
+    line-height: 1.7;
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 0 24px 80px;
+  }
+
+  /* COVER */
+  .cover {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 80px 0 60px;
+    position: relative;
+    overflow: hidden;
+  }
+  .cover::before {
+    content: '';
+    position: absolute;
+    top: -200px; right: -200px;
+    width: 600px; height: 600px;
+    background: radial-gradient(circle, rgba(201,169,110,0.08) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .cover-tag {
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 32px;
+    font-weight: 500;
+  }
+  .cover h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(36px, 6vw, 64px);
+    line-height: 1.15;
+    font-weight: 700;
+    margin-bottom: 24px;
+  }
+  .cover h1 em {
+    font-style: italic;
+    color: var(--accent);
+  }
+  .cover-sub {
+    font-size: 18px;
+    color: var(--muted);
+    max-width: 520px;
+    margin-bottom: 48px;
+    font-weight: 300;
+  }
+  .cover-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+    color: var(--muted);
+    letter-spacing: 1px;
+  }
+  .cover-brand span {
+    color: var(--accent);
+    font-weight: 500;
+    font-family: 'Playfair Display', serif;
+    font-size: 16px;
+  }
+  .divider-line {
+    width: 1px; height: 32px;
+    background: var(--border);
+  }
+
+  /* SECTIONS */
+  .section {
+    padding: 72px 0;
+    border-top: 1px solid var(--border);
+  }
+  .section-num {
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 500;
+    margin-bottom: 16px;
+  }
+  .section h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(26px, 4vw, 40px);
+    font-weight: 700;
+    line-height: 1.2;
+    margin-bottom: 24px;
+  }
+  .section h2 em { font-style: italic; color: var(--accent); }
+  .section p {
+    font-size: 16px;
+    color: #c8c4bc;
+    margin-bottom: 20px;
+    max-width: 660px;
+  }
+
+  /* STAT CARDS */
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin: 32px 0;
+  }
+  .stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px 20px;
+  }
+  .stat-card .num {
+    font-family: 'Playfair Display', serif;
+    font-size: 36px;
+    color: var(--accent);
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+  .stat-card .label {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.4;
+  }
+
+  /* HIGHLIGHT BOX */
+  .highlight {
+    background: linear-gradient(135deg, rgba(201,169,110,0.08), rgba(201,169,110,0.03));
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 12px 12px 0;
+    padding: 24px 28px;
+    margin: 28px 0;
+  }
+  .highlight .hl-label {
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 500;
+    margin-bottom: 10px;
+  }
+  .highlight p {
+    font-size: 15px;
+    color: var(--text);
+    margin: 0;
+  }
+
+  /* PROBLEM / SOLUTION */
+  .ps-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 28px 0;
+  }
+  @media(max-width:560px){ .ps-grid { grid-template-columns: 1fr; } }
+  .ps-box {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .ps-box .ps-label {
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    font-weight: 500;
+    margin-bottom: 10px;
+  }
+  .ps-box.problem .ps-label { color: #e07070; }
+  .ps-box.solution .ps-label { color: var(--accent); }
+  .ps-box p { font-size: 14px; color: #c8c4bc; margin: 0; }
+
+  /* CHECKLIST */
+  .checklist { list-style: none; margin: 20px 0; }
+  .checklist li {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    font-size: 15px;
+    color: #c8c4bc;
+  }
+  .checklist li:last-child { border-bottom: none; }
+  .checklist li .icon { color: var(--accent); flex-shrink: 0; margin-top: 2px; }
+
+  /* CTA */
+  .cta-section {
+    padding: 80px 0 40px;
+    text-align: center;
+    border-top: 1px solid var(--border);
+  }
+  .cta-section h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(28px, 5vw, 48px);
+    font-weight: 700;
+    margin-bottom: 16px;
+    line-height: 1.2;
+  }
+  .cta-section h2 em { font-style: italic; color: var(--accent); }
+  .cta-section p {
+    font-size: 17px;
+    color: var(--muted);
+    margin-bottom: 40px;
+    max-width: 480px;
+    margin-left: auto; margin-right: auto;
+  }
+  .btn-group { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+  .btn-primary {
+    background: var(--accent);
+    color: #0a0a0f;
+    padding: 16px 36px;
+    border-radius: 8px;
+    font-weight: 500;
+    font-size: 15px;
+    text-decoration: none;
+    letter-spacing: 0.5px;
+    transition: background 0.2s;
+  }
+  .btn-primary:hover { background: var(--accent2); }
+  .btn-secondary {
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 16px 36px;
+    border-radius: 8px;
+    font-size: 15px;
+    text-decoration: none;
+    transition: border-color 0.2s;
+  }
+  .btn-secondary:hover { border-color: var(--accent); }
+
+  .plans-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin: 40px 0;
+    text-align: left;
+  }
+  .plan-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px 20px;
+  }
+  .plan-card.featured {
+    border-color: var(--accent);
+    background: linear-gradient(135deg, rgba(201,169,110,0.06), transparent);
+  }
+  .plan-card .plan-name {
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 500;
+    margin-bottom: 8px;
+  }
+  .plan-card .plan-price {
+    font-family: 'Playfair Display', serif;
+    font-size: 32px;
+    color: var(--accent);
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .plan-card .plan-price span { font-size: 15px; color: var(--muted); }
+  .plan-card .plan-desc {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 20px;
+  }
+  .plan-card a {
+    display: block;
+    text-align: center;
+    padding: 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.2s;
+  }
+  .plan-card.featured a {
+    background: var(--accent);
+    color: #0a0a0f;
+  }
+  .plan-card:not(.featured) a {
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+  .plan-card:not(.featured) a:hover { border-color: var(--accent); }
+
+  .footer-note {
+    text-align: center;
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 48px;
+    padding-top: 32px;
+    border-top: 1px solid var(--border);
+  }
+  .footer-note a { color: var(--accent); text-decoration: none; }
+
+  /* PRINT */
+  @media print {
+    body { background: white; color: #111; max-width: 100%; }
+    .btn-primary, .btn-secondary { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- COVER -->
+<div class="cover">
+  <div class="cover-tag">Free Guide · Salon Owners · AIBeautyKit</div>
+  <h1>5 Reasons Your Salon Is <em>Losing Money</em> Without Automation</h1>
+  <p class="cover-sub">And how to fix all five in under 14 days — without hiring anyone new.</p>
+  <div class="cover-brand">
+    <span>AIBeautyKit</span>
+    <div class="divider-line"></div>
+    <span style="color:var(--muted)">AI Team for Beauty Professionals · aibeautykit.com</span>
+  </div>
+</div>
+
+<!-- INTRO -->
+<div class="section">
+  <div class="section-num">Introduction</div>
+  <h2>Does any of this <em>sound familiar?</em></h2>
+  <p>Your phone rings while you're in the middle of a cut. A client messages across three different apps. At the end of the month, the revenue is lower than it should be — and you can't quite figure out why.</p>
+  <p>This isn't your fault. It's a systemic problem that affects 80% of salons. And it has a name: <strong style="color:var(--text)">administrative overhead without automation.</strong></p>
+
+  <div class="stat-row">
+    <div class="stat-card">
+      <div class="num">15–30%</div>
+      <div class="label">of potential revenue lost to unautomated processes</div>
+    </div>
+    <div class="stat-card">
+      <div class="num">4 hrs</div>
+      <div class="label">average weekly time spent on admin that could be automated</div>
+    </div>
+    <div class="stat-card">
+      <div class="num">67%</div>
+      <div class="label">of clients under 35 prefer online booking over calling</div>
+    </div>
+  </div>
+
+  <p>In this guide, you'll find the five most common and costly gaps — and exactly what to do about each one.</p>
+</div>
+
+<!-- REASON 1 -->
+<div class="section">
+  <div class="section-num">Reason 01</div>
+  <h2>Phone Bookings Are <em>Eating Your Time</em></h2>
+  <p>Every phone call takes 3–5 minutes. With 20 bookings a day, that's up to <strong style="color:var(--text)">1.5 hours of your team's time</strong> — just answering the phone.</p>
+  <p>Over a month: 30+ hours. That's nearly four full working days, every single month, spent scheduling appointments that could book themselves.</p>
+
+  <div class="stat-row">
+    <div class="stat-card">
+      <div class="num">30 hrs</div>
+      <div class="label">lost per month to manual phone booking</div>
+    </div>
+    <div class="stat-card">
+      <div class="num">67%</div>
+      <div class="label">of clients prefer booking online — and simply don't call</div>
+    </div>
+  </div>
+
+  <div class="ps-grid">
+    <div class="ps-box problem">
+      <div class="ps-label">❌ Without automation</div>
+      <p>Every booking requires a human. Missed calls = missed revenue. Staff time consumed by admin.</p>
+    </div>
+    <div class="ps-box solution">
+      <div class="ps-label">✓ With Aria (AIBeautyKit)</div>
+      <p>Clients book 24/7 through the bot. No calls needed. Staff focus on the chair, not the phone.</p>
+    </div>
+  </div>
+</div>
+
+<!-- REASON 2 -->
+<div class="section">
+  <div class="section-num">Reason 02</div>
+  <h2>No-Shows Are <em>Costing You Thousands</em></h2>
+  <p>The average no-show rate in beauty salons is <strong style="color:var(--text)">10–15% of all bookings.</strong> That's one in ten appointments — paid for by nobody, filled by nobody.</p>
+
+  <div class="stat-row">
+    <div class="stat-card">
+      <div class="num">12%</div>
+      <div class="label">average no-show rate without reminders</div>
+    </div>
+    <div class="stat-card">
+      <div class="num">€750</div>
+      <div class="label">lost per month at €50 avg ticket, 100 bookings</div>
+    </div>
+    <div class="stat-card">
+      <div class="num">€9,000</div>
+      <div class="label">that's your annual no-show loss</div>
+    </div>
+  </div>
+
+  <div class="highlight">
+    <div class="hl-label">The fix</div>
+    <p>Automated reminders sent 24 hours and 2 hours before the appointment reduce no-shows to 2–3%. That alone can save your salon <strong>€6,000–€8,000 per year.</strong></p>
+  </div>
+
+  <div class="ps-grid">
+    <div class="ps-box problem">
+      <div class="ps-label">❌ Without automation</div>
+      <p>Clients forget. Chairs sit empty. Revenue disappears. You remember only when it's too late to fill the slot.</p>
+    </div>
+    <div class="ps-box solution">
+      <div class="ps-label">✓ With Aria</div>
+      <p>Automatic reminders at 24h and 2h. If a client cancels, the slot opens for rebook instantly.</p>
+    </div>
+  </div>
+</div>
+
+<!-- REASON 3 -->
+<div class="section">
+  <div class="section-num">Reason 03</div>
+  <h2>You Don't Know Your <em>Most Valuable Clients</em></h2>
+  <p>Can you name your top 10 clients by revenue right now? Do you know which services have the highest margin? Which days of the week are consistently underbooked?</p>
+  <p>Without data, you're making decisions by gut feeling. And gut feelings are expensive.</p>
+
+  <div class="highlight">
+    <div class="hl-label">Real example</div>
+    <p>"Sage flagged that my Thursdays were consistently empty. Maya put together a targeted flash offer. I filled the whole day in under 2 hours. That kind of insight would take me weeks to figure out on my own." — Karolina B., Salon Owner · Warsaw</p>
+  </div>
+
+  <div class="ps-grid">
+    <div class="ps-box problem">
+      <div class="ps-label">❌ Without automation</div>
+      <p>Revenue patterns are invisible. Promotions are guesswork. Loyal clients go unrecognised and eventually leave.</p>
+    </div>
+    <div class="ps-box solution">
+      <div class="ps-label">✓ With Sage + Maya (AIBeautyKit)</div>
+      <p>Daily and weekly reports. Top clients flagged automatically. Empty slots filled with targeted flash offers.</p>
+    </div>
+  </div>
+</div>
+
+<!-- REASON 4 -->
+<div class="section">
+  <div class="section-num">Reason 04</div>
+  <h2>Clients Leave — and <em>Never Come Back</em></h2>
+  <p>The average beauty client visits 4–6 times per year. If you don't reach out after 45 days of silence, research shows the probability of a return visit drops by over 40%.</p>
+  <p>Most salons do nothing. No follow-up. No re-engagement. The client simply drifts away — usually to a competitor who sent them a message.</p>
+
+  <div class="stat-row">
+    <div class="stat-card">
+      <div class="num">45 days</div>
+      <div class="label">the critical silence window before a client starts drifting</div>
+    </div>
+    <div class="stat-card">
+      <div class="num">−40%</div>
+      <div class="label">return probability after 45 days without contact</div>
+    </div>
+    <div class="stat-card">
+      <div class="num">5×</div>
+      <div class="label">cheaper to retain a client than acquire a new one</div>
+    </div>
+  </div>
+
+  <div class="ps-grid">
+    <div class="ps-box problem">
+      <div class="ps-label">❌ Without automation</div>
+      <p>You have no system to track silence. Clients disappear quietly. You only notice when revenue drops.</p>
+    </div>
+    <div class="ps-box solution">
+      <div class="ps-label">✓ With Luna (AIBeautyKit)</div>
+      <p>Automatic re-engagement message after 45 days. Personalised, in your tone. Clients come back.</p>
+    </div>
+  </div>
+</div>
+
+<!-- REASON 5 -->
+<div class="section">
+  <div class="section-num">Reason 05</div>
+  <h2>Your Average Ticket <em>Isn't Growing</em></h2>
+  <p>Upselling feels awkward in person. Most stylists skip it. But done right — and done automatically — it's the single highest-ROI lever in any salon.</p>
+
+  <div class="highlight">
+    <div class="hl-label">Real example</div>
+    <p>"The upsell feature alone pays for the subscription three times over. My average ticket went from €65 to €94 in six weeks." — Priya M., Lash Artist · Amsterdam</p>
+  </div>
+
+  <div class="stat-row">
+    <div class="stat-card">
+      <div class="num">€65→€94</div>
+      <div class="label">avg ticket increase in 6 weeks with smart upsell</div>
+    </div>
+    <div class="stat-card">
+      <div class="num">+45%</div>
+      <div class="label">revenue increase without a single new client</div>
+    </div>
+  </div>
+
+  <div class="ps-grid">
+    <div class="ps-box problem">
+      <div class="ps-label">❌ Without automation</div>
+      <p>Upsell depends on mood, memory, and comfort. It rarely happens consistently. Revenue stays flat.</p>
+    </div>
+    <div class="ps-box solution">
+      <div class="ps-label">✓ With Vivienne (AIBeautyKit)</div>
+      <p>Smart upsell suggestions sent at the right moment to the right client. Automatic. Personalised. Consistent.</p>
+    </div>
+  </div>
+</div>
+
+<!-- SUMMARY -->
+<div class="section">
+  <div class="section-num">Summary</div>
+  <h2>The 5 Reasons — <em>at a glance</em></h2>
+  <ul class="checklist">
+    <li><span class="icon">01</span> Phone bookings waste 30+ hours per month and lose clients who don't want to call</li>
+    <li><span class="icon">02</span> No-shows cost €500–€9,000/year without automated reminders</li>
+    <li><span class="icon">03</span> No data means decisions by gut — and empty slots that stay empty</li>
+    <li><span class="icon">04</span> Lost clients after 45 days of silence cost 5× more to replace than to retain</li>
+    <li><span class="icon">05</span> Flat average ticket without upsell = leaving money on every single appointment</li>
+  </ul>
+</div>
+
+<!-- CTA -->
+<div class="cta-section">
+  <h2>Ready to fix all five — <em>in 14 days?</em></h2>
+  <p>AIBeautyKit is a team of 6 AI specialists built specifically for beauty professionals. Setup takes under 10 minutes. Results start the same day.</p>
+
+  <div class="plans-grid">
+    <div class="plan-card">
+      <div class="plan-name">Starter</div>
+      <div class="plan-price">€49<span>/mo</span></div>
+      <div class="plan-desc">Aria + Celeste + Luna. Perfect to start.</div>
+      <a href="https://buy.stripe.com/9B6cN5bAP96814ScWlgYU01">Get Started →</a>
+    </div>
+    <div class="plan-card featured">
+      <div class="plan-name">⭐ Pro — Most Popular</div>
+      <div class="plan-price">€89<span>/mo</span></div>
+      <div class="plan-desc">Full team of 6. Unlimited responses. 12 languages.</div>
+      <a href="https://buy.stripe.com/eVqeVd9sHeqsfZM5tTgYU02">Get Started →</a>
+    </div>
+    <div class="plan-card">
+      <div class="plan-name">Agency</div>
+      <div class="plan-price">€179<span>/mo</span></div>
+      <div class="plan-desc">Up to 5 chairs. White-label. API access.</div>
+      <a href="https://buy.stripe.com/28E9AT34jdmobJw9K9gYU00">Get Started →</a>
+    </div>
+  </div>
+
+  <div class="btn-group">
+    <a href="https://web-production-54417.up.railway.app/" class="btn-primary">Visit AIBeautyKit →</a>
+    <a href="https://web-production-54417.up.railway.app/#pricing" class="btn-secondary">See all plans</a>
+  </div>
+
+  <div class="footer-note">
+    30-day money-back guarantee · No contract · Cancel anytime<br><br>
+    <a href="https://web-production-54417.up.railway.app/">web-production-54417.up.railway.app</a> · hello@aibeautykit.com
+  </div>
+</div>
+
+</body>
+</html>

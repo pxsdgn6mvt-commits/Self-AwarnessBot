@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How to Manage Bookings Without Chaos — AIBeautyKit</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f0a0d;
+    --bg2: #180f14;
+    --bg3: #1f141a;
+    --accent: #d4828a;
+    --accent2: #e8a8ae;
+    --text: #f5eff1;
+    --muted: #8a7880;
+    --border: rgba(212,130,138,0.2);
+    --card: rgba(255,255,255,0.03);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Jost', sans-serif;
+    font-weight: 300;
+    line-height: 1.7;
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 0 24px 80px;
+  }
+  .cover {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 80px 0 60px;
+    position: relative;
+    overflow: hidden;
+  }
+  .cover::before {
+    content: '';
+    position: absolute;
+    bottom: -100px; left: -200px;
+    width: 500px; height: 500px;
+    background: radial-gradient(circle, rgba(212,130,138,0.07) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .cover-tag { font-size:11px; letter-spacing:3px; text-transform:uppercase; color:var(--accent); margin-bottom:32px; font-weight:500; }
+  .cover h1 { font-family:'Cormorant Garamond',serif; font-size:clamp(36px,6vw,62px); line-height:1.1; font-weight:600; margin-bottom:24px; }
+  .cover h1 em { font-style:italic; color:var(--accent); }
+  .cover-sub { font-size:18px; color:var(--muted); max-width:500px; margin-bottom:48px; }
+  .cover-brand { display:flex; align-items:center; gap:12px; font-size:13px; color:var(--muted); }
+  .cover-brand span { color:var(--accent); font-weight:500; font-family:'Cormorant Garamond',serif; font-size:18px; }
+  .divider-line { width:1px; height:28px; background:var(--border); }
+  .section { padding:64px 0; border-top:1px solid var(--border); }
+  .section-num { font-size:11px; letter-spacing:3px; text-transform:uppercase; color:var(--accent); font-weight:500; margin-bottom:16px; }
+  .section h2 { font-family:'Cormorant Garamond',serif; font-size:clamp(26px,4vw,42px); font-weight:600; line-height:1.15; margin-bottom:24px; }
+  .section h2 em { font-style:italic; color:var(--accent); }
+  .section p { font-size:16px; color:#c8bfc2; margin-bottom:20px; max-width:660px; }
+  .stat-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:16px; margin:32px 0; }
+  .stat-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:24px 20px; }
+  .stat-card .num { font-family:'Cormorant Garamond',serif; font-size:38px; color:var(--accent); font-weight:600; line-height:1; margin-bottom:8px; }
+  .stat-card .label { font-size:13px; color:var(--muted); line-height:1.4; }
+  .highlight { background:linear-gradient(135deg,rgba(212,130,138,0.07),rgba(212,130,138,0.02)); border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:0 12px 12px 0; padding:24px 28px; margin:28px 0; }
+  .highlight .hl-label { font-size:11px; letter-spacing:2px; text-transform:uppercase; color:var(--accent); font-weight:500; margin-bottom:10px; }
+  .highlight p { font-size:15px; color:var(--text); margin:0; }
+  .ps-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:28px 0; }
+  @media(max-width:560px){.ps-grid{grid-template-columns:1fr;}}
+  .ps-box { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:20px; }
+  .ps-box .ps-label { font-size:11px; letter-spacing:2px; text-transform:uppercase; font-weight:500; margin-bottom:10px; }
+  .ps-box.problem .ps-label { color:#e07070; }
+  .ps-box.solution .ps-label { color:var(--accent); }
+  .ps-box p { font-size:14px; color:#c8bfc2; margin:0; }
+  .checklist { list-style:none; margin:20px 0; }
+  .checklist li { display:flex; gap:12px; align-items:flex-start; padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.04); font-size:15px; color:#c8bfc2; }
+  .checklist li:last-child { border-bottom:none; }
+  .checklist li .icon { color:var(--accent); flex-shrink:0; margin-top:2px; }
+  .cta-section { padding:80px 0 40px; text-align:center; border-top:1px solid var(--border); }
+  .cta-section h2 { font-family:'Cormorant Garamond',serif; font-size:clamp(28px,5vw,50px); font-weight:600; margin-bottom:16px; line-height:1.15; }
+  .cta-section h2 em { font-style:italic; color:var(--accent); }
+  .cta-section p { font-size:17px; color:var(--muted); margin-bottom:40px; max-width:460px; margin-left:auto; margin-right:auto; }
+  .plans-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px; margin:40px 0; text-align:left; }
+  .plan-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:24px 20px; }
+  .plan-card.featured { border-color:var(--accent); background:linear-gradient(135deg,rgba(212,130,138,0.06),transparent); }
+  .plan-card .plan-name { font-size:11px; letter-spacing:2px; text-transform:uppercase; color:var(--muted); font-weight:500; margin-bottom:8px; }
+  .plan-card .plan-price { font-family:'Cormorant Garamond',serif; font-size:34px; color:var(--accent); font-weight:600; margin-bottom:4px; }
+  .plan-card .plan-price span { font-size:15px; color:var(--muted); }
+  .plan-card .plan-desc { font-size:13px; color:var(--muted); margin-bottom:20px; }
+  .plan-card a { display:block; text-align:center; padding:10px; border-radius:6px; font-size:13px; font-weight:500; text-decoration:none; transition:all 0.2s; }
+  .plan-card.featured a { background:var(--accent); color:#0f0a0d; }
+  .plan-card:not(.featured) a { border:1px solid var(--border); color:var(--text); }
+  .plan-card:not(.featured) a:hover { border-color:var(--accent); }
+  .btn-group { display:flex; gap:16px; justify-content:center; flex-wrap:wrap; }
+  .btn-primary { background:var(--accent); color:#0f0a0d; padding:16px 36px; border-radius:8px; font-weight:500; font-size:15px; text-decoration:none; transition:background 0.2s; }
+  .btn-primary:hover { background:var(--accent2); }
+  .btn-secondary { border:1px solid var(--border); color:var(--text); padding:16px 36px; border-radius:8px; font-size:15px; text-decoration:none; transition:border-color 0.2s; }
+  .btn-secondary:hover { border-color:var(--accent); }
+  .footer-note { text-align:center; font-size:13px; color:var(--muted); margin-top:48px; padding-top:32px; border-top:1px solid var(--border); }
+  .footer-note a { color:var(--accent); text-decoration:none; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="cover-tag">Free Guide · Stylists & Beauty Pros · AIBeautyKit</div>
+  <h1>How to Manage Bookings <em>Without Chaos</em> and Keep Your Clients Coming Back</h1>
+  <p class="cover-sub">A practical guide for independent beauty professionals who want more clients and less admin.</p>
+  <div class="cover-brand">
+    <span>AIBeautyKit</span>
+    <div class="divider-line"></div>
+    <span style="color:var(--muted)">AI Team for Beauty Professionals · aibeautykit.com</span>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-num">Introduction</div>
+  <h2>You became a stylist to <em>create</em> — not to manage spreadsheets</h2>
+  <p>But somewhere between building your client base and running your calendar, the admin took over. Messages to answer. Appointments to confirm. No-shows to chase. Reviews to reply to.</p>
+  <p>This guide shows you five specific places where solo beauty professionals lose time, clients, and money — and exactly how to fix each one.</p>
+  <div class="stat-row">
+    <div class="stat-card"><div class="num">4 hrs</div><div class="label">lost weekly to admin tasks that could be automated</div></div>
+    <div class="stat-card"><div class="num">3×</div><div class="label">more likely to rebook if a client gets a personalised follow-up</div></div>
+    <div class="stat-card"><div class="num">€0</div><div class="label">extra staff needed — AI handles it all</div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-num">Problem 01</div>
+  <h2>Your Booking System Is <em>Running You</em></h2>
+  <p>If your calendar lives in your head, a notebook, or a mix of WhatsApp and Instagram DMs — you're spending hours every week just keeping track.</p>
+  <p>And every time you're in the middle of a client and your phone buzzes with a booking request, you lose focus. The client in your chair notices.</p>
+  <div class="highlight">
+    <div class="hl-label">The real cost</div>
+    <p>Solo professionals spend an average of <strong>6–8 hours per week</strong> on booking-related admin. That's a full working day — every single week — not spent on clients.</p>
+  </div>
+  <div class="ps-grid">
+    <div class="ps-box problem"><div class="ps-label">❌ Without automation</div><p>Bookings come in from everywhere. Double-bookings happen. Gaps appear. You're always one missed message away from chaos.</p></div>
+    <div class="ps-box solution"><div class="ps-label">✓ With Aria (AIBeautyKit)</div><p>One link. Clients pick their time, confirm, and get a reminder — without you doing anything.</p></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-num">Problem 02</div>
+  <h2>No-Shows Are <em>Draining Your Income</em></h2>
+  <p>One no-show per week at a €60 average ticket is €240 a month — €2,880 a year — gone. And there was nothing wrong with your work. They just forgot.</p>
+  <div class="stat-row">
+    <div class="stat-card"><div class="num">1 in 10</div><div class="label">appointments ends in a no-show without reminders</div></div>
+    <div class="stat-card"><div class="num">−80%</div><div class="label">fewer no-shows with automated reminders at 24h + 2h</div></div>
+    <div class="stat-card"><div class="num">€2,880</div><div class="label">average annual loss for a solo pro with 1 no-show/week</div></div>
+  </div>
+  <div class="ps-grid">
+    <div class="ps-box problem"><div class="ps-label">❌ Without automation</div><p>You remember to send reminders sometimes. When life gets busy, you forget. No-shows happen. Slots stay empty.</p></div>
+    <div class="ps-box solution"><div class="ps-label">✓ With Aria</div><p>Every client gets a reminder automatically — 24h and 2h before. No-shows drop to near zero.</p></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-num">Problem 03</div>
+  <h2>Clients Drift Away <em>In Silence</em></h2>
+  <p>Most clients don't leave because they're unhappy. They leave because life got busy and nobody reached out. After 45 days without contact, the chance of a return visit drops by over 40%.</p>
+  <div class="highlight">
+    <div class="hl-label">Real example</div>
+    <p>"I used to spend every Sunday evening chasing no-shows and writing follow-ups. Now AIBeautyKit handles all of it. I genuinely haven't touched my DMs on a weekend in two months." — Anna K., Nail Technician · Helsinki</p>
+  </div>
+  <div class="ps-grid">
+    <div class="ps-box problem"><div class="ps-label">❌ Without automation</div><p>You mean to follow up. But there are 12 other things to do. The client books somewhere else.</p></div>
+    <div class="ps-box solution"><div class="ps-label">✓ With Luna (AIBeautyKit)</div><p>Automatic re-engagement after 45 days of silence. Personalised message. In your tone. Client comes back.</p></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-num">Problem 04</div>
+  <h2>Your Instagram Presence Is <em>Inconsistent</em></h2>
+  <p>You know you should be posting. You even have ideas. But after a full day with clients, writing a caption feels impossible. So you post when you can — which is rarely.</p>
+  <p>Inconsistent posting = inconsistent growth. And every week without content is a week a potential client never found you.</p>
+  <div class="stat-row">
+    <div class="stat-card"><div class="num">3–5×</div><div class="label">more reach with consistent weekly posting</div></div>
+    <div class="stat-card"><div class="num">2 hrs</div><div class="label">average time spent writing one week of captions manually</div></div>
+    <div class="stat-card"><div class="num">2 min</div><div class="label">to brief Celeste and get a full week of content</div></div>
+  </div>
+  <div class="ps-grid">
+    <div class="ps-box problem"><div class="ps-label">❌ Without automation</div><p>Content happens when energy allows. Long gaps appear. Followers disengage. Algorithm deprioritises you.</p></div>
+    <div class="ps-box solution"><div class="ps-label">✓ With Celeste (AIBeautyKit)</div><p>Weekly captions, story ideas, and before/after templates — generated in your voice, ready to post.</p></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-num">Problem 05</div>
+  <h2>Reviews Are <em>Not Happening</em> by Themselves</h2>
+  <p>Happy clients rarely leave reviews unless someone asks. And asking in person feels awkward. So most of your best work goes unrecorded — while one unhappy client becomes your most visible online presence.</p>
+  <div class="highlight">
+    <div class="hl-label">The fix</div>
+    <p>An automated review request sent 2 hours after the appointment — while the experience is still fresh — gets 4–6× more responses than a manual ask later.</p>
+  </div>
+  <div class="ps-grid">
+    <div class="ps-box problem"><div class="ps-label">❌ Without automation</div><p>Reviews happen by chance. New clients can't find social proof. Growth stalls.</p></div>
+    <div class="ps-box solution"><div class="ps-label">✓ With Luna</div><p>Review request sent automatically after each appointment. Your reputation builds on autopilot.</p></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-num">Summary</div>
+  <h2>The 5 problems — <em>at a glance</em></h2>
+  <ul class="checklist">
+    <li><span class="icon">01</span> Chaotic booking system wastes 6–8 hours per week and breaks your focus mid-client</li>
+    <li><span class="icon">02</span> No-shows cost up to €2,880/year when there's no automated reminder system</li>
+    <li><span class="icon">03</span> Clients drift away after 45 days of silence — and most never come back</li>
+    <li><span class="icon">04</span> Inconsistent Instagram presence means slow growth and invisible work</li>
+    <li><span class="icon">05</span> No review system means your reputation relies on luck</li>
+  </ul>
+</div>
+
+<div class="cta-section">
+  <h2>Fix all five — <em>starting today</em></h2>
+  <p>AIBeautyKit is a team of 6 AI specialists built for beauty professionals. Setup: 8 minutes. Results: same day.</p>
+  <div class="plans-grid">
+    <div class="plan-card"><div class="plan-name">Starter</div><div class="plan-price">€49<span>/mo</span></div><div class="plan-desc">Aria + Celeste + Luna. Perfect to start.</div><a href="https://buy.stripe.com/9B6cN5bAP96814ScWlgYU01">Get Started →</a></div>
+    <div class="plan-card featured"><div class="plan-name">⭐ Pro — Most Popular</div><div class="plan-price">€89<span>/mo</span></div><div class="plan-desc">Full team of 6. Unlimited. 12 languages.</div><a href="https://buy.stripe.com/eVqeVd9sHeqsfZM5tTgYU02">Get Started →</a></div>
+    <div class="plan-card"><div class="plan-name">Agency</div><div class="plan-price">€179<span>/mo</span></div><div class="plan-desc">Up to 5 chairs. White-label. API.</div><a href="https://buy.stripe.com/28E9AT34jdmobJw9K9gYU00">Get Started →</a></div>
+  </div>
+  <div class="btn-group">
+    <a href="https://web-production-54417.up.railway.app/" class="btn-primary">Visit AIBeautyKit →</a>
+    <a href="https://web-production-54417.up.railway.app/#pricing" class="btn-secondary">See all plans</a>
+  </div>
+  <div class="footer-note">30-day money-back guarantee · No contract · Cancel anytime<br><br><a href="https://web-production-54417.up.railway.app/">web-production-54417.up.railway.app</a> · hello@aibeautykit.com</div>
+</div>
+
+</body>
+</html>

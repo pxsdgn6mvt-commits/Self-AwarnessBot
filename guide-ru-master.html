@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Как вести запись без хаоса — AIBeautyKit</title>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,700;1,400&family=Work+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#09080f;--bg2:#100e1a;--bg3:#161325;--accent:#9b7fe8;--accent2:#b89ef0;--text:#f0eef8;--muted:#7a7592;--border:rgba(155,127,232,0.2);--card:rgba(255,255,255,0.03);}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Work Sans',sans-serif;font-weight:300;line-height:1.7;max-width:860px;margin:0 auto;padding:0 24px 80px;}
+  .cover{min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:80px 0 60px;position:relative;overflow:hidden;}
+  .cover::before{content:'';position:absolute;bottom:-100px;left:-100px;width:500px;height:500px;background:radial-gradient(circle,rgba(155,127,232,0.08) 0%,transparent 70%);pointer-events:none;}
+  .cover::after{content:'';position:absolute;top:50px;right:-150px;width:300px;height:300px;background:radial-gradient(circle,rgba(155,127,232,0.05) 0%,transparent 70%);pointer-events:none;}
+  .cover-tag{font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--accent);margin-bottom:32px;font-weight:500;}
+  .cover h1{font-family:'Lora',serif;font-size:clamp(34px,5.5vw,60px);line-height:1.15;font-weight:700;margin-bottom:24px;}
+  .cover h1 em{font-style:italic;color:var(--accent);}
+  .cover-sub{font-size:18px;color:var(--muted);max-width:520px;margin-bottom:48px;}
+  .cover-brand{display:flex;align-items:center;gap:12px;font-size:13px;color:var(--muted);}
+  .cover-brand span{color:var(--accent);font-weight:500;font-family:'Lora',serif;font-size:17px;}
+  .divider-line{width:1px;height:28px;background:var(--border);}
+  .section{padding:64px 0;border-top:1px solid var(--border);}
+  .section-num{font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--accent);font-weight:500;margin-bottom:16px;}
+  .section h2{font-family:'Lora',serif;font-size:clamp(24px,4vw,40px);font-weight:700;line-height:1.2;margin-bottom:24px;}
+  .section h2 em{font-style:italic;color:var(--accent);}
+  .section p{font-size:16px;color:#c0bcd0;margin-bottom:20px;max-width:660px;}
+  .stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:16px;margin:32px 0;}
+  .stat-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px 20px;}
+  .stat-card .num{font-family:'Lora',serif;font-size:36px;color:var(--accent);font-weight:700;line-height:1;margin-bottom:8px;}
+  .stat-card .label{font-size:13px;color:var(--muted);line-height:1.4;}
+  .highlight{background:linear-gradient(135deg,rgba(155,127,232,0.07),rgba(155,127,232,0.02));border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:0 12px 12px 0;padding:24px 28px;margin:28px 0;}
+  .highlight .hl-label{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--accent);font-weight:500;margin-bottom:10px;}
+  .highlight p{font-size:15px;color:var(--text);margin:0;}
+  .ps-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:28px 0;}
+  @media(max-width:560px){.ps-grid{grid-template-columns:1fr;}}
+  .ps-box{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;}
+  .ps-box .ps-label{font-size:11px;letter-spacing:2px;text-transform:uppercase;font-weight:500;margin-bottom:10px;}
+  .ps-box.problem .ps-label{color:#e07070;}
+  .ps-box.solution .ps-label{color:var(--accent);}
+  .ps-box p{font-size:14px;color:#c0bcd0;margin:0;}
+  .checklist{list-style:none;margin:20px 0;}
+  .checklist li{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:15px;color:#c0bcd0;}
+  .checklist li:last-child{border-bottom:none;}
+  .checklist li .icon{color:var(--accent);flex-shrink:0;margin-top:2px;}
+  .cta-section{padding:80px 0 40px;text-align:center;border-top:1px solid var(--border);}
+  .cta-section h2{font-family:'Lora',serif;font-size:clamp(26px,5vw,48px);font-weight:700;margin-bottom:16px;line-height:1.2;}
+  .cta-section h2 em{font-style:italic;color:var(--accent);}
+  .cta-section p{font-size:17px;color:var(--muted);margin-bottom:40px;max-width:460px;margin-left:auto;margin-right:auto;}
+  .plans-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin:40px 0;text-align:left;}
+  .plan-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px 20px;}
+  .plan-card.featured{border-color:var(--accent);background:linear-gradient(135deg,rgba(155,127,232,0.06),transparent);}
+  .plan-card .plan-name{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:500;margin-bottom:8px;}
+  .plan-card .plan-price{font-family:'Lora',serif;font-size:34px;color:var(--accent);font-weight:700;margin-bottom:4px;}
+  .plan-card .plan-price span{font-size:15px;color:var(--muted);}
+  .plan-card .plan-desc{font-size:13px;color:var(--muted);margin-bottom:20px;}
+  .plan-card a{display:block;text-align:center;padding:10px;border-radius:6px;font-size:13px;font-weight:500;text-decoration:none;transition:all 0.2s;}
+  .plan-card.featured a{background:var(--accent);color:#09080f;}
+  .plan-card:not(.featured) a{border:1px solid var(--border);color:var(--text);}
+  .plan-card:not(.featured) a:hover{border-color:var(--accent);}
+  .btn-group{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;}
+  .btn-primary{background:var(--accent);color:#09080f;padding:16px 36px;border-radius:8px;font-weight:500;font-size:15px;text-decoration:none;}
+  .btn-primary:hover{background:var(--accent2);}
+  .btn-secondary{border:1px solid var(--border);color:var(--text);padding:16px 36px;border-radius:8px;font-size:15px;text-decoration:none;}
+  .btn-secondary:hover{border-color:var(--accent);}
+  .footer-note{text-align:center;font-size:13px;color:var(--muted);margin-top:48px;padding-top:32px;border-top:1px solid var(--border);}
+  .footer-note a{color:var(--accent);text-decoration:none;}
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="cover-tag">Бесплатный гайд · Мастера · AIBeautyKit</div>
+  <h1>Как вести запись <em>без хаоса</em> и не терять клиентов</h1>
+  <p class="cover-sub">Практический гайд для мастеров которые хотят больше клиентов и меньше административной рутины.</p>
+  <div class="cover-brand">
+    <span>AIBeautyKit</span>
+    <div class="divider-line"></div>
+    <span style="color:var(--muted)">AI-команда для бьюти-профессионалов · aibeautykit.com</span>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-num">Введение</div>
+  <h2>Ты стал мастером чтобы <em>творить</em> — не вести таблицы</h2>
+  <p>Но где-то между набором клиентской базы и управлением календарём — административная рутина взяла верх. Сообщения для ответа. Записи для подтверждения. No-show которых не ждал. Отзывы которые надо не забыть попросить.</p>
+  <p>Этот гайд показывает пять конкретных мест где мастера теряют время, клиентов и деньги — и как исправить каждое.</p>
+  <div class="stat-row">
+    <div class="stat-card"><div class="num">6–8 ч</div><div class="label">в неделю теряется на административные задачи</div></div>
+    <div class="stat-card"><div class="num">3×</div><div class="label">больше шансов на повторный визит при персонализированном follow-up</div></div>
+    <div class="stat-card"><div class="num">€0</div><div class="label">дополнительного персонала — AI берёт всё на себя</div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-num">Проблема 01</div>
+  <h2>Твоя система записи <em>управляет тобой</em></h2>
+  <p>Если твой календарь живёт в голове, блокноте или в смеси WhatsApp и Instagram DM — ты тратишь часы каждую неделю просто чтобы не запутаться.</p>
+  <p>И каждый раз когда телефон вибрирует во время работы с клиентом — ты теряешь фокус. Клиент в кресле это замечает.</p>
+  <div class="highlight">
+    <div class="hl-label">Реальная цена</div>
+    <p>Мастера в среднем тратят <strong>6–8 часов в неделю</strong> на задачи связанные с записью. Это целый рабочий день — каждую неделю — не потраченный на клиентов.</p>
+  </div>
+  <div class="ps-grid">
+    <div class="ps-box problem"><div class="ps-label">❌ Без автоматизации</div><p>Записи приходят отовсюду. Двойные бронирования случаются. Пробелы появляются. Ты всегда в одном пропущенном сообщении от хаоса.</p></div>
+    <div class="ps-box solution"><div class="ps-label">✓ С Aria (AIBeautyKit)</div><p>Одна ссылка. Клиент выбирает время, подтверждает и получает напоминание — без твоего участия.</p></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-num">Проблема 02</div>
+  <h2>No-show <em>опустошают твой доход</em></h2>
+  <p>Один no-show в неделю при среднем чеке €60 — это €240 в месяц, €2 880 в год. И с твоей работой всё было в порядке. Клиент просто забыл.</p>
+  <div class="stat-row">
+    <div class="stat-card"><div class="num">1 из 10</div><div class="label">записей заканчивается no-show без напоминаний</div></div>
+    <div class="stat-card"><div class="num">−80%</div><div class="label">no-show с автоматическими напоминаниями за 24ч + 2ч</div></div>
+    <div class="stat-card"><div class="num">€2 880</div><div class="label">средние годовые потери мастера при 1 no-show в неделю</div></div>
+  </div>
+  <div class="ps-grid">
+    <div class="ps-box problem"><div class="ps-label">❌ Без автоматизации</div><p>Иногда помнишь отправить напоминание. Когда жизнь насыщенная — забываешь. No-show случаются. Слоты пустуют.</p></div>
+    <div class="ps-box solution"><div class="ps-label">✓ С Aria</div><p>Каждый клиент получает напоминание автоматически — за 24ч и за 2ч. No-show падают до минимума.</p></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-num">Проблема 03</div>
+  <h2>Клиенты уходят <em>в тишине</em></h2>
+  <p>Большинство клиентов уходят не потому что недовольны. Просто жизнь закрутилась и никто не написал. После 45 дней без контакта вероятность возврата падает более чем на 40%.</p>
+  <div class="highlight">
+    <div class="hl-label">Реальный пример</div>
+    <p>"Раньше я каждое воскресенье отслеживала no-show и писала follow-up вручную. Теперь AIBeautyKit делает всё это сам. Я буквально не заходила в DM на выходных уже два месяца." — Анна К., nail-мастер · Хельсинки</p>
+  </div>
+  <div class="ps-grid">
+    <div class="ps-box problem"><div class="ps-label">❌ Без автоматизации</div><p>Хочешь написать follow-up — но есть 12 других дел. Клиент записывается к другому мастеру.</p></div>
+    <div class="ps-box solution"><div class="ps-label">✓ С Luna</div><p>Автоматическое сообщение реактивации после 45 дней тишины. Персонализированное, в твоём стиле. Клиент возвращается.</p></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-num">Проблема 04</div>
+  <h2>Instagram не работает <em>на тебя</em></h2>
+  <p>Ты знаешь что надо публиковать контент. Идеи даже есть. Но после полного дня с клиентами написать подпись кажется невозможным. Поэтому посты выходят когда получается — что бывает редко.</p>
+  <div class="stat-row">
+    <div class="stat-card"><div class="num">3–5×</div><div class="label">больше охват при стабильных еженедельных постах</div></div>
+    <div class="stat-card"><div class="num">2 ч</div><div class="label">в среднем уходит на написание контента на неделю вручную</div></div>
+    <div class="stat-card"><div class="num">2 мин</div><div class="label">чтобы получить готовый контент на неделю от Celeste</div></div>
+  </div>
+  <div class="ps-grid">
+    <div class="ps-box problem"><div class="ps-label">❌ Без автоматизации</div><p>Контент выходит когда есть силы. Появляются длинные паузы. Аудитория перестаёт вовлекаться.</p></div>
+    <div class="ps-box solution"><div class="ps-label">✓ С Celeste</div><p>Подписи, идеи для сторис и шаблоны для before/after — в твоём голосе, готовые к публикации.</p></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-num">Проблема 05</div>
+  <h2>Отзывы <em>не собираются сами</em></h2>
+  <p>Довольные клиенты редко оставляют отзывы если их не попросить. А просить вживую неловко. Поэтому большинство твоих лучших работ остаётся незафиксированным — пока один недовольный клиент не становится твоим самым заметным онлайн-следом.</p>
+  <div class="highlight">
+    <div class="hl-label">Решение</div>
+    <p>Автоматический запрос отзыва через 2 часа после визита — пока опыт ещё свеж — получает в 4–6 раз больше ответов чем ручная просьба позже.</p>
+  </div>
+  <div class="ps-grid">
+    <div class="ps-box problem"><div class="ps-label">❌ Без автоматизации</div><p>Отзывы случаются случайно. Новые клиенты не могут найти социальное доказательство. Рост замедляется.</p></div>
+    <div class="ps-box solution"><div class="ps-label">✓ С Luna</div><p>Запрос отзыва отправляется автоматически после каждого визита. Репутация строится на автопилоте.</p></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-num">Итог</div>
+  <h2>5 проблем — <em>кратко</em></h2>
+  <ul class="checklist">
+    <li><span class="icon">01</span> Хаотичная система записи теряет 6–8 часов в неделю и рвёт фокус во время работы с клиентом</li>
+    <li><span class="icon">02</span> No-show стоят до €2 880 в год без системы автоматических напоминаний</li>
+    <li><span class="icon">03</span> Клиенты уходят после 45 дней тишины — и большинство не возвращается</li>
+    <li><span class="icon">04</span> Нестабильный Instagram = медленный рост и невидимая работа</li>
+    <li><span class="icon">05</span> Нет системы отзывов — репутация строится на удаче</li>
+  </ul>
+</div>
+
+<div class="cta-section">
+  <h2>Исправь все пять — <em>начиная сегодня</em></h2>
+  <p>AIBeautyKit — команда из 6 AI-специалистов для бьюти-профессионалов. Настройка: 8 минут. Результат: в тот же день.</p>
+  <div class="plans-grid">
+    <div class="plan-card"><div class="plan-name">Starter</div><div class="plan-price">€49<span>/мес</span></div><div class="plan-desc">Aria + Celeste + Luna. Идеально для старта.</div><a href="https://buy.stripe.com/9B6cN5bAP96814ScWlgYU01">Начать →</a></div>
+    <div class="plan-card featured"><div class="plan-name">⭐ Pro — Выбор большинства</div><div class="plan-price">€89<span>/мес</span></div><div class="plan-desc">Вся команда. Безлимит. 12 языков.</div><a href="https://buy.stripe.com/eVqeVd9sHeqsfZM5tTgYU02">Начать →</a></div>
+    <div class="plan-card"><div class="plan-name">Agency</div><div class="plan-price">€179<span>/мес</span></div><div class="plan-desc">До 5 мастеров. White-label. API.</div><a href="https://buy.stripe.com/28E9AT34jdmobJw9K9gYU00">Начать →</a></div>
+  </div>
+  <div class="btn-group">
+    <a href="https://web-production-54417.up.railway.app/" class="btn-primary">Перейти на AIBeautyKit →</a>
+    <a href="https://web-production-54417.up.railway.app/#pricing" class="btn-secondary">Смотреть тарифы</a>
+  </div>
+  <div class="footer-note">30-дневная гарантия возврата · Без контракта · Отмена в любой момент<br><br><a href="https://web-production-54417.up.railway.app/">web-production-54417.up.railway.app</a> · hello@aibeautykit.com</div>
+</div>
+
+</body>
+</html>
