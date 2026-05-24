@@ -182,4 +182,18 @@ ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS daily_summary_hour    INT NOT 
 ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS owner_lang            VARCHAR(2) NOT NULL DEFAULT 'ru';
 ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS is_vip                BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE aria_tenants ADD COLUMN IF NOT EXISTS vip_until             TIMESTAMPTZ;
+
+-- ── Stripe subscriptions ──────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS aria_subscriptions (
+    id                      BIGSERIAL PRIMARY KEY,
+    tenant_id               INT REFERENCES aria_tenants(id),
+    stripe_customer_id      TEXT,
+    stripe_subscription_id  TEXT UNIQUE,
+    stripe_price_id         TEXT,
+    plan                    TEXT NOT NULL,
+    status                  TEXT NOT NULL DEFAULT 'active',
+    customer_email          TEXT,
+    created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 """

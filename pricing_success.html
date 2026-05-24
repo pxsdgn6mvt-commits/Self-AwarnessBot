@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>AIBeautyKit — Payment Successful</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23c4613a'/><text x='16' y='22' text-anchor='middle' font-family='Georgia,serif' font-size='19' font-weight='bold' fill='white'>A</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --cream:#f5f0e8;--dark:#1a120a;--dark2:#2d1a0e;
+  --terra:#c4613a;--terra-d:#9e4a29;--muted:#8b6e5a;--border:rgba(26,18,10,.12);
+}
+body{background:var(--cream);color:var(--dark);font-family:'Inter',system-ui,sans-serif;min-height:100vh;display:flex;flex-direction:column}
+nav{background:var(--dark2);padding:16px 24px;display:flex;align-items:center}
+nav a{font-family:'Lora',serif;font-weight:700;font-size:1.1rem;color:#f5f0e8;text-decoration:none}
+.main{flex:1;display:flex;align-items:center;justify-content:center;padding:48px 24px}
+.card{background:#fff;border:1.5px solid var(--border);border-radius:20px;padding:56px 48px;max-width:520px;width:100%;text-align:center;box-shadow:0 8px 40px rgba(26,18,10,.08)}
+.icon{font-size:3.5rem;margin-bottom:24px}
+h1{font-family:'Lora',serif;font-size:1.9rem;font-weight:700;color:var(--dark);margin-bottom:16px}
+p{color:var(--muted);font-size:.95rem;line-height:1.75;margin-bottom:12px}
+.steps{text-align:left;margin:28px 0;background:rgba(196,97,58,.05);border:1px solid rgba(196,97,58,.15);border-radius:12px;padding:20px 24px}
+.steps h3{font-family:'Lora',serif;font-size:1rem;font-weight:600;color:var(--dark);margin-bottom:12px}
+.steps ol{padding-left:20px;color:var(--muted);font-size:.9rem;line-height:2}
+.btn{display:inline-block;margin-top:28px;padding:14px 32px;background:var(--terra);color:#fff;border-radius:10px;font-weight:600;font-size:.95rem;text-decoration:none;transition:background .2s}
+.btn:hover{background:var(--terra-d)}
+footer{text-align:center;padding:24px;color:var(--muted);font-size:.8rem;border-top:1px solid var(--border)}
+</style>
+</head>
+<body>
+<nav><a href="/">AIBeautyKit</a></nav>
+<div class="main">
+  <div class="card">
+    <div class="icon">🎉</div>
+    <h1>Payment Successful!</h1>
+    <p>Thank you for subscribing to AIBeautyKit. Your payment has been processed and your account is being set up.</p>
+    <div class="steps">
+      <h3>What happens next</h3>
+      <ol>
+        <li>You'll receive a payment receipt from Stripe by email</li>
+        <li>Our team will configure your Telegram bot within 24 hours</li>
+        <li>You'll receive a Telegram message with your bot link and setup instructions</li>
+      </ol>
+    </div>
+    <p>Questions? Reply to your receipt email or contact us via Telegram.</p>
+    <a href="/" class="btn">Back to Home</a>
+  </div>
+</div>
+<footer>&copy; 2026 AIBeautyKit</footer>
+</body>
+</html>

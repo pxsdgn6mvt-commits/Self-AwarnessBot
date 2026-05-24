@@ -786,3 +786,36 @@ async def update_item_duration(item_id: int, duration_minutes: int | None) -> No
         await conn.execute(
             "UPDATE aria_service_items SET duration_minutes=$2 WHERE id=$1", item_id, duration_minutes
         )
+
+
+# ── Subscriptions ─────────────────────────────────────────────────────────────
+
+async def create_subscription(
+    plan: str,
+    customer_email: str,
+    stripe_subscription_id: Optional[str] = None,
+    stripe_customer_id: Optional[str] = None,
+    stripe_price_id: Optional[str] = None,
+    tenant_id: Optional[int] = None,
+) -> int:
+    async with _p().acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO aria_subscriptions
+                (plan, customer_email, stripe_subscription_id,
+                 stripe_customer_id, stripe_price_id, tenant_id)
+            VALUES ($1,$2,$3,$4,$5,$6)
+            RETURNING id
+            """,
+            plan, customer_email, stripe_subscription_id,
+            stripe_customer_id, stripe_price_id, tenant_id,
+        )
+        return row["id"]
+
+
+async def get_subscription_by_stripe_id(stripe_subscription_id: str) -> Optional[asyncpg.Record]:
+    async with _p().acquire() as conn:
+        return await conn.fetchrow(
+            "SELECT * FROM aria_subscriptions WHERE stripe_subscription_id=$1",
+            stripe_subscription_id,
+        )

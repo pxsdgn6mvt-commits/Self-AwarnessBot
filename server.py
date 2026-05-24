@@ -1,3 +1,4 @@
+import asyncio
 import os
 import logging
 from flask import Flask, request, jsonify, Response
@@ -51,6 +52,108 @@ def faq():
 def health():
     return "ok", 200
 
+
+@app.route("/pricing")
+def pricing():
+    from aria.config import settings
+    path = os.path.join(BASE_DIR, "pricing.html")
+    with open(path, "rb") as f:
+        html = f.read().decode("utf-8")
+    html = html.replace("__STRIPE_PRICE_ID_STARTER__", settings.STRIPE_PRICE_ID_STARTER)
+    html = html.replace("__STRIPE_PRICE_ID_PRO__",     settings.STRIPE_PRICE_ID_PRO)
+    html = html.replace("__STRIPE_PRICE_ID_AGENCY__",  settings.STRIPE_PRICE_ID_AGENCY)
+    return Response(html.encode("utf-8"), mimetype="text/html; charset=utf-8")
+
+
+@app.route("/pricing/success")
+def pricing_success():
+    return _read_html("pricing_success.html")
+
+
+@app.route("/pricing/cancel")
+def pricing_cancel():
+    return _read_html("pricing_cancel.html")
+
+
+@app.route("/api/stripe/checkout", methods=["POST"])
+def stripe_checkout():
+    from aria.services.stripe_service import create_checkout_session
+    from aria.config import settings
+
+    data = request.get_json(silent=True) or {}
+    price_id = data.get("price_id", "")
+    if not price_id:
+        return jsonify({"error": "price_id required"}), 400
+
+    valid_ids = {
+        settings.STRIPE_PRICE_ID_STARTER,
+        settings.STRIPE_PRICE_ID_PRO,
+        settings.STRIPE_PRICE_ID_AGENCY,
+    }
+    if price_id not in valid_ids:
+        return jsonify({"error": "invalid price_id"}), 400
+
+    base = request.host_url.rstrip("/")
+    try:
+        url = create_checkout_session(
+            price_id,
+            success_url=f"{base}/pricing/success",
+            cancel_url=f"{base}/pricing/cancel",
+        )
+        return jsonify({"url": url})
+    except Exception as exc:
+        log.exception("Stripe checkout error")
+        return jsonify({"error": str(exc)}), 502
+
+
+@app.route("/api/stripe/webhook", methods=["POST"])
+def stripe_webhook():
+    from aria.services.stripe_service import parse_webhook_event
+    from aria.services.onboarding import provision_bot
+    import stripe
+
+    payload = request.get_data()
+    sig = request.headers.get("Stripe-Signature", "")
+
+    _SigError = getattr(stripe, "SignatureVerificationError",
+                        getattr(stripe.error, "SignatureVerificationError", Exception))
+    try:
+        event = parse_webhook_event(payload, sig)
+    except _SigError:
+        log.warning("Stripe webhook signature verification failed")
+        return jsonify({"error": "invalid signature"}), 400
+    except Exception as exc:
+        log.exception("Stripe webhook parse error")
+        return jsonify({"error": str(exc)}), 400
+
+    if event["type"] == "checkout.session.completed":
+        session = event["data"]["object"]
+        customer_email    = session.get("customer_details", {}).get("email") or session.get("customer_email", "")
+        stripe_sub_id     = session.get("subscription", "")
+        stripe_customer   = session.get("customer", "")
+        metadata          = session.get("metadata", {})
+        plan              = metadata.get("plan", "unknown")
+        line_items_data   = session.get("line_items")
+        stripe_price_id   = ""
+        if line_items_data and line_items_data.get("data"):
+            stripe_price_id = line_items_data["data"][0].get("price", {}).get("id", "")
+
+        try:
+            loop = asyncio.new_event_loop()
+            loop.run_until_complete(
+                provision_bot(
+                    customer_email=customer_email,
+                    plan=plan,
+                    stripe_subscription_id=stripe_sub_id,
+                    stripe_customer_id=stripe_customer,
+                    stripe_price_id=stripe_price_id,
+                )
+            )
+            loop.close()
+        except Exception:
+            log.exception("Onboarding provision_bot failed")
+
+    return jsonify({"status": "ok"}), 200
 
 
 @app.route("/api/chat", methods=["POST"])

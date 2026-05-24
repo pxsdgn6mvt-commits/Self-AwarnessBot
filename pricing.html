@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>AIBeautyKit — Pricing</title>
+<meta name="description" content="Choose the plan that fits your salon. Starter €49, Pro €89, Agency €179 per month.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23c4613a'/><text x='16' y='22' text-anchor='middle' font-family='Georgia,serif' font-size='19' font-weight='bold' fill='white'>A</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --cream:#f5f0e8;--cream2:#ede8df;--cream3:#e4ddd3;
+  --dark:#1a120a;--dark2:#2d1a0e;
+  --terra:#c4613a;--terra-d:#9e4a29;
+  --gold:#b8860b;--gold-l:#d4a540;
+  --muted:#8b6e5a;--muted2:#b09880;
+  --border:rgba(26,18,10,.12);
+}
+html{scroll-behavior:smooth}
+body{background:var(--cream);color:var(--dark);line-height:1.65;font-family:'Inter',system-ui,sans-serif;min-height:100vh}
+h1,h2,h3{font-family:'Lora',Georgia,serif}
+
+/* NAV */
+nav{background:var(--dark2);padding:16px 24px;display:flex;align-items:center;gap:16px}
+nav a{color:rgba(245,240,232,.75);text-decoration:none;font-size:.85rem;font-weight:500}
+nav a:first-child{font-family:'Lora',serif;font-weight:700;font-size:1.1rem;color:#f5f0e8;margin-right:auto}
+nav a:hover{color:#f5f0e8}
+
+/* HERO */
+.hero{text-align:center;padding:72px 24px 48px}
+.hero-label{display:inline-flex;align-items:center;gap:10px;font-size:.67rem;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--terra);margin-bottom:20px}
+.hero-label::before,.hero-label::after{content:'';display:block;width:24px;height:1.5px;background:var(--terra)}
+.hero h1{font-size:clamp(2rem,5vw,44px);font-weight:700;color:var(--dark);line-height:1.1;margin-bottom:16px}
+.hero h1 em{font-style:italic;color:var(--terra)}
+.hero p{color:var(--muted);font-size:1rem;max-width:480px;margin:0 auto}
+
+/* PLANS */
+.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px;max-width:1000px;margin:0 auto;padding:0 24px 80px}
+
+.card{background:#fff;border:1.5px solid var(--border);border-radius:16px;padding:36px 28px;display:flex;flex-direction:column;gap:20px;position:relative;transition:transform .2s,box-shadow .2s}
+.card:hover{transform:translateY(-4px);box-shadow:0 12px 40px rgba(26,18,10,.1)}
+
+.card.featured{border-color:var(--terra);box-shadow:0 0 0 3px rgba(196,97,58,.12)}
+.badge{position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:var(--terra);color:#fff;font-size:.7rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;padding:4px 14px;border-radius:20px;white-space:nowrap}
+
+.plan-name{font-family:'Lora',serif;font-size:1.3rem;font-weight:700;color:var(--dark)}
+.plan-price{display:flex;align-items:baseline;gap:4px}
+.plan-price .amount{font-size:2.4rem;font-weight:700;color:var(--terra);font-family:'Lora',serif}
+.plan-price .period{color:var(--muted);font-size:.9rem}
+
+.features{list-style:none;display:flex;flex-direction:column;gap:10px;flex:1}
+.features li{display:flex;align-items:flex-start;gap:10px;font-size:.9rem;color:var(--dark)}
+.features li::before{content:'✓';color:var(--terra);font-weight:700;flex-shrink:0;margin-top:1px}
+
+.btn{display:block;text-align:center;padding:14px 24px;border-radius:10px;font-weight:600;font-size:.95rem;cursor:pointer;border:none;transition:background .2s,transform .15s;font-family:'Inter',sans-serif}
+.btn-primary{background:var(--terra);color:#fff}
+.btn-primary:hover{background:var(--terra-d);transform:translateY(-1px)}
+.btn-outline{background:transparent;color:var(--terra);border:2px solid var(--terra)}
+.btn-outline:hover{background:rgba(196,97,58,.06);transform:translateY(-1px)}
+
+.loading{opacity:.6;pointer-events:none}
+
+/* FOOTER */
+footer{text-align:center;padding:32px 24px;color:var(--muted);font-size:.82rem;border-top:1px solid var(--border)}
+footer a{color:var(--terra);text-decoration:none}
+
+/* GUARANTEE */
+.guarantee{text-align:center;padding:0 24px 48px;color:var(--muted);font-size:.88rem}
+.guarantee span{display:inline-block;background:rgba(196,97,58,.07);border:1px solid rgba(196,97,58,.2);border-radius:8px;padding:10px 20px}
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="/">AIBeautyKit</a>
+  <a href="/#features">Features</a>
+  <a href="/#audit">Free Audit</a>
+</nav>
+
+<section class="hero">
+  <div class="hero-label">Plans &amp; Pricing</div>
+  <h1>Your AI team,<br><em>ready in minutes</em></h1>
+  <p>Pick a plan, pay once, get your Telegram bot configured and live the same day.</p>
+</section>
+
+<div class="plans">
+
+  <!-- Starter -->
+  <div class="card">
+    <div>
+      <div class="plan-name">Starter</div>
+      <div class="plan-price"><span class="amount">€49</span><span class="period">/month</span></div>
+    </div>
+    <ul class="features">
+      <li>24/7 Telegram booking bot</li>
+      <li>AI booking assistant</li>
+      <li>Appointment reminders</li>
+      <li>1 salon location</li>
+      <li>Email support</li>
+    </ul>
+    <button class="btn btn-outline" data-price-env="STARTER" onclick="checkout(this)">Get Started</button>
+  </div>
+
+  <!-- Pro (recommended) -->
+  <div class="card featured">
+    <div class="badge">Most Popular</div>
+    <div>
+      <div class="plan-name">Pro</div>
+      <div class="plan-price"><span class="amount">€89</span><span class="period">/month</span></div>
+    </div>
+    <ul class="features">
+      <li>Everything in Starter</li>
+      <li>AI content &amp; marketing specialist</li>
+      <li>Client CRM with VIP tracking</li>
+      <li>Revenue analytics dashboard</li>
+      <li>Waitlist management</li>
+      <li>Priority support</li>
+    </ul>
+    <button class="btn btn-primary" data-price-env="PRO" onclick="checkout(this)">Get Pro</button>
+  </div>
+
+  <!-- Agency -->
+  <div class="card">
+    <div>
+      <div class="plan-name">Agency</div>
+      <div class="plan-price"><span class="amount">€179</span><span class="period">/month</span></div>
+    </div>
+    <ul class="features">
+      <li>Everything in Pro</li>
+      <li>Up to 10 salon locations</li>
+      <li>Multi-tenant management</li>
+      <li>Custom AI prompt tuning</li>
+      <li>Dedicated onboarding call</li>
+      <li>SLA support</li>
+    </ul>
+    <button class="btn btn-outline" data-price-env="AGENCY" onclick="checkout(this)">Get Agency</button>
+  </div>
+
+</div>
+
+<div class="guarantee">
+  <span>30-day money-back guarantee &nbsp;·&nbsp; Cancel anytime &nbsp;·&nbsp; GDPR compliant</span>
+</div>
+
+<footer>
+  &copy; 2026 AIBeautyKit &nbsp;·&nbsp; <a href="/">Home</a> &nbsp;·&nbsp; <a href="/faq">FAQ</a>
+</footer>
+
+<script>
+const PRICE_IDS = {
+  STARTER: "__STRIPE_PRICE_ID_STARTER__",
+  PRO:     "__STRIPE_PRICE_ID_PRO__",
+  AGENCY:  "__STRIPE_PRICE_ID_AGENCY__",
+};
+
+async function checkout(btn) {
+  const env = btn.dataset.priceEnv;
+  const price_id = PRICE_IDS[env];
+  if (!price_id || price_id.startsWith("__")) {
+    alert("Payment is not yet configured. Please contact us.");
+    return;
+  }
+  btn.classList.add("loading");
+  btn.textContent = "Redirecting…";
+  try {
+    const res = await fetch("/api/stripe/checkout", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({price_id}),
+    });
+    const data = await res.json();
+    if (data.url) {
+      window.location.href = data.url;
+    } else {
+      alert("Could not start checkout: " + (data.error || "unknown error"));
+      btn.classList.remove("loading");
+      btn.textContent = env === "PRO" ? "Get Pro" : env === "STARTER" ? "Get Started" : "Get Agency";
+    }
+  } catch (e) {
+    alert("Network error. Please try again.");
+    btn.classList.remove("loading");
+    btn.textContent = env === "PRO" ? "Get Pro" : env === "STARTER" ? "Get Started" : "Get Agency";
+  }
+}
+</script>
+
+</body>
+</html>

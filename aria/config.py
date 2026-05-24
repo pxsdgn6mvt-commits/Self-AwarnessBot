@@ -80,5 +80,12 @@ class Settings:
         self.WEBHOOK_BASE_URL = raw_url
         self.WEBHOOK_SECRET = _str("WEBHOOK_SECRET", "")
 
+        # ── Stripe ────────────────────────────────────────────────────────────
+        self.STRIPE_SECRET_KEY       = _str("STRIPE_SECRET_KEY", "")
+        self.STRIPE_WEBHOOK_SECRET   = _str("STRIPE_WEBHOOK_SECRET", "")
+        self.STRIPE_PRICE_ID_STARTER = _str("STRIPE_PRICE_ID_STARTER", "")
+        self.STRIPE_PRICE_ID_PRO     = _str("STRIPE_PRICE_ID_PRO", "")
+        self.STRIPE_PRICE_ID_AGENCY  = _str("STRIPE_PRICE_ID_AGENCY", "")
+
 
 settings = Settings()
