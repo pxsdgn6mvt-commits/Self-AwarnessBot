@@ -55,6 +55,7 @@ def get_main_kb(lang: str = "ru") -> ReplyKeyboardMarkup:
             [KeyboardButton(text=t("btn_today", lang)),    KeyboardButton(text=t("btn_tomorrow", lang))],
             [KeyboardButton(text=t("btn_new", lang)),      KeyboardButton(text=t("btn_upcoming", lang))],
             [KeyboardButton(text=t("btn_dashboard", lang)),KeyboardButton(text=t("btn_settings", lang))],
+            [KeyboardButton(text="💳 Подписка")],
         ],
         resize_keyboard=True,
         is_persistent=True,
@@ -68,7 +69,8 @@ MAIN_KB_TEXTS: frozenset[str] = frozenset(
     all_variants("btn_today") | all_variants("btn_tomorrow") |
     all_variants("btn_new") | all_variants("btn_upcoming") |
     all_variants("btn_dashboard") | all_variants("btn_settings") |
-    {"📱 Меню", "📱 Управление", "📋 Список ботов", "➕ Добавить бота", "📣 Рассылка"}
+    {"📱 Меню", "📱 Управление", "📋 Список ботов", "➕ Добавить бота", "📣 Рассылка",
+     "💳 Подписка"}
 )
 
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import Optional
 
 import requests
 
@@ -36,6 +37,7 @@ async def provision_bot(
     stripe_subscription_id: str,
     stripe_customer_id: str = "",
     stripe_price_id: str = "",
+    tenant_id: Optional[int] = None,
 ) -> int:
     sub_id = await repo.create_subscription(
         plan=plan,
@@ -43,14 +45,16 @@ async def provision_bot(
         stripe_subscription_id=stripe_subscription_id or None,
         stripe_customer_id=stripe_customer_id or None,
         stripe_price_id=stripe_price_id or None,
+        tenant_id=tenant_id,
     )
-    log.info("Created subscription id=%s plan=%s email=%s", sub_id, plan, customer_email)
+    log.info("Created subscription id=%s plan=%s email=%s tenant_id=%s", sub_id, plan, customer_email, tenant_id)
 
     admin_id = settings.ADMIN_TELEGRAM_ID
     if admin_id:
+        source = f"Telegram Payment (tenant #{tenant_id})" if tenant_id else f"Stripe sub: {stripe_subscription_id}"
         msg = (
-            f"Новый клиент: {customer_email} / {plan}\n"
-            f"Stripe sub: {stripe_subscription_id}\n"
+            f"Новый клиент: {customer_email or '—'} / {plan}\n"
+            f"{source}\n"
             "Добавь бот токен через /add_bot"
         )
         loop = asyncio.get_event_loop()

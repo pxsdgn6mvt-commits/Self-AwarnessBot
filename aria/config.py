@@ -87,5 +87,8 @@ class Settings:
         self.STRIPE_PRICE_ID_PRO     = _str("STRIPE_PRICE_ID_PRO", "")
         self.STRIPE_PRICE_ID_AGENCY  = _str("STRIPE_PRICE_ID_AGENCY", "")
 
+        # ── Telegram Payments ─────────────────────────────────────────────────
+        self.STRIPE_PROVIDER_TOKEN   = _str("STRIPE_PROVIDER_TOKEN", "")
+
 
 settings = Settings()

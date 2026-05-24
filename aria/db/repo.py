@@ -819,3 +819,21 @@ async def get_subscription_by_stripe_id(stripe_subscription_id: str) -> Optional
             "SELECT * FROM aria_subscriptions WHERE stripe_subscription_id=$1",
             stripe_subscription_id,
         )
+
+
+async def get_active_subscription(tenant_id: int) -> Optional[asyncpg.Record]:
+    async with _p().acquire() as conn:
+        return await conn.fetchrow(
+            """SELECT * FROM aria_subscriptions
+               WHERE tenant_id=$1 AND status='active'
+               ORDER BY created_at DESC LIMIT 1""",
+            tenant_id,
+        )
+
+
+async def update_subscription_tenant(subscription_id: int, tenant_id: int) -> None:
+    async with _p().acquire() as conn:
+        await conn.execute(
+            "UPDATE aria_subscriptions SET tenant_id=$2, updated_at=NOW() WHERE id=$1",
+            subscription_id, tenant_id,
+        )

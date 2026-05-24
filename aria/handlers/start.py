@@ -7,6 +7,7 @@ import logging
 
 from aiogram import F, Router
 from aiogram.filters import CommandStart, Command
+from aiogram.filters.command import CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
@@ -69,7 +70,11 @@ def _lang_kb() -> InlineKeyboardMarkup:
 
 
 @router.message(CommandStart(), SetupDone())
-async def cmd_start(message: Message, state: FSMContext, tenant: TenantConfig) -> None:
+async def cmd_start(message: Message, state: FSMContext, tenant: TenantConfig, command: CommandObject) -> None:
+    if command.args == "subscribe":
+        from aria.handlers.subscription import show_subscription_menu
+        await show_subscription_menu(message, tenant)
+        return
     await state.clear()
     await repo.upsert_client(tenant.id, message.from_user.id,
                               message.from_user.language_code or "ru")
