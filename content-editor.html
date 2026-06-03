@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Content Editor — BitByBit</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:#0f0f0f;color:#e0e0e0;font-family:'Inter',system-ui,sans-serif;min-height:100vh}
+
+.header{background:#1a1a1a;border-bottom:1px solid #2a2a2a;padding:14px 24px;display:flex;align-items:center;gap:14px}
+.header-logo{font-size:1.1rem;font-weight:800;color:#fff;letter-spacing:-0.02em}
+.header-logo span{color:#6c63ff}
+.header-sub{font-size:0.78rem;color:#555}
+
+.main{max-width:1200px;margin:0 auto;padding:28px 24px}
+
+/* Download section */
+.section{background:#1a1a1a;border:1px solid #2a2a2a;border-radius:12px;padding:22px;margin-bottom:24px}
+.section-title{font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.15em;color:#555;margin-bottom:14px}
+.download-row{display:flex;gap:10px}
+.url-input{flex:1;background:#111;border:1px solid #333;border-radius:8px;padding:11px 14px;color:#e0e0e0;font-size:0.88rem;outline:none;transition:border-color 0.2s}
+.url-input:focus{border-color:#6c63ff}
+.url-input::placeholder{color:#444}
+.btn{background:#6c63ff;color:#fff;border:none;border-radius:8px;padding:11px 20px;font-size:0.88rem;font-weight:600;cursor:pointer;transition:background 0.2s;white-space:nowrap;display:inline-flex;align-items:center;gap:7px}
+.btn:hover{background:#5a52e0}
+.btn:disabled{background:#333;color:#666;cursor:not-allowed}
+.btn-ghost{background:#222;color:#aaa;border:1px solid #333}
+.btn-ghost:hover{background:#2a2a2a;color:#ddd}
+.status{margin-top:10px;font-size:0.82rem;color:#666;min-height:18px}
+.status.ok{color:#6bcb77}
+.status.err{color:#ff6b6b}
+
+/* Gallery */
+.gallery-wrap .section-title{margin-bottom:16px}
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
+.gitem{background:#111;border:1px solid #2a2a2a;border-radius:10px;overflow:hidden;cursor:pointer;transition:border-color 0.15s,transform 0.15s}
+.gitem:hover{border-color:#6c63ff;transform:translateY(-2px)}
+.gthumb{width:100%;aspect-ratio:1;object-fit:cover;display:block}
+.gthumb-video{width:100%;aspect-ratio:1;background:#1a1a1a;display:flex;align-items:center;justify-content:center;font-size:2.2rem}
+.glabel{padding:7px 10px;font-size:0.72rem;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Modal */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:1000;display:none;align-items:center;justify-content:center}
+.overlay.open{display:flex}
+.modal{background:#1a1a1a;border:1px solid #2a2a2a;border-radius:14px;width:96vw;max-width:1080px;max-height:96vh;display:flex;flex-direction:column;overflow:hidden}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid #2a2a2a;flex-shrink:0}
+.modal-head h3{font-size:0.9rem;color:#ccc;font-weight:500}
+.btn-x{background:none;border:none;color:#555;font-size:1.6rem;cursor:pointer;line-height:1;padding:2px 6px;border-radius:4px;transition:color 0.15s}
+.btn-x:hover{color:#fff}
+.modal-body{display:flex;flex:1;overflow:hidden;min-height:0}
+
+/* Canvas */
+.canvas-wrap{flex:1;background:#0a0a0a;display:flex;align-items:center;justify-content:center;overflow:auto;padding:14px;min-width:0}
+#editor-canvas{cursor:crosshair;max-width:100%;max-height:calc(96vh - 120px);border-radius:6px}
+#editor-video{max-width:100%;max-height:calc(96vh - 120px);border-radius:6px;display:none}
+
+/* Sidebar */
+.sidebar{width:270px;flex-shrink:0;background:#161616;border-left:1px solid #2a2a2a;overflow-y:auto;display:flex;flex-direction:column;gap:0}
+.sb-block{padding:16px;border-bottom:1px solid #222}
+.sb-block:last-child{border-bottom:none}
+.sb-label{font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.15em;color:#555;margin-bottom:10px}
+
+/* Masks */
+.mask-hint{font-size:0.78rem;color:#666;line-height:1.5;margin-bottom:10px}
+.mask-list{display:flex;flex-direction:column;gap:5px;margin-bottom:8px}
+.mask-item{display:flex;align-items:center;justify-content:space-between;background:#1e1e1e;border-radius:6px;padding:5px 9px;font-size:0.75rem;color:#888}
+.btn-rm{background:none;border:none;color:#ff6b6b;cursor:pointer;font-size:0.85rem;padding:0 3px}
+
+/* Logo */
+.logo-drop{border:2px dashed #333;border-radius:8px;padding:14px;text-align:center;cursor:pointer;transition:border-color 0.2s}
+.logo-drop:hover{border-color:#6c63ff}
+.logo-drop p{font-size:0.78rem;color:#555;line-height:1.5}
+#logo-preview{max-width:100%;max-height:50px;margin-top:8px;border-radius:4px;display:none}
+
+/* Tint */
+.tint-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.tint-row label{font-size:0.8rem;color:#888;flex:1}
+input[type="color"]{width:32px;height:26px;border:none;border-radius:4px;cursor:pointer;padding:0;background:none}
+input[type="range"]{flex:1;accent-color:#6c63ff;height:4px}
+.tint-val{font-size:0.78rem;color:#666;width:28px;text-align:right}
+input[type="checkbox"]{accent-color:#6c63ff;width:14px;height:14px}
+
+/* Text */
+textarea.ta{width:100%;background:#111;border:1px solid #333;border-radius:7px;padding:9px;color:#e0e0e0;font-size:0.8rem;font-family:inherit;resize:vertical;min-height:72px;outline:none;transition:border-color 0.2s}
+textarea.ta:focus{border-color:#6c63ff}
+.rewrite-out{margin-top:8px;background:#0d1a0d;border:1px solid #2a3a2a;border-radius:6px;padding:9px;font-size:0.8rem;color:#88c888;line-height:1.55;display:none;cursor:pointer}
+.rewrite-out:hover{border-color:#3a6a3a}
+.rewrite-tip{font-size:0.7rem;color:#444;margin-top:4px;display:none}
+
+/* Process */
+.result-box{margin-top:10px;background:#0d1a0d;border:1px solid #2a4a2a;border-radius:8px;padding:10px;text-align:center;display:none}
+.result-box.show{display:block}
+.result-box p{font-size:0.78rem;color:#6bcb77;margin-bottom:6px}
+.btn-dl{display:inline-block;background:#1a3a1a;color:#6bcb77;padding:7px 16px;border-radius:6px;text-decoration:none;font-size:0.82rem;font-weight:600;transition:background 0.2s}
+.btn-dl:hover{background:#2a5a2a}
+
+/* Spinner */
+.spin{display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,0.25);border-top-color:#fff;border-radius:50%;animation:sp 0.7s linear infinite;vertical-align:middle}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* Empty state */
+.empty{text-align:center;padding:40px;color:#444;font-size:0.88rem}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-logo">Bit<span>By</span>Bit</div>
+  <div class="header-sub">Content Editor — переработка контента</div>
+</div>
+
+<div class="main">
+
+  <!-- Download -->
+  <div class="section">
+    <div class="section-title">Шаг 1 — Скачать с Instagram</div>
+    <div class="download-row">
+      <input type="url" class="url-input" id="url-input" placeholder="https://www.instagram.com/p/…" />
+      <button class="btn" id="btn-dl" onclick="downloadContent()">Скачать</button>
+    </div>
+    <div class="status" id="dl-status"></div>
+  </div>
+
+  <!-- Gallery -->
+  <div class="section gallery-wrap" id="gallery-wrap" style="display:none">
+    <div class="section-title">Шаг 2 — Выбери файл для редактирования</div>
+    <div class="gallery" id="gallery"></div>
+  </div>
+
+  <div class="empty" id="empty-hint">Вставь ссылку на пост Instagram и нажми «Скачать»</div>
+</div>
+
+<!-- Editor Modal -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="modal-fname">Редактор</h3>
+      <button class="btn-x" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="canvas-wrap">
+        <canvas id="editor-canvas"></canvas>
+        <video id="editor-video" controls></video>
+      </div>
+      <div class="sidebar">
+
+        <!-- Masks -->
+        <div class="sb-block" id="sb-masks">
+          <div class="sb-label">Маскировать область</div>
+          <div class="mask-hint">Нарисуй прямоугольник на фото — выбранная область будет размыта (логотипы, watermark)</div>
+          <div class="mask-list" id="mask-list"></div>
+          <button class="btn btn-ghost" style="width:100%;justify-content:center;font-size:0.8rem;padding:7px" onclick="clearMasks()">Очистить маски</button>
+        </div>
+
+        <!-- Logo -->
+        <div class="sb-block">
+          <div class="sb-label">Логотип BitByBit</div>
+          <div class="logo-drop" onclick="document.getElementById('logo-file').click()">
+            <p>Нажми чтобы загрузить<br/><span style="color:#444;font-size:0.7rem">PNG с прозрачностью</span></p>
+            <img id="logo-preview" />
+          </div>
+          <input type="file" id="logo-file" accept="image/*" style="display:none" onchange="loadLogo(this)" />
+        </div>
+
+        <!-- Tint -->
+        <div class="sb-block">
+          <div class="sb-label">Цветовой оттенок</div>
+          <div class="tint-row">
+            <label>Цвет</label>
+            <input type="color" id="tint-color" value="#000000" />
+            <label style="flex:none;margin-left:8px">Вкл.</label>
+            <input type="checkbox" id="tint-on" />
+          </div>
+          <div class="tint-row">
+            <label>Сила</label>
+            <input type="range" id="tint-op" min="0" max="70" value="20"
+              oninput="document.getElementById('tv').textContent=this.value+'%'" />
+            <span class="tint-val" id="tv">20%</span>
+          </div>
+        </div>
+
+        <!-- Text rewrite -->
+        <div class="sb-block" id="sb-text">
+          <div class="sb-label">Переписать текст через ИИ</div>
+          <textarea class="ta" id="orig-text" placeholder="Вставь текст с картинки…"></textarea>
+          <button class="btn" style="width:100%;justify-content:center;margin-top:8px;font-size:0.82rem;padding:9px;background:#332e66;border:1px solid #6c63ff;color:#b0a8ff" id="btn-rw" onclick="rewriteText()">Переписать</button>
+          <div class="rewrite-out" id="rw-out" title="Нажми чтобы скопировать в поле"></div>
+          <div class="rewrite-tip" id="rw-tip">Нажми на текст чтобы скопировать</div>
+        </div>
+
+        <!-- Process -->
+        <div class="sb-block">
+          <button class="btn" style="width:100%;justify-content:center;font-size:0.9rem;padding:12px" id="btn-proc" onclick="processFile()">
+            Обработать
+          </button>
+          <div class="status" id="proc-status" style="margin-top:8px"></div>
+          <div class="result-box" id="result-box">
+            <p>Готово!</p>
+            <a class="btn-dl" id="result-link" download>Скачать файл</a>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let sessionId = null;
+let currentFile = null;
+let masks = [];
+let logoB64 = null;
+let isDrawing = false;
+let startX = 0, startY = 0;
+const img = new Image();
+
+// ── Download ──────────────────────────────────────
+async function downloadContent() {
+  const url = document.getElementById('url-input').value.trim();
+  if (!url) return;
+  const btn = document.getElementById('btn-dl');
+  const st  = document.getElementById('dl-status');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> Скачиваю…';
+  st.textContent = '';
+  st.className = 'status';
+  try {
+    const res  = await fetch('/api/content/download', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({url})
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Ошибка');
+    sessionId = data.session_id;
+    st.textContent = `Скачано: ${data.files.length} файл(ов)`;
+    st.className = 'status ok';
+    document.getElementById('empty-hint').style.display = 'none';
+    renderGallery(data.files);
+  } catch(e) {
+    st.textContent = e.message;
+    st.className = 'status err';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Скачать';
+  }
+}
+
+// ── Gallery ───────────────────────────────────────
+function renderGallery(files) {
+  const wrap = document.getElementById('gallery-wrap');
+  const grid = document.getElementById('gallery');
+  grid.innerHTML = '';
+  wrap.style.display = 'block';
+  files.forEach(f => {
+    const el = document.createElement('div');
+    el.className = 'gitem';
+    el.onclick = () => openEditor(f);
+    el.innerHTML = f.type === 'image'
+      ? `<img src="${f.url}" class="gthumb" loading="lazy"/><div class="glabel">${f.name}</div>`
+      : `<div class="gthumb-video">🎥</div><div class="glabel">${f.name}</div>`;
+    grid.appendChild(el);
+  });
+}
+
+// ── Editor ────────────────────────────────────────
+function openEditor(file) {
+  currentFile = file;
+  masks = [];
+  document.getElementById('modal-fname').textContent = file.name;
+  document.getElementById('result-box').classList.remove('show');
+  document.getElementById('proc-status').textContent = '';
+  document.getElementById('orig-text').value = '';
+  document.getElementById('rw-out').style.display = 'none';
+  document.getElementById('rw-tip').style.display = 'none';
+  renderMaskList();
+
+  const canvas = document.getElementById('editor-canvas');
+  const video  = document.getElementById('editor-video');
+  const sbMask = document.getElementById('sb-masks');
+  const sbText = document.getElementById('sb-text');
+
+  if (file.type === 'image') {
+    canvas.style.display = 'block';
+    video.style.display  = 'none';
+    sbMask.style.display = 'block';
+    sbText.style.display = 'block';
+    img.onload = () => {
+      const maxW = 700, maxH = 580;
+      let w = img.naturalWidth, h = img.naturalHeight;
+      if (w > maxW) { h = h * maxW / w; w = maxW; }
+      if (h > maxH) { w = w * maxH / h; h = maxH; }
+      canvas.width  = Math.round(w);
+      canvas.height = Math.round(h);
+      redraw();
+    };
+    img.src = file.url;
+  } else {
+    canvas.style.display = 'none';
+    video.style.display  = 'block';
+    video.src = file.url;
+    sbMask.style.display = 'none';
+    sbText.style.display = 'none';
+  }
+  document.getElementById('overlay').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('overlay').classList.remove('open');
+  const v = document.getElementById('editor-video');
+  v.pause(); v.src = '';
+}
+
+// ── Canvas drawing ────────────────────────────────
+function redraw() {
+  const canvas = document.getElementById('editor-canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  masks.forEach((m, i) => {
+    ctx.fillStyle = 'rgba(255,60,60,0.28)';
+    ctx.fillRect(m.px, m.py, m.pw, m.ph);
+    ctx.strokeStyle = 'rgba(255,80,80,0.85)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(m.px, m.py, m.pw, m.ph);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 12px Inter';
+    ctx.fillText(i + 1, m.px + 4, m.py + 14);
+  });
+}
+
+const cvs = document.getElementById('editor-canvas');
+
+cvs.addEventListener('mousedown', e => {
+  if (!currentFile || currentFile.type !== 'image') return;
+  const r = cvs.getBoundingClientRect();
+  startX = e.clientX - r.left;
+  startY = e.clientY - r.top;
+  isDrawing = true;
+});
+
+cvs.addEventListener('mousemove', e => {
+  if (!isDrawing) return;
+  const r = cvs.getBoundingClientRect();
+  const cx = e.clientX - r.left, cy = e.clientY - r.top;
+  redraw();
+  const ctx = cvs.getContext('2d');
+  ctx.fillStyle = 'rgba(108,99,255,0.25)';
+  ctx.fillRect(startX, startY, cx - startX, cy - startY);
+  ctx.strokeStyle = 'rgba(108,99,255,0.85)';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(startX, startY, cx - startX, cy - startY);
+});
+
+cvs.addEventListener('mouseup', e => {
+  if (!isDrawing) return;
+  isDrawing = false;
+  const r = cvs.getBoundingClientRect();
+  const ex = e.clientX - r.left, ey = e.clientY - r.top;
+  const px = Math.min(startX, ex), py = Math.min(startY, ey);
+  const pw = Math.abs(ex - startX),  ph = Math.abs(ey - startY);
+  if (pw > 6 && ph > 6) {
+    masks.push({ px, py, pw, ph,
+      x: px / cvs.width, y: py / cvs.height,
+      w: pw / cvs.width, h: ph / cvs.height });
+    renderMaskList();
+    redraw();
+  }
+});
+
+function renderMaskList() {
+  const list = document.getElementById('mask-list');
+  list.innerHTML = '';
+  masks.forEach((m, i) => {
+    const d = document.createElement('div');
+    d.className = 'mask-item';
+    d.innerHTML = `<span>Маска ${i+1}: ${Math.round(m.pw)}×${Math.round(m.ph)}px</span>
+      <button class="btn-rm" onclick="removeMask(${i})">✕</button>`;
+    list.appendChild(d);
+  });
+}
+
+function removeMask(i) { masks.splice(i, 1); renderMaskList(); redraw(); }
+function clearMasks()   { masks = []; renderMaskList(); redraw(); }
+
+// ── Logo ──────────────────────────────────────────
+function loadLogo(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    logoB64 = e.target.result.split(',')[1];
+    const prev = document.getElementById('logo-preview');
+    prev.src = e.target.result;
+    prev.style.display = 'block';
+    document.querySelector('.logo-drop p').innerHTML =
+      `<span style="color:#9b95ff;font-size:0.78rem">${file.name}</span>`;
+  };
+  reader.readAsDataURL(file);
+}
+
+// ── Rewrite ───────────────────────────────────────
+async function rewriteText() {
+  const text = document.getElementById('orig-text').value.trim();
+  if (!text) return;
+  const btn = document.getElementById('btn-rw');
+  const out  = document.getElementById('rw-out');
+  const tip  = document.getElementById('rw-tip');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> Думаю…';
+  out.style.display = 'none';
+  tip.style.display = 'none';
+  try {
+    const res  = await fetch('/api/content/rewrite', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({text})
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    out.textContent = data.rewritten;
+    out.style.display = 'block';
+    tip.style.display = 'block';
+    out.onclick = () => {
+      document.getElementById('orig-text').value = data.rewritten;
+      out.style.borderColor = '#6c63ff';
+      setTimeout(() => out.style.borderColor = '', 800);
+    };
+  } catch(e) {
+    out.textContent = 'Ошибка: ' + e.message;
+    out.style.color = '#ff6b6b';
+    out.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Переписать';
+  }
+}
+
+// ── Process ───────────────────────────────────────
+async function processFile() {
+  if (!currentFile || !sessionId) return;
+  const btn  = document.getElementById('btn-proc');
+  const st   = document.getElementById('proc-status');
+  const rbox = document.getElementById('result-box');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> Обрабатываю…';
+  st.textContent = '';
+  st.className = 'status';
+  rbox.classList.remove('show');
+
+  try {
+    const tintOn  = document.getElementById('tint-on').checked;
+    const tintHex = document.getElementById('tint-color').value;
+    const tintOp  = parseInt(document.getElementById('tint-op').value) / 100;
+
+    let endpoint, body;
+    if (currentFile.type === 'image') {
+      endpoint = '/api/content/process-image';
+      let colorTint = null;
+      if (tintOn) {
+        colorTint = {
+          r: parseInt(tintHex.slice(1,3),16),
+          g: parseInt(tintHex.slice(3,5),16),
+          b: parseInt(tintHex.slice(5,7),16),
+          opacity: tintOp
+        };
+      }
+      body = {
+        session_id: sessionId,
+        filename:   currentFile.name,
+        logo_b64:   logoB64,
+        masks:      masks.map(m => ({x:m.x, y:m.y, w:m.w, h:m.h})),
+        color_tint: colorTint
+      };
+    } else {
+      endpoint = '/api/content/process-video';
+      body = { session_id: sessionId, filename: currentFile.name, logo_b64: logoB64 };
+    }
+
+    const res  = await fetch(endpoint, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Ошибка обработки');
+
+    const link = document.getElementById('result-link');
+    link.href     = data.url;
+    link.download = data.filename || 'processed';
+    rbox.classList.add('show');
+
+    if (currentFile.type === 'image') {
+      img.onload = redraw;
+      img.src = data.url + '?t=' + Date.now();
+    }
+  } catch(e) {
+    st.textContent = e.message;
+    st.className = 'status err';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Обработать';
+  }
+}
+
+// Keyboard / click shortcuts
+document.getElementById('url-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') downloadContent();
+});
+document.getElementById('overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('overlay')) closeModal();
+});
+</script>
+</body>
+</html>
